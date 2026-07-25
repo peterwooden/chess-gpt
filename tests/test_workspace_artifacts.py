@@ -58,3 +58,21 @@ def test_first_experiment_records_the_observed_result() -> None:
     assert manifest["experiment"]["id"] == path.stem
     assert manifest["experiment"]["status"] == "completed"
     assert manifest["result"]["accepted"] is True
+
+
+def test_first_playable_baseline_records_a_passing_result() -> None:
+    path = ROOT / "experiments/0001-basic-san-ngram.toml"
+    with path.open("rb") as file:
+        manifest = tomllib.load(file)
+
+    result = manifest["result"]
+    assert manifest["experiment"]["id"] == path.stem
+    assert manifest["experiment"]["status"] == "completed"
+    assert result["validation_legal_move_rate"] == 1.0
+    assert (
+        result["validation_top1_accuracy"]
+        > result["validation_deterministic_fallback_top1_accuracy"]
+    )
+    assert result["canonical_learned_state_bytes"] <= 100_000_000
+    assert result["functional_san_cli"] is True
+    assert result["acceptance_passed"] is True

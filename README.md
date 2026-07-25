@@ -6,7 +6,7 @@ The priorities are: win fairly, learn ML engineering deeply, and turn creative i
 
 ## Current stage
 
-We are establishing the rules, data provenance, local environment, and first-principles curriculum. The public dataset is recorded as a **candidate**, not silently treated as frozen, because its published artifacts and GPCT vocabulary generation do not yet agree.
+The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test; read the [full baseline record](docs/BASELINE_0001.md).
 
 ## Local setup
 
@@ -22,7 +22,7 @@ uv run pyright
 
 ## First playable baseline
 
-Experiment `0001-basic-san-ngram` is the deliberately simple floor: it learns which SAN moves tend to follow the previous two moves, backs off to broader frequencies when needed, and filters every prediction through the legal moves in the current position. Its versioned specification is in [`experiments/0001-basic-san-ngram.toml`](experiments/0001-basic-san-ngram.toml); generated checkpoints and metrics stay under the ignored `runs/` directory.
+Experiment `0001-basic-san-ngram` is the deliberately simple floor: it learns which SAN moves tend to follow the previous two moves, backs off to broader frequencies when needed, and filters every prediction through the legal moves in the current position. Its [versioned specification](experiments/0001-basic-san-ngram.toml) contains the measured result; generated checkpoints and metrics stay under the ignored `runs/` directory.
 
 After obtaining the pinned dataset shard named in the experiment, train and ask for one move:
 
