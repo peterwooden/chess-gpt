@@ -1,0 +1,21 @@
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+
+# Large or generated ML artifacts
+data/downloads/
+checkpoints/
+*.bin
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+
+# Run outputs are reproducible artifacts, not source.
+runs/*
+!runs/README.md

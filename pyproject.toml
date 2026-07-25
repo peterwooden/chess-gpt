@@ -1,0 +1,50 @@
+[project]
+name = "chess-gpt"
+version = "0.1.0"
+description = "A reproducible, teaching-first laboratory for small chess language models"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "duckdb>=1.3",
+  "huggingface-hub>=0.34",
+  "numpy>=2.2",
+  "pyarrow>=20",
+  "python-chess>=1.999",
+  "torch>=2.7",
+]
+
+[dependency-groups]
+dev = [
+  "pyright>=1.1.400",
+  "pytest>=8.4",
+  "ruff>=0.12",
+]
+
+[project.scripts]
+chess-gpt-doctor = "chess_gpt.doctor:main"
+chess-gpt-compute-cost = "chess_gpt.compute_cost:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/chess_gpt"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venv = ".venv"
+venvPath = "."
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "UP"]

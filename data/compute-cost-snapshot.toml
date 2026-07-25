@@ -1,0 +1,31 @@
+[snapshot]
+observed_at = "2026-07-25"
+currency = "USD"
+budget_flops = "1e18"
+notes = "Rental excludes storage, taxes, data-transfer time, setup time, and idle time."
+
+[[accelerators]]
+provider = "RunPod"
+gpu = "NVIDIA H100 SXM 80 GB"
+hourly_price_usd = "2.99"
+dense_bf16_tflops = "989.5"
+price_source = "https://www.runpod.io/pricing"
+throughput_source = "https://www.nvidia.com/en-us/data-center/h100/"
+throughput_note = "NVIDIA publishes 1,979 TFLOP/s with structured sparsity; dense throughput is half."
+
+[[accelerators]]
+provider = "RunPod"
+gpu = "NVIDIA A100 PCIe 80 GB"
+hourly_price_usd = "1.39"
+dense_bf16_tflops = "312"
+price_source = "https://www.runpod.io/pricing"
+throughput_source = "https://www.nvidia.com/en-sg/data-center/a100/"
+throughput_note = "NVIDIA publishes 312 dense and 624 sparse BF16 Tensor Core TFLOP/s."
+[[accelerators]]
+provider = "RunPod"
+gpu = "NVIDIA A100 SXM 80 GB"
+hourly_price_usd = "1.49"
+dense_bf16_tflops = "312"
+price_source = "https://www.runpod.io/pricing"
+throughput_source = "https://www.nvidia.com/en-sg/data-center/a100/"
+throughput_note = "NVIDIA publishes 312 dense and 624 sparse BF16 Tensor Core TFLOP/s."

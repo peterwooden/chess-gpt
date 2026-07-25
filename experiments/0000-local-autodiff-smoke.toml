@@ -1,0 +1,23 @@
+[experiment]
+id = "0000-local-autodiff-smoke"
+status = "completed"
+question = "Can the locked project perform a correct forward and backward pass on this laptop?"
+hypothesis = "PyTorch will use MPS on the M1 Pro and compute d(x^2)/dx = 6 at x = 3."
+intentional_change = "Establish the local environment; no model comparison is being made."
+
+[reproducibility]
+seed = 20260724
+dataset_required = false
+command = "uv run chess-gpt-doctor"
+
+[acceptance]
+expected_device = "mps"
+expected_derivative = 6.0
+
+[result]
+completed_at = "2026-07-24"
+python = "3.13.0"
+torch = "2.13.0"
+device = "mps"
+observed_derivative = 6.0
+accepted = true
