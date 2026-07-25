@@ -8,7 +8,7 @@ The priorities are: win fairly, learn ML engineering deeply, and turn creative i
 
 The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test; read the [full baseline record](docs/BASELINE_0001.md).
 
-The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner's latest diagnostic attempt scored 7/8 on the direct track; one focused prediction about honest train/validation/test usage remains before Chapter 1 mastery work begins.
+The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner's latest diagnostic attempt scored 7/8 on the direct track and the follow-up prediction demonstrated the remaining train/validation/test concept, so the direct Chapter 1 path is now ready to be designed collaboratively.
 
 The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It can download a compatible model from Hugging Face, run human-versus-model play, or run two models against each other while showing SAN moves and inference timing. The narrow, hash-verified interchange format is documented in the [browser model contract](docs/BROWSER_MODEL_CONTRACT.md).
 
