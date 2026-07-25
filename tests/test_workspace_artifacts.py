@@ -42,6 +42,14 @@ def test_candidate_dataset_is_not_mistaken_for_a_freeze() -> None:
     assert manifest["compatibility"]["compatible"] is False
 
 
+def test_tournament_rules_are_five_bold_labelled_bullets() -> None:
+    rules = (ROOT / "docs/TOURNAMENT_RULES_DRAFT.md").read_text().splitlines()
+    bullets = [line for line in rules if line.startswith("- ")]
+
+    assert len(bullets) == 5
+    assert all(line.startswith("- **") for line in bullets)
+
+
 def test_first_experiment_records_the_observed_result() -> None:
     path = ROOT / "experiments/0000-local-autodiff-smoke.toml"
     with path.open("rb") as file:

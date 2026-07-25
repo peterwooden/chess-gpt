@@ -19,7 +19,7 @@ Before making project decisions, read `MISSION.md`, `PROJECT_INTENT.md`, `NOTES.
 
 - Treat the Hugging Face dataset revision in `data/dataset-candidate.toml` as a candidate until all three competitors freeze it in writing.
 - Do not add outside games, pretrained weights, engine labels, synthetic data, search, or auxiliary inference systems unless the agreed tournament rules permit them.
-- Count all unique trainable parameters, including embeddings and output heads, when checking a parameter cap. Tied parameters count once.
+- Count all model-specific learned state, including weights, embeddings, biases, learned buffers, quantization scales, codebooks, and constants, when checking the 100 MB submission cap.
 
 ## Engineering
 
