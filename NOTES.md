@@ -14,6 +14,7 @@
 - Python, terminal/Git, calculus, linear algebra, and probability comfort remain unknown; establish these through small tasks rather than a long preliminary exam.
 - The learner usually accesses Codex from a phone through a remote session, where local HTML links display source instead of a rendered page; publish interactive lessons through Sites and return a normal web URL.
 - Interactive lessons should gate a short completion code behind correct retrieval answers so the learner can paste it back as lightweight evidence of completion.
+- Commit and push completed repository changes to `main` by default unless the learner explicitly asks to keep them local.
 
 ## Default teaching loop
 

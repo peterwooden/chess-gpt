@@ -26,3 +26,4 @@ Before making project decisions, read `MISSION.md`, `PROJECT_INTENT.md`, `NOTES.
 - Use the checked-in `uv.lock`; do not install project packages ad hoc.
 - Keep large datasets, checkpoints, and generated run artifacts out of Git.
 - Tests, lint, type checks, and a tiny end-to-end smoke run must pass before scaling an experiment.
+- After requested repository edits pass their relevant checks, commit and push them to `main` unless the user explicitly says not to.
