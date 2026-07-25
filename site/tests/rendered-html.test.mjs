@@ -26,6 +26,10 @@ test("server-renders the roadmap and placement diagnostic", async () => {
   assert.match(html, /Placement diagnostic/i);
   assert.match(html, /What does it mean to learn/i);
   assert.match(html, /How should we spend the budget/i);
+  assert.match(html, /Reinforcement learning/i);
+  assert.match(html, /How does a win teach earlier moves/i);
+  assert.match(html, /Deep Learning/i);
+  assert.match(html, /Spinning Up in Deep RL/i);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/i);
 });
 

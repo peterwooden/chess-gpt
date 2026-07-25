@@ -118,6 +118,13 @@ const chapters = [
   { number: "10", title: "How does an idea become evidence?", motive: "Make creative experiments credible and useful.", concepts: "Hypotheses · ablations · reproducibility" },
 ];
 
+const rlChapters = [
+  { number: "R1", title: "When is prediction the wrong objective?", motive: "Separate imitating human moves from maximizing game result.", concepts: "Policy · reward · return" },
+  { number: "R2", title: "How does a win teach earlier moves?", motive: "Assign credit when the clearest signal arrives at checkmate.", concepts: "Value · Bellman · Monte Carlo · TD" },
+  { number: "R3", title: "Should we learn values, actions, or both?", motive: "Choose an algorithm family that fits chess and the budget.", concepts: "Policy gradients · actor-critic · exploration" },
+  { number: "R4", title: "Can self-play improve us honestly?", motive: "Control opponent drift, variance, compute, and evaluation bias.", concepts: "Self-play · search · paired matches" },
+];
+
 const confidenceLabels = ["Guessing", "Some confidence", "Very confident"];
 
 type SavedDiagnostic = {
@@ -232,7 +239,7 @@ export default function Home() {
           <span className="field-card-label">Course parameters</span>
           <dl>
             <div><dt>Time</dt><dd>5 hrs / week</dd></div>
-            <div><dt>Core</dt><dd>10 chapters</dd></div>
+            <div><dt>Path</dt><dd>10 core + 4 RL</dd></div>
             <div><dt>Loop</dt><dd>Toy → chess</dd></div>
             <div><dt>Goal</dt><dd>Win + understand</dd></div>
           </dl>
@@ -258,7 +265,7 @@ export default function Home() {
             <p className="eyebrow">The complete path</p>
             <h2 id="roadmap-title">Ten causal questions.</h2>
           </div>
-          <p>Outcomes stay fixed. Missions adapt to your diagnostic, predictions, and experiment evidence.</p>
+          <p>Ten chapters form the core. A four-part reinforcement-learning extension follows once the supervised model and evaluation protocol are trustworthy.</p>
         </div>
         <div className="chapter-list">
           {chapters.map((chapter) => (
@@ -270,6 +277,26 @@ export default function Home() {
               <span className="locked">Locked</span>
             </article>
           ))}
+        </div>
+        <div className="extension-block">
+          <div className="extension-heading">
+            <div>
+              <p className="eyebrow">Phase II · optional competitive extension</p>
+              <h3>Reinforcement learning</h3>
+            </div>
+            <p>RL asks a different question: not “what move did a human play?” but “which action improves expected game result?” Self-play only reaches the tournament model after the shared-data rule is clarified.</p>
+          </div>
+          <div className="chapter-list extension-list">
+            {rlChapters.map((chapter) => (
+              <article className="chapter" key={chapter.number}>
+                <div className="chapter-check" aria-label={`Extension ${chapter.number} locked`}>□</div>
+                <span className="chapter-number">{chapter.number}</span>
+                <div className="chapter-copy"><h3>{chapter.title}</h3><p>{chapter.motive}</p></div>
+                <small>{chapter.concepts}</small>
+                <span className="locked">Locked</span>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -363,6 +390,8 @@ export default function Home() {
           <a href="https://udlbook.github.io/udlbook/"><span><strong>Understanding Deep Learning</strong><small>Simon J. D. Prince · visual textbook spine</small></span><i>↗</i></a>
           <a href="https://web.stanford.edu/~jurafsky/slp3/ed3book.pdf"><span><strong>Speech and Language Processing</strong><small>Jurafsky & Martin · language-model theory</small></span><i>↗</i></a>
           <a href="https://mml-book.github.io/"><span><strong>Mathematics for Machine Learning</strong><small>Deisenroth, Faisal & Ong · selective mathematics</small></span><i>↗</i></a>
+          <a href="https://www.deeplearningbook.org/"><span><strong>Deep Learning</strong><small>Goodfellow, Bengio & Courville · selective theory</small></span><i>↗</i></a>
+          <a href="https://spinningup.openai.com/en/latest/"><span><strong>Spinning Up in Deep RL</strong><small>OpenAI · conceptual RL extension</small></span><i>↗</i></a>
         </div>
       </section>
 

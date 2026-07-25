@@ -11,6 +11,10 @@ This is the durable learning roadmap. Core outcomes are fixed; individual missio
 - The weekly cadence assumes five hours per week across several short missions, one focused source assignment, one experiment, and review.
 - Chapter 1 will be written only after the placement diagnostic is reviewed.
 
+## Reading strategy for *Deep Learning*
+
+Goodfellow, Bengio, and Courville is a companion reference, not a cover-to-cover prerequisite. Chapters 3–8 and 11 support the core probability, optimization, generalization, and debugging work; Part III contributes section 15.4 on distributed representations to Chapter 3 and section 17.1 on Monte Carlo estimation to the RL extension. The rest of Part III is optional because its autoencoder, graphical-model, partition-function, approximate-inference, and older generative-model material does not directly advance our small Transformer unless a later experiment creates a reason to study it.
+
 ## Course setup
 
 - [x] Learning mission and tournament priorities recorded
@@ -33,7 +37,7 @@ This is the durable learning roadmap. Core outcomes are fixed; individual missio
 - [ ] Run the Chapter 1 chess experiment
 - [ ] Complete the mastery checkpoint and explanation
 
-Primary sources: Jurafsky & Martin, *Speech and Language Processing*, Chapter 3; Karpathy, “building makemore.”
+Primary sources: Jurafsky & Martin, *Speech and Language Processing*, Chapter 3; Karpathy, “building makemore.” Companion reference: Goodfellow et al., sections 5.1–5.5.
 
 ## Chapter 2 — How can a number learn to prefer a move?
 
@@ -48,7 +52,7 @@ Primary sources: Jurafsky & Martin, *Speech and Language Processing*, Chapter 3;
 - [ ] Run the Chapter 2 chess experiment
 - [ ] Complete the mastery checkpoint and explanation
 
-Primary sources: Karpathy, “building micrograd”; Prince, *Understanding Deep Learning*, Chapters 5–7.
+Primary sources: Karpathy, “building micrograd”; Prince, *Understanding Deep Learning*, Chapters 5–7. Companion reference: Goodfellow et al., sections 4.3 and 6.5.
 
 ## Chapter 3 — How does a model turn move history into probabilities?
 
@@ -63,7 +67,7 @@ Primary sources: Karpathy, “building micrograd”; Prince, *Understanding Deep
 - [ ] Train the first neural chess language model
 - [ ] Complete the mastery checkpoint and explanation
 
-Primary sources: Karpathy, “building makemore” Parts 1–2; Jurafsky & Martin, Chapters 4–6.
+Primary sources: Karpathy, “building makemore” Parts 1–2; Jurafsky & Martin, Chapters 4–6. Companion reference: Goodfellow et al., section 3.13, section 6.2, and Part III section 15.4.
 
 ## Chapter 4 — Did the model learn or memorize?
 
@@ -78,7 +82,7 @@ Primary sources: Karpathy, “building makemore” Parts 1–2; Jurafsky & Marti
 - [ ] Run a controlled capacity experiment
 - [ ] Complete the mastery checkpoint and explanation
 
-Primary sources: Prince, Chapters 8–9; Karpathy, “A Recipe for Training Neural Networks.”
+Primary sources: Prince, Chapters 8–9; Karpathy, “A Recipe for Training Neural Networks.” Companion reference: Goodfellow et al., sections 5.2–5.4 and Chapter 7.
 
 ## Chapter 5 — How fast should the model learn?
 
@@ -93,7 +97,7 @@ Primary sources: Prince, Chapters 8–9; Karpathy, “A Recipe for Training Neur
 - [ ] Run a learning-rate range experiment
 - [ ] Complete the mastery checkpoint and explanation
 
-Primary sources: Karpathy, “Activations & Gradients” and “Backprop Ninja”; Prince, Chapters 6–7.
+Primary sources: Karpathy, “Activations & Gradients” and “Backprop Ninja”; Prince, Chapters 6–7. Companion reference: Goodfellow et al., Chapter 8.
 
 ## Chapter 6 — How can the model use any earlier move?
 
@@ -168,7 +172,75 @@ Primary sources: Jurafsky & Martin on language-model evaluation; project tournam
 - [ ] Complete an original end-to-end experiment
 - [ ] Complete the mastery checkpoint and explanation
 
-Primary sources: Karpathy, “A Recipe for Training Neural Networks”; this repository's versioned experiment records.
+Primary sources: Karpathy, “A Recipe for Training Neural Networks”; this repository's versioned experiment records. Companion reference: Goodfellow et al., Chapter 11.
+
+## Phase II — Reinforcement-learning extension
+
+This optional extension begins only after Chapter 9, when the learner can already train and evaluate the supervised policy. Any self-play or environment interaction used to update the tournament model counts as training; before doing that, the three competitors must explicitly agree that it satisfies the shared-data rule and that all such compute counts toward the one-exaFLOP budget. If it is not allowed, the conceptual missions still run on tiny environments and archived chess evidence without changing the tournament submission.
+
+### RL extension 1 — When is predicting human moves the wrong objective?
+
+**Motivation:** distinguish imitating the moves in the dataset from choosing moves that maximize the eventual game result.
+
+- [ ] Map chess history, legal SAN moves, policy outputs, trajectories, rewards, and returns onto RL notation
+- [ ] Distinguish supervised behaviour cloning, offline RL, online RL, and planning
+- [ ] Explain why the existing next-move model is already a categorical policy
+- [ ] Predict when optimizing game result should help or damage an imitation-trained model
+- [ ] Compare three proposed reward specifications and identify exploitable proxies
+- [ ] Run a toy bandit before mapping the mechanism to chess
+- [ ] Complete the mastery checkpoint and explanation
+
+Primary sources: OpenAI Spinning Up, “Key Concepts in RL”; Sutton & Barto, Chapters 2–3.
+
+### RL extension 2 — How does a final result teach earlier moves?
+
+**Motivation:** assign credit through a long game when the clearest reward arrives at checkmate.
+
+- [ ] Calculate finite and discounted returns from a tiny trajectory
+- [ ] Explain state values, action values, Bellman relationships, and advantage
+- [ ] Compare Monte Carlo and temporal-difference targets by bias, variance, and data efficiency
+- [ ] Predict how reward sparsity and discounting change what the model learns
+- [ ] Diagnose three value-target implementations, including one with information leakage
+- [ ] Estimate a toy chess position's value from sampled continuations
+- [ ] Complete the mastery checkpoint and explanation
+
+Primary sources: Sutton & Barto, Chapters 3–6; Goodfellow et al., Part III section 17.1; OpenAI Spinning Up on value functions.
+
+### RL extension 3 — Should we learn values, actions, or both?
+
+**Motivation:** choose an algorithm family that matches chess's discrete actions, sparse outcomes, pretrained policy, and small compute budget.
+
+- [ ] Distinguish value-based, policy-gradient, actor-critic, model-based, and search-assisted approaches
+- [ ] Explain the policy-gradient update as log-probability weighted by estimated advantage
+- [ ] Predict how a baseline changes gradient variance without changing the expected gradient
+- [ ] Explain exploration, entropy, on-policy data, and distribution shift
+- [ ] Compare three policy-gradient implementations and find the silent mathematical error
+- [ ] Run a tiny policy-gradient experiment, then specify a supervised-checkpoint fine-tuning experiment
+- [ ] Complete the mastery checkpoint and explanation
+
+Primary sources: OpenAI Spinning Up, “Kinds of RL Algorithms” and “Intro to Policy Optimization”; Sutton & Barto, Chapter 13.
+
+### RL extension 4 — Can self-play make the model stronger without fooling us?
+
+**Motivation:** improve actual match performance while controlling opponent drift, random-seed variance, compute, and evaluation bias.
+
+- [ ] Explain self-play as a changing data distribution and opponent population
+- [ ] Distinguish the roles of policy, value model, tree search, and generated experience in AlphaZero
+- [ ] Predict failure modes including collapse, cycling, reward hacking, and catastrophic forgetting
+- [ ] Design opponent snapshots, shared openings, reversed colors, multiple seeds, and rollback criteria
+- [ ] Account for environment inference and updates inside the training-compute budget
+- [ ] Compare the supervised checkpoint and RL-tuned checkpoint with a preregistered paired match
+- [ ] Complete the mastery checkpoint and explanation
+
+Primary sources: Silver et al., “Mastering Chess and Shogi by Self-Play”; OpenAI Spinning Up, “Doing Rigorous Research in RL.”
+
+## RL extension graduation
+
+- [ ] Explain when RL is the right tool and when supervised learning or search is the cleaner choice
+- [ ] Predict how reward, discounting, exploration, opponent choice, and algorithm family affect learning
+- [ ] Specify a budgeted, rules-compliant RL experiment clearly enough for a coding agent to implement
+- [ ] Diagnose a plausible RL failure using learning curves, value estimates, entropy, and match evidence
+- [ ] Demonstrate a trustworthy playing-strength comparison or explain why the experiment should be rejected
 
 ## Graduation
 

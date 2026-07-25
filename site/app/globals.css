@@ -84,6 +84,12 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .chapter-copy p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
 .chapter small { grid-column: 3 / -1; color: var(--green); font-family: ui-monospace, monospace; font-size: 0.67rem; line-height: 1.5; }
 .locked { padding: 0.25rem 0.45rem; border: 1px solid var(--line); color: var(--muted); font-size: 0.58rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.extension-block { margin-top: 4rem; padding: 1.25rem; border: 1px solid var(--green); background: rgb(220 231 223 / 0.42); }
+.extension-heading { margin-bottom: 2rem; }
+.extension-heading h3 { margin: 0; color: var(--green); font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(2rem, 6vw, 3.4rem); font-weight: 500; letter-spacing: -0.045em; }
+.extension-heading > p { max-width: 42rem; margin: 1rem 0 0; color: var(--muted); line-height: 1.6; }
+.extension-list { border-color: rgb(20 63 49 / 0.28); }
+.extension-list .chapter:first-child { border-top-color: rgb(20 63 49 / 0.28); }
 
 .diagnostic-intro { max-width: 48rem; }
 .diagnostic-rule { margin-top: 1.4rem; padding: 1rem; border-left: 0.3rem solid var(--amber); background: rgb(255 253 247 / 0.65); line-height: 1.5; }
@@ -144,6 +150,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .contract-grid { grid-template-columns: repeat(4, 1fr); }
   .chapter { grid-template-columns: 1.5rem 2.5rem minmax(16rem, 1fr) minmax(13rem, 0.7fr) auto; align-items: center; }
   .chapter small { grid-column: auto; }
+  .extension-heading { display: grid; grid-template-columns: minmax(16rem, 0.8fr) minmax(20rem, 1fr); gap: 3rem; align-items: end; }
+  .extension-heading > p { margin: 0; }
   .choices { grid-template-columns: repeat(3, 1fr); }
   .choice { align-content: start; grid-template-columns: 1fr; min-height: 8rem; }
   .submit-panel { flex-direction: row; align-items: center; position: sticky; bottom: 1rem; box-shadow: 0 0.8rem 2rem rgb(20 63 49 / 0.2); }

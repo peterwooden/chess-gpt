@@ -86,3 +86,6 @@ def test_curriculum_tracks_prediction_driven_progress() -> None:
     assert "hill climbing" in curriculum.lower()
     assert "prediction" in curriculum.lower()
     assert "five hours per week" in curriculum.lower()
+    assert curriculum.count("### RL extension ") == 4
+    assert "Part III section 15.4" in curriculum
+    assert "Part III section 17.1" in curriculum

@@ -20,6 +20,8 @@
   Useful statement of the teacher-plus-AI educational vision. The linked LLM101n repository is archived and explicitly says the course does not yet exist, so it is inspiration rather than available curriculum.
 - [Textbook: *Understanding Deep Learning* — Simon J. D. Prince](https://udlbook.github.io/udlbook/)
   A free, visual, implementation-minded textbook with short chapters. Use chapters 2–9 for supervised learning, networks, loss, optimization, performance, and regularization; use chapter 12 when we reach transformers.
+- [Textbook: *Deep Learning* — Ian Goodfellow, Yoshua Bengio, and Aaron Courville](https://www.deeplearningbook.org/)
+  A free 2016 reference for durable theory rather than current Transformer implementation practice. Use selected sections from chapters 3–8 and 11 for the core course; from Part III, use section 15.4 for distributed representations and section 17.1 for Monte Carlo estimation. The remaining Part III topics become optional only when a concrete experiment needs them.
 - [Textbook: *Speech and Language Processing*, 3rd-edition draft — Dan Jurafsky and James H. Martin](https://web.stanford.edu/~jurafsky/slp3/ed3book.pdf)
   A current language-modeling spine that progresses through tokens, n-grams, logistic regression, embeddings, neural networks, LLMs, and transformers. Use for: the probabilistic meaning and motivation behind each chess next-move model.
 - [Textbook: *Mathematics for Machine Learning* — Deisenroth, Faisal, and Ong](https://mml-book.github.io/)
@@ -30,6 +32,12 @@
   The original Transformer paper. Use for: checking our eventual causal self-attention implementation against the architecture's primary source after the mechanism is intuitive.
 - [Paper: “Training Compute-Optimal Large Language Models”](https://arxiv.org/abs/2203.15556)
   The Chinchilla scaling study relating model parameters, training tokens, and fixed compute. Use for: motivating tournament-budget allocation once we can measure our own tokens and FLOPs.
+- [Spinning Up in Deep RL — OpenAI](https://spinningup.openai.com/en/latest/)
+  A clear conceptual path through states, actions, policies, returns, value functions, algorithm families, and policy gradients. Use for: the post-core reinforcement-learning extension and implementation-comparison exercises—not as a software dependency, because the project is in maintenance mode and plans no major updates.
+- [Textbook: *Reinforcement Learning: An Introduction*, 2nd edition — Sutton and Barto](https://www.incompleteideas.net/book/bookdraft2018mar21.pdf)
+  The foundational reference for multi-armed bandits, Markov decision processes, dynamic programming, Monte Carlo estimation, temporal-difference learning, and policy gradients. Use selectively to give Spinning Up's concise explanations a deeper theoretical foundation.
+- [Paper: “Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm”](https://arxiv.org/abs/1712.01815)
+  The AlphaZero chess paper. Use for: separating policy, value, search, self-play data generation, and playing-strength evidence—and for identifying which parts are infeasible or illegal under this tournament's eventual rules and compute budget.
 - [PyTorch reproducibility notes](https://docs.pytorch.org/docs/stable/notes/randomness)
   Official limits and controls for randomness and deterministic algorithms. Use for: experiment manifests, seed handling, debugging mode, and honest reproducibility claims.
 - [PyTorch MPS backend notes](https://docs.pytorch.org/docs/stable/notes/mps.html)

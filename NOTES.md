@@ -25,6 +25,7 @@
 - Collaborate on consequential choices involving data, targets, architecture, optimization, compute allocation, or evaluation. Routine agreed mechanical work may proceed without interruption.
 - Record the learner's prediction in every consequential versioned experiment before running it, then compare prediction with evidence afterward.
 - Present the site as a serious interactive field notebook: causal diagrams, small numerical simulators, implementation comparisons, experiment records, and restrained progress indicators rather than gamification.
+- Include a post-core reinforcement-learning extension grounded in chess, with self-play gated on an explicit tournament ruling about generated training experience and compute accounting.
 - Commit and push completed repository changes to `main` by default unless the learner explicitly asks to keep them local.
 - Do not incorporate competitors' distinctive techniques into lessons or experiments unless the learner explicitly chooses to study them.
 
