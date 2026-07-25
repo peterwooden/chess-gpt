@@ -98,3 +98,11 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelLoader, /150 MB browser safety limit/);
   assert.doesNotMatch(modelLoader, /\beval\s*\(|new Function\s*\(/);
 });
+
+test("arena constrains the board to eight equal columns and rows", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const boardRule = styles.match(/\.chessboard\s*\{[^}]+\}/)?.[0] ?? "";
+
+  assert.match(boardRule, /grid-template-columns:\s*repeat\(8,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(boardRule, /grid-template-rows:\s*repeat\(8,\s*minmax\(0,\s*1fr\)\)/);
+});
