@@ -21,6 +21,6 @@ Build the strongest fair chess model in a three-friend tournament while learning
 
 ## Out of scope
 
-- Using outside training data, pretrained weights, search, or extra inference compute unless the tournament rules explicitly allow them.
+- Using outside training data or pretrained weights unless the tournament rules explicitly allow them.
 - Building elaborate infrastructure before a small, trustworthy end-to-end baseline works.
 - Treating a lower validation loss as proof of a stronger chess player without match-based evaluation.
