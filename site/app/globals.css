@@ -81,9 +81,13 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .chapter { display: grid; grid-template-columns: 1.5rem 2rem 1fr auto; gap: 0.7rem; align-items: start; padding: 1.35rem 0; border-top: 1px solid var(--line); }
 .chapter-check { color: var(--muted); font-family: ui-monospace, monospace; }
 .chapter-copy h3 { margin: 0 0 0.35rem; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.35rem; line-height: 1.15; }
+.chapter-copy h3 a { color: inherit; text-decoration-thickness: 0.08em; text-underline-offset: 0.2em; }
 .chapter-copy p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
 .chapter small { grid-column: 3 / -1; color: var(--green); font-family: ui-monospace, monospace; font-size: 0.67rem; line-height: 1.5; }
 .locked { padding: 0.25rem 0.45rem; border: 1px solid var(--line); color: var(--muted); font-size: 0.58rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.chapter-active { margin-inline: -0.75rem; padding-inline: 0.75rem; border-top-color: var(--green); background: rgb(220 231 223 / 0.35); }
+.chapter-active .chapter-check { color: var(--green); }
+.chapter-open { padding: 0.35rem 0.5rem; border: 1px solid var(--green); color: var(--green); font-size: 0.62rem; font-weight: 900; letter-spacing: 0.04em; text-decoration: none; text-transform: uppercase; white-space: nowrap; }
 .extension-block { margin-top: 4rem; padding: 1.25rem; border: 1px solid var(--green); background: rgb(220 231 223 / 0.42); }
 .extension-heading { margin-bottom: 2rem; }
 .extension-heading h3 { margin: 0; color: var(--green); font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(2rem, 6vw, 3.4rem); font-weight: 500; letter-spacing: -0.045em; }
@@ -271,6 +275,72 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .arena-footer span { color: var(--green); font-family: ui-monospace, monospace; font-weight: 850; }
 .arena-footer a { color: var(--green); font-weight: 800; text-underline-offset: 0.25rem; }
 
+/* Chapter lessons */
+.lesson-page { min-height: 100svh; background: radial-gradient(circle at 90% 2%, rgb(184 91 41 / 0.12), transparent 23rem), var(--paper); }
+.lesson-nav { position: sticky; z-index: 40; top: 0; display: flex; justify-content: space-between; gap: 1rem; align-items: center; min-height: 3.75rem; padding: 0 1rem; border-bottom: 1px solid rgb(20 63 49 / 0.18); background: rgb(241 237 226 / 0.93); backdrop-filter: blur(14px); }
+.lesson-nav a { color: var(--green); font-family: ui-monospace, monospace; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.08em; text-decoration: none; }
+.lesson-nav span { color: var(--muted); font-size: 0.62rem; font-weight: 850; letter-spacing: 0.07em; text-align: right; text-transform: uppercase; }
+.lesson-hero, .lesson-section, .mission-complete, .lesson-footer { width: min(100% - 2rem, 68rem); margin-inline: auto; }
+.lesson-hero { display: grid; gap: 2rem; padding: 4.5rem 0; }
+.lesson-hero h1 { max-width: 10ch; font-size: clamp(3.6rem, 15vw, 7.5rem); }
+.lesson-hero .lede { max-width: 34rem; }
+.lesson-brief { padding: 1.15rem; border: 1px solid var(--green); background: rgb(255 253 247 / 0.72); box-shadow: 0.4rem 0.4rem 0 var(--green-soft); rotate: 1deg; }
+.lesson-brief span { color: var(--amber); font-family: ui-monospace, monospace; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.lesson-brief strong { display: block; margin: 2.5rem 0 0.75rem; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.45rem; line-height: 1.2; }
+.lesson-brief p { margin: 0; color: var(--muted); line-height: 1.5; }
+.lesson-section { padding: 4.5rem 0; border-top: 1px solid var(--line); }
+.lesson-section-heading { max-width: 45rem; margin-bottom: 2rem; }
+.lesson-section-heading > p:last-child { color: var(--muted); line-height: 1.65; }
+.lesson-task { padding: 1.1rem; border: 1px solid var(--green); background: rgb(255 253 247 / 0.76); }
+.lesson-task h3 { margin: 0 0 1.4rem; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(1.4rem, 5vw, 1.9rem); line-height: 1.25; }
+.lesson-choice-grid { display: grid; gap: 0.55rem; }
+.lesson-choice { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.6rem; align-items: center; min-height: 3.5rem; padding: 0.55rem 0.7rem; border: 1px solid var(--line); color: var(--ink); background: var(--white); text-align: left; cursor: pointer; }
+.lesson-choice span { display: grid; width: 1.75rem; height: 1.75rem; border: 1px solid var(--line); border-radius: 50%; place-items: center; color: var(--muted); font-size: 0.7rem; }
+.lesson-choice.selected { border-color: var(--green); outline: 2px solid rgb(20 63 49 / 0.12); }
+.lesson-choice.selected span { border-color: var(--green); color: var(--white); background: var(--green); }
+.lesson-submit { min-height: 2.9rem; margin-top: 1rem; padding: 0 1rem; border: 1px solid var(--green); border-radius: 0.2rem; color: var(--white); background: var(--green); font-weight: 850; cursor: pointer; }
+.lesson-submit:disabled { border-color: var(--line); color: #999487; background: #e5e0d4; cursor: default; }
+.lesson-feedback { margin-top: 1rem; padding: 0.9rem; border-left: 0.3rem solid; line-height: 1.5; }
+.lesson-feedback.correct { border-color: var(--green); background: var(--green-soft); }
+.lesson-feedback.incorrect { border-color: var(--red); background: #efe0dc; }
+.lesson-feedback p { margin: 0.35rem 0 0; }
+.game-envelope { display: grid; gap: 0.8rem; align-items: center; padding: 1rem; border: 1px solid var(--line); background: rgb(255 253 247 / 0.6); }
+.game-envelope > div { min-width: 0; padding: 0.8rem; border: 1px solid var(--line); background: var(--white); }
+.game-envelope span { display: block; margin-bottom: 0.35rem; color: var(--amber); font-family: ui-monospace, monospace; font-size: 0.65rem; font-weight: 900; text-transform: uppercase; }
+.game-envelope i { color: var(--muted); font-size: 0.72rem; font-style: normal; font-weight: 850; text-align: center; text-transform: uppercase; }
+.position-stack { display: grid; gap: 0.3rem; }
+.position-stack code { overflow-x: auto; padding: 0.35rem; background: #e8e3d7; white-space: nowrap; }
+.split-stamp { color: var(--green); font-family: ui-monospace, monospace; font-size: 0.8rem; font-weight: 900; letter-spacing: 0.04em; text-align: center; }
+.split-stamp em { display: block; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: 0.62rem; font-style: normal; }
+.lesson-note { max-width: 48rem; margin: 1.5rem 0 0; color: var(--muted); line-height: 1.7; }
+.lesson-note a { color: var(--green); font-weight: 800; }
+.implementation-grid { display: grid; gap: 0.8rem; }
+.implementation-card { min-width: 0; padding: 1rem; border: 1px solid var(--line); color: var(--ink); background: rgb(255 253 247 / 0.72); text-align: left; cursor: pointer; }
+.implementation-card > span, .retrieval-card > span { color: var(--amber); font-family: ui-monospace, monospace; font-weight: 900; }
+.implementation-card h3 { margin: 0.5rem 0 1rem; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.35rem; }
+.implementation-card pre { overflow-x: auto; min-height: 8.5rem; margin: 0; padding: 0.8rem; border: 1px solid var(--line); background: #e8e3d7; font-size: 0.68rem; line-height: 1.55; }
+.implementation-card p { margin: 1rem 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.55; }
+.implementation-card.selected { border-color: var(--green); outline: 3px solid rgb(20 63 49 / 0.12); }
+.retrieval-stack { display: grid; gap: 0.8rem; }
+.retrieval-card { padding: 1rem; border: 1px solid var(--line); background: rgb(255 253 247 / 0.72); }
+.retrieval-card h3 { margin: 0.6rem 0 1rem; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.3rem; line-height: 1.25; }
+.retrieval-choices { display: grid; gap: 0.45rem; }
+.retrieval-choices button { min-height: 3rem; padding: 0.65rem; border: 1px solid var(--line); color: var(--ink); background: var(--white); font-size: 0.76rem; font-weight: 780; text-align: left; cursor: pointer; }
+.retrieval-choices button.selected { border-color: var(--green); color: var(--green); background: var(--green-soft); }
+.mission-complete { margin-bottom: 4.5rem; padding: 1.25rem; border: 1px dashed var(--line); color: var(--muted); background: #e7e1d4; }
+.mission-complete.unlocked { border-style: solid; border-color: var(--green); color: var(--white); background: var(--green); box-shadow: 0.5rem 0.5rem 0 var(--green-soft); }
+.mission-complete .eyebrow { color: inherit; opacity: 0.72; }
+.mission-complete h2 { margin-top: 0.4rem; }
+.mission-complete p { max-width: 44rem; line-height: 1.65; }
+.mission-code { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; align-items: center; margin-top: 1.25rem; padding: 0.9rem; border: 1px dashed #8bb59f; background: rgb(0 0 0 / 0.12); }
+.mission-code code { overflow-x: auto; color: var(--white); font-size: clamp(0.95rem, 4vw, 1.25rem); font-weight: 900; }
+.mission-code button, .lesson-reset { min-height: 2.5rem; padding: 0 0.8rem; border: 1px solid currentColor; color: inherit; background: transparent; font-weight: 850; cursor: pointer; }
+.mission-code button { color: var(--green); background: var(--white); }
+.lesson-reset { margin-top: 1rem; font-size: 0.68rem; }
+.lesson-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.75rem; padding: 2rem 0 3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.75rem; }
+.lesson-footer span { color: var(--green); font-family: ui-monospace, monospace; font-weight: 850; }
+.lesson-footer a { color: var(--green); font-weight: 800; }
+
 @keyframes arena-pulse {
   50% { opacity: 0.3; scale: 0.75; }
 }
@@ -301,6 +371,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .play-actions { grid-column: 1 / -1; grid-template-columns: repeat(4, auto); justify-content: start; }
   .arena-workbench { grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.7fr); }
   .move-console { max-height: calc(min((100vw - 2rem) * 0.635, 44rem) + 4.15rem); }
+  .lesson-nav { padding-inline: max(1rem, calc((100vw - 68rem) / 2)); }
+  .lesson-hero { grid-template-columns: minmax(0, 1.5fr) minmax(16rem, 0.6fr); gap: 4rem; align-items: center; padding-block: 6rem; }
+  .lesson-choice-grid { grid-template-columns: repeat(3, 1fr); }
+  .lesson-choice { align-content: start; grid-template-columns: 1fr; min-height: 7rem; }
+  .game-envelope { grid-template-columns: minmax(9rem, 0.8fr) auto minmax(13rem, 1.2fr) auto minmax(8rem, 0.7fr); }
+  .implementation-grid { grid-template-columns: repeat(3, 1fr); }
+  .retrieval-stack { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

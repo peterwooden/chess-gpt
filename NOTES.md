@@ -51,6 +51,8 @@ Use Karpathy's public material as a spine, adapted to this project rather than c
 6. Turn the teaching implementation into a tested, profiled experiment harness.
 7. Establish a strong baseline, then run creative ablations and tournament matches.
 
+The reviewed diagnostic selected the direct Chapter 1 path in [`docs/CHAPTER_1_PLAN.md`](docs/CHAPTER_1_PLAN.md). Mission 1 starts with game-level split integrity because every later architecture, learning-rate, and data-size prediction depends on trustworthy evidence. Generating the mission does not count as learner mastery.
+
 ## Guardrails for the teacher
 
 - Never use the final test set for routine model selection.

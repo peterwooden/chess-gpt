@@ -91,6 +91,9 @@ def test_curriculum_tracks_prediction_driven_progress() -> None:
     assert curriculum.count("### RL extension ") == 4
     assert "Part III §15.4" in curriculum
     assert "Part III §17.1" in curriculum
+    assert "- [x] Adaptive Chapter 1 missions generated" in curriculum
+    assert (ROOT / "docs/CHAPTER_1_PLAN.md").is_file()
+    assert (ROOT / "lessons/0001-honest-chess-data-splits.html").is_file()
     assert curriculum.count("**Further reading**") == 14
     assert curriculum.count("- **Primary:**") == 14
     assert curriculum.count("- **Secondary:**") == 14

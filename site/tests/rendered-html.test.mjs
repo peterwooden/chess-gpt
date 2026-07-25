@@ -31,6 +31,8 @@ test("server-renders the roadmap and placement diagnostic", async () => {
   assert.match(html, /Deep Learning/i);
   assert.match(html, /Spinning Up in Deep RL/i);
   assert.match(html, /Open the browser arena/i);
+  assert.match(html, /Continue Chapter 1/i);
+  assert.match(html, /Mission 1/i);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|react-loading-skeleton/i);
 });
 
@@ -42,7 +44,34 @@ test("diagnostic remains gated and device-local", async () => {
   assert.match(page, /confidenceSet === questions\.length/);
   assert.match(page, /window\.localStorage/);
   assert.match(page, /submitted \? diagnosticResult/);
-  assert.match(page, /Chapter 1 stays locked/i);
+  assert.match(page, /teacher uses this code/i);
+});
+
+test("server-renders the first chapter mission", async () => {
+  const response = await render("/chapter-1/data-splits");
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+
+  const html = await response.text();
+  assert.match(html, /<title>Split games, not positions · Chess GPT Learning Lab<\/title>/i);
+  assert.match(html, /Predict the direction of the error/i);
+  assert.match(html, /Shuffle expanded positions/i);
+  assert.match(html, /Hash stable game identity/i);
+  assert.match(html, /Retrieval checkpoint/i);
+  assert.match(html, /The code is still sealed/i);
+});
+
+test("chapter mission gates a device-local completion code", async () => {
+  const lesson = await readFile(
+    new URL("../app/chapter-1/data-splits/lesson-client.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(lesson, /CGPT-C1M1-GAMEHASH/);
+  assert.match(lesson, /window\.localStorage/);
+  assert.match(lesson, /forecastCorrect && implementationCorrect && progress\.retrievalChecked && retrievalCorrect/);
+  assert.match(lesson, /progress\.implementation === 2/);
+  assert.match(lesson, /what identity must remain stable/i);
 });
 
 test("server-renders the client-only browser arena", async () => {

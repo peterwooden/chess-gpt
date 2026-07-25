@@ -235,7 +235,8 @@ export default function Home() {
           <h1>Predict before<br />you train.</h1>
           <p className="lede">Learn machine learning by forecasting what each lever will do, testing it on a real chess model, and explaining the evidence.</p>
           <div className="hero-actions">
-            <a className="primary-link" href="#diagnostic">Take the diagnostic <span>↓</span></a>
+            <Link className="primary-link" href="/chapter-1/data-splits">Continue Chapter 1 <span>→</span></Link>
+            <a className="text-link" href="#diagnostic">Review the diagnostic</a>
             <Link className="text-link" href="/arena">Open the browser arena</Link>
             <a className="text-link" href="#roadmap">Inspect the roadmap</a>
           </div>
@@ -273,13 +274,13 @@ export default function Home() {
           <p>Ten chapters form the core. A four-part reinforcement-learning extension follows once the supervised model and evaluation protocol are trustworthy.</p>
         </div>
         <div className="chapter-list">
-          {chapters.map((chapter) => (
-            <article className="chapter" key={chapter.number}>
-              <div className="chapter-check" aria-label={`Chapter ${chapter.number} locked`}>□</div>
+          {chapters.map((chapter, index) => (
+            <article className={index === 0 ? "chapter chapter-active" : "chapter"} key={chapter.number}>
+              <div className="chapter-check" aria-label={`Chapter ${chapter.number} ${index === 0 ? "in progress" : "locked"}`}>{index === 0 ? "→" : "□"}</div>
               <span className="chapter-number">{chapter.number}</span>
-              <div className="chapter-copy"><h3>{chapter.title}</h3><p>{chapter.motive}</p></div>
+              <div className="chapter-copy"><h3>{index === 0 ? <Link href="/chapter-1/data-splits">{chapter.title}</Link> : chapter.title}</h3><p>{chapter.motive}</p></div>
               <small>{chapter.concepts}</small>
-              <span className="locked">Locked</span>
+              {index === 0 ? <Link className="chapter-open" href="/chapter-1/data-splits">Mission 1 →</Link> : <span className="locked">Locked</span>}
             </article>
           ))}
         </div>
@@ -380,7 +381,7 @@ export default function Home() {
               <button type="button" onClick={copyCode}>{copied ? "Code copied" : "Copy diagnostic code"}</button>
               <button className="reset-button" type="button" onClick={resetDiagnostic}>Reset diagnostic</button>
             </div>
-            <small>Chapter 1 stays locked until your teacher reviews this profile and asks one follow-up prediction.</small>
+            <small>Your teacher uses this code and one follow-up prediction to choose the Chapter 1 path. Mission progress is stored separately on this device.</small>
           </section>
         )}
       </section>

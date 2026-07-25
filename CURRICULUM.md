@@ -9,7 +9,7 @@ This is the durable learning roadmap. Core outcomes are fixed; individual missio
 - Consequential experiments record the learner's predicted direction, rough magnitude, assumptions, confidence, and likely failure modes before execution.
 - Lessons use a tiny inspectable example first and the real chess system second.
 - The weekly cadence assumes five hours per week across several short missions, one focused source assignment, one experiment, and review.
-- Chapter 1 will be written only after the placement diagnostic is reviewed.
+- Chapter 1 missions adapt to the reviewed placement diagnostic and are recorded in [`docs/CHAPTER_1_PLAN.md`](docs/CHAPTER_1_PLAN.md).
 
 ## Reading strategy for *Deep Learning*
 
@@ -29,7 +29,7 @@ Goodfellow, Bengio, and Courville is a companion reference, not a cover-to-cover
 - [x] First reproducible chess baseline trained as experiment `0001`
 - [x] Placement diagnostic completed on the learning site
 - [x] Diagnostic code and one prediction explained to the teacher
-- [ ] Adaptive Chapter 1 missions generated
+- [x] Adaptive Chapter 1 missions generated
 
 ## Chapter 1 — What does it mean for a chess model to learn?
 

@@ -30,6 +30,12 @@
       <dt id="training-example">Training example</dt>
       <dd>An input context paired with one or more target tokens whose prediction error contributes to the loss. It is not automatically the same thing as a whole chess game.</dd>
 
+      <dt id="split-unit">Split unit</dt>
+      <dd>The smallest group assigned wholly to one data split. In our current evaluation it is a complete chess game, so overlapping positions from one game cannot cross from training into validation.</dd>
+
+      <dt id="data-leakage">Data leakage</dt>
+      <dd>Information crosses into training or model selection that would not be available for the claimed evaluation scenario, making measured performance misleadingly optimistic. Splitting overlapping positions from one game across training and validation is one form.</dd>
+
       <dt id="training-split">Training split</dt>
       <dd>The games whose targets may update model parameters.</dd>
 
