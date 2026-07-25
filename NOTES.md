@@ -15,6 +15,7 @@
 - The learner usually accesses Codex from a phone through a remote session, where local HTML links display source instead of a rendered page; publish interactive lessons through Sites and return a normal web URL.
 - Interactive lessons should gate a short completion code behind correct retrieval answers so the learner can paste it back as lightweight evidence of completion.
 - Commit and push completed repository changes to `main` by default unless the learner explicitly asks to keep them local.
+- Do not incorporate competitors' distinctive techniques into lessons or experiments unless the learner explicitly chooses to study them.
 
 ## Default teaching loop
 

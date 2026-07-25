@@ -1,22 +1,15 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  const imageUrl = `${protocol}://${host}/og.png`;
-  const title = "One Move, Three Representations · Chess GPT";
-  const description = "A short interactive lesson on how chess moves become language-model tokens.";
+const title = "Chess GPT Learning Lab";
+const description = "A first-principles machine-learning course built around training a competitive small chess language model.";
 
-  return {
-    title,
-    description,
-    openGraph: { title, description, images: [{ url: imageUrl, width: 1200, height: 630 }] },
-    twitter: { card: "summary_large_image", title, description, images: [imageUrl] },
-  };
-}
+export const metadata: Metadata = {
+  title,
+  description,
+  openGraph: { title, description },
+  twitter: { card: "summary", title, description },
+};
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

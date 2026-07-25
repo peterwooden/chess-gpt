@@ -56,4 +56,4 @@ One session should produce one small conceptual win and one trustworthy artifact
 4. explain the result;
 5. record what changed our understanding.
 
-The first lesson is [One move, three representations](lessons/0001-one-move-three-representations.html).
+The first lesson is being co-designed with the learner before a replacement is committed.
