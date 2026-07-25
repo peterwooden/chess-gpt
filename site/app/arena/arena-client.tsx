@@ -10,6 +10,7 @@ import {
 } from "./model";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
+const MODEL_AUTOPLAY_DELAY_MS = 650;
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1] as const;
 const PIECES: Record<Color, Record<PieceSymbol, string>> = {
@@ -26,6 +27,7 @@ type ModelSlot = {
 };
 
 type PlayMode = "human" | "models";
+type SidePreference = Color | "random";
 
 type MoveRecord = {
   ply: number;
@@ -59,9 +61,10 @@ export default function ArenaClient() {
   const [modelB, setModelB] = useState<ModelSlot>(emptySlot);
   const [mode, setMode] = useState<PlayMode>("human");
   const [humanColor, setHumanColor] = useState<Color>("w");
+  const [player1Color, setPlayer1Color] = useState<Color>("w");
+  const [sidePreference, setSidePreference] = useState<SidePreference>("random");
   const [running, setRunning] = useState(false);
   const [thinking, setThinking] = useState<string | null>(null);
-  const [delayMs, setDelayMs] = useState(650);
   const [gameStarted, setGameStarted] = useState(false);
   const [, setGameVersion] = useState(0);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
@@ -105,7 +108,7 @@ export default function ArenaClient() {
     ? new Set(game.moves({ square: selectedSquare, verbose: true }).map((move) => move.to))
     : new Set<Square>();
   const latestMove = moves.at(-1);
-  const orientation: Color = mode === "human" ? humanColor : "w";
+  const orientation: Color = gameStarted && mode === "human" ? humanColor : "w";
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
   const status = describeGame(game, running, thinking);
@@ -158,18 +161,18 @@ export default function ArenaClient() {
     setSlot((current) => ({ ...current, reference, error: null }));
   }
 
-  function beginGame(nextMode: PlayMode) {
-    if (!modelA.model) {
-      setGameError("Load Model A before starting a game.");
+  function beginGame() {
+    if (!modelA.model && !modelB.model) {
+      setGameError("Load at least one model before starting a game.");
       return;
     }
-    if (nextMode === "models" && !modelB.model) {
-      setGameError("Load Model B before starting model-versus-model play.");
-      return;
-    }
+    const nextMode: PlayMode = modelA.model && modelB.model ? "models" : "human";
+    const resolvedPlayer1Color = sidePreference === "random" ? randomColor() : sidePreference;
     gameEpoch.current += 1;
     gameRef.current = new Chess();
     setMode(nextMode);
+    setPlayer1Color(resolvedPlayer1Color);
+    setHumanColor(modelA.model ? oppositeColor(resolvedPlayer1Color) : resolvedPlayer1Color);
     setMoves([]);
     setSelectedSquare(null);
     setPromotion(null);
@@ -221,22 +224,23 @@ export default function ArenaClient() {
   const activeModel = (() => {
     if (!running || game.isGameOver()) return null;
     if (mode === "models") {
-      return game.turn() === "w"
+      return game.turn() === player1Color
         ? modelA.model && { model: modelA.model, actor: modelA.model.info.name }
         : modelB.model && { model: modelB.model, actor: modelB.model.info.name };
     }
     if (game.turn() === humanColor) return null;
-    return modelA.model && { model: modelA.model, actor: modelA.model.info.name };
+    const singleModel = modelA.model ?? modelB.model;
+    return singleModel && { model: singleModel, actor: singleModel.info.name };
   })();
 
   useEffect(() => {
     if (!activeModel || thinking) return;
     const timer = window.setTimeout(
       () => void playModelMove(activeModel.model, activeModel.actor),
-      mode === "models" ? delayMs : 180,
+      mode === "models" ? MODEL_AUTOPLAY_DELAY_MS : 180,
     );
     return () => window.clearTimeout(timer);
-  }, [activeModel, delayMs, mode, playModelMove, thinking]);
+  }, [activeModel, mode, playModelMove, thinking]);
 
   function chooseSquare(square: Square) {
     if (mode !== "human" || !running || thinking || game.turn() !== humanColor) return;
@@ -295,198 +299,198 @@ export default function ArenaClient() {
 
   async function stepOnce() {
     if (thinking || game.isGameOver()) return;
+    const humanOpponent = modelA.model ?? modelB.model;
     const candidate =
       mode === "models"
-        ? game.turn() === "w"
+        ? game.turn() === player1Color
           ? modelA.model && { model: modelA.model, actor: modelA.model.info.name }
           : modelB.model && { model: modelB.model, actor: modelB.model.info.name }
         : game.turn() !== humanColor
-          ? modelA.model && { model: modelA.model, actor: modelA.model.info.name }
+          ? humanOpponent && { model: humanOpponent, actor: humanOpponent.info.name }
           : null;
     if (candidate) await playModelMove(candidate.model, candidate.actor);
   }
 
+  function returnToSetup() {
+    gameEpoch.current += 1;
+    gameRef.current = new Chess();
+    setRunning(false);
+    setThinking(null);
+    setMoves([]);
+    setSelectedSquare(null);
+    setPromotion(null);
+    setGameError(null);
+    setGameStarted(false);
+    setGameVersion((value) => value + 1);
+  }
+
+  const player1Name = modelA.model?.info.name ?? "Human";
+  const player2Name = modelB.model?.info.name ?? "Human";
+  const whitePlayer = player1Color === "w" ? player1Name : player2Name;
+  const blackPlayer = player1Color === "b" ? player1Name : player2Name;
+
   return (
-    <main className="arena-page">
+    <main className="arena-page arena-page-v2">
       <nav className="arena-nav" aria-label="Arena navigation">
-        <Link href="/" className="wordmark">CGPT / LAB</Link>
-        <span>Browser arena · local inference</span>
+        <Link href="/" className="arena-title">ChessGPT arena</Link>
+        <span>Runs locally in your browser</span>
       </nav>
 
-      <header className="arena-hero">
-        <div>
-          <p className="eyebrow">Playable model harness · zero server inference</p>
-          <h1>Two URLs.<br />One board.</h1>
-        </div>
-        <p>
-          Download revisioned Hugging Face artifacts directly into this browser. Play Model A yourself,
-          or load Model B and watch a complete game unfold move by move.
-        </p>
-      </header>
-
-      <section className="model-rack" aria-labelledby="model-rack-title">
-        <div className="arena-section-heading">
-          <div>
-            <p className="eyebrow">01 · Select players</p>
-            <h2 id="model-rack-title">Load the learned state.</h2>
+      <section className="arena-workspace" aria-label="Chess arena">
+        <div className="board-stage">
+          <div className="game-status" aria-live="polite">
+            <span>{gameStarted ? mode === "human" ? "Human match" : "Model match" : "Board ready"}</span>
+            <strong>{gameStarted ? status : "Choose players and press Start"}</strong>
+            <small>{gameStarted ? `${history.length} plies · ${Math.ceil(history.length / 2)} moves` : "Local inference"}</small>
           </div>
-          <p>
-            Prefer <code>owner/repository@commit</code>. A branch such as <code>main</code> works for
-            exploration, but it is mutable and cannot identify a tournament submission.
-          </p>
-        </div>
-        <div className="model-grid">
-          <ModelLoader
-            label="Model A"
-            role="Human opponent · White in autoplay"
-            slot={modelA}
-            onReference={(reference) => updateReference("a", reference)}
-            onLoad={() => void loadModel("a")}
-          />
-          <ModelLoader
-            label="Model B"
-            role="Optional · Black in autoplay"
-            slot={modelB}
-            onReference={(reference) => updateReference("b", reference)}
-            onLoad={() => void loadModel("b")}
-          />
-        </div>
-        <p className="contract-note">
-          Accepted artifacts: a direct <code>model.json.gz</code> SAN n-gram checkpoint, or a repository
-          containing <code>browser/manifest.json</code> under the safe <code>chess-gpt-browser-v1</code> contract.
-        </p>
-      </section>
-
-      <section className="play-lab" aria-labelledby="board-title">
-        <div className="play-toolbar">
-          <div>
-            <p className="eyebrow">02 · Run inference</p>
-            <h2 id="board-title">Watch every decision.</h2>
+          <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
+            {boardRanks.flatMap((rank) =>
+              boardFiles.map((file) => {
+                const square = `${file}${rank}` as Square;
+                const piece = game.get(square);
+                const light = (FILES.indexOf(file) + rank) % 2 === 1;
+                const selected = square === selectedSquare;
+                const target = targetSquares.has(square);
+                const last = square === latestMove?.from || square === latestMove?.to;
+                return (
+                  <button
+                    type="button"
+                    role="gridcell"
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${pieceName(piece.type)}` : " empty"}`}
+                    className={`board-square ${light ? "light" : "dark"}${selected ? " selected" : ""}${target ? " target" : ""}${last ? " last" : ""}`}
+                    onClick={() => chooseSquare(square)}
+                    key={square}
+                  >
+                    {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
+                    {(orientation === "w" ? rank === 1 : rank === 8) ? <small className="file-label">{file}</small> : null}
+                    {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
+                  </button>
+                );
+              }),
+            )}
           </div>
-          <div className="play-options">
-            <label>
-              Human side
-              <select
-                value={humanColor}
-                onChange={(event) => setHumanColor(event.target.value as Color)}
-                disabled={gameStarted && !game.isGameOver()}
-              >
-                <option value="w">White</option>
-                <option value="b">Black</option>
-              </select>
-            </label>
-            <label>
-              Autoplay pace
-              <select value={delayMs} onChange={(event) => setDelayMs(Number(event.target.value))}>
-                <option value={120}>Fast · 0.12 s</option>
-                <option value={650}>Readable · 0.65 s</option>
-                <option value={1500}>Study · 1.5 s</option>
-              </select>
-            </label>
-          </div>
-          <div className="play-actions">
-            <button type="button" className="arena-primary" onClick={() => beginGame("human")}>
-              Human vs A
-            </button>
-            <button type="button" onClick={() => beginGame("models")} disabled={!modelB.model}>
-              A vs B
-            </button>
-            <button
-              type="button"
-              onClick={() => setRunning((value) => !value)}
-              disabled={!gameStarted || game.isGameOver()}
-            >
-              {running ? "Pause" : "Resume"}
-            </button>
-            <button type="button" onClick={() => void stepOnce()} disabled={running || Boolean(thinking)}>
-              Next move
-            </button>
-          </div>
-        </div>
-
-        <div className="arena-workbench">
-          <div className="board-stage">
-            <div className="game-status" aria-live="polite">
-              <span>{mode === "human" ? "Human match" : "Model match"}</span>
-              <strong>{status}</strong>
-              <small>{history.length} plies · {Math.ceil(history.length / 2)} moves</small>
+          {promotion ? (
+            <div className="promotion-picker" role="dialog" aria-label="Choose promotion piece">
+              <strong>Promote pawn to</strong>
+              <div>
+                {promotion.pieces.map((piece) => (
+                  <button
+                    type="button"
+                    onClick={() => playHumanMove(promotion.from, promotion.to, piece)}
+                    aria-label={`Promote to ${pieceName(piece)}`}
+                    key={piece}
+                  >
+                    {PIECES[humanColor][piece]}
+                  </button>
+                ))}
+                <button type="button" className="promotion-cancel" onClick={() => setPromotion(null)}>Cancel</button>
+              </div>
             </div>
-            {gameError ? <div className="arena-error" role="alert">{gameError}</div> : null}
-            <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
-              {boardRanks.flatMap((rank) =>
-                boardFiles.map((file) => {
-                  const square = `${file}${rank}` as Square;
-                  const piece = game.get(square);
-                  const light = (FILES.indexOf(file) + rank) % 2 === 1;
-                  const selected = square === selectedSquare;
-                  const target = targetSquares.has(square);
-                  const last = square === latestMove?.from || square === latestMove?.to;
-                  return (
-                    <button
-                      type="button"
-                      role="gridcell"
-                      aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${pieceName(piece.type)}` : " empty"}`}
-                      className={`board-square ${light ? "light" : "dark"}${selected ? " selected" : ""}${target ? " target" : ""}${last ? " last" : ""}`}
-                      onClick={() => chooseSquare(square)}
-                      key={square}
-                    >
-                      {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
-                      {(orientation === "w" ? rank === 1 : rank === 8) ? <small className="file-label">{file}</small> : null}
-                      {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
-                    </button>
-                  );
-                }),
-              )}
-            </div>
-            {promotion ? (
-              <div className="promotion-picker" role="dialog" aria-label="Choose promotion piece">
-                <strong>Promote pawn to</strong>
+          ) : null}
+        </div>
+
+        <aside className="arena-sidebar">
+          {!gameStarted ? (
+            <section className="setup-pane" aria-labelledby="setup-title">
+              <header className="setup-heading">
+                <p className="eyebrow">New game</p>
+                <h1 id="setup-title">Set up game</h1>
+                <p>Load one model to play it yourself, or load two to watch them play.</p>
+              </header>
+
+              <ModelLoader
+                label="Player 1"
+                role="Model · optional"
+                slot={modelA}
+                onReference={(reference) => updateReference("a", reference)}
+                onLoad={() => void loadModel("a")}
+              />
+
+              <fieldset className="side-picker">
+                <legend>Player 1 plays</legend>
                 <div>
-                  {promotion.pieces.map((piece) => (
+                  {([
+                    { value: "w", label: "White" },
+                    { value: "random", label: "Random" },
+                    { value: "b", label: "Black" },
+                  ] as const).map((side) => (
                     <button
                       type="button"
-                      onClick={() => playHumanMove(promotion.from, promotion.to, piece)}
-                      aria-label={`Promote to ${pieceName(piece)}`}
-                      key={piece}
+                      className={sidePreference === side.value ? "selected" : ""}
+                      aria-pressed={sidePreference === side.value}
+                      onClick={() => setSidePreference(side.value)}
+                      key={side.value}
                     >
-                      {PIECES[humanColor][piece]}
+                      {side.label}
                     </button>
                   ))}
-                  <button type="button" className="promotion-cancel" onClick={() => setPromotion(null)}>Cancel</button>
                 </div>
-              </div>
-            ) : null}
-          </div>
+              </fieldset>
 
-          <aside className="move-console" aria-label="Game progress">
-            <header>
-              <div><span>Live record</span><strong>{thinking ? `${thinking} is thinking` : running ? "Game running" : "Game paused"}</strong></div>
-              <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
-            </header>
-            {moves.length === 0 ? (
-              <div className="empty-record">
-                <span>—</span>
-                <p>Load a model and begin a game. SAN moves and inference timing will appear here.</p>
+              <ModelLoader
+                label="Player 2"
+                role="Optional · Human if empty"
+                slot={modelB}
+                onReference={(reference) => updateReference("b", reference)}
+                onLoad={() => void loadModel("b")}
+              />
+
+              <div className="setup-actions">
+                {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
+                <p>{modelA.model && modelB.model ? "Model versus model" : modelA.model || modelB.model ? "The empty player slot will be Human" : "Load at least one model"}</p>
+                <button type="button" onClick={beginGame} disabled={(!modelA.model && !modelB.model) || modelA.phase === "loading" || modelB.phase === "loading"}>
+                  Start game
+                </button>
               </div>
-            ) : (
-              <ol className="move-record">
-                {moves.map((move) => (
-                  <li className={move.ply === moves.length ? "current" : ""} key={`${move.ply}-${move.san}`}>
-                    <span>{move.ply}</span>
-                    <strong>{move.san}</strong>
-                    <div><b>{move.actor}</b><small>{move.source}{move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}</small></div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </aside>
-        </div>
+            </section>
+          ) : (
+            <section className="move-console" aria-label="Game progress">
+              <header>
+                <div><span>Moves</span><strong>{thinking ? `${thinking} is thinking` : running ? "Game running" : "Game paused"}</strong></div>
+                <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
+              </header>
+              <dl className="match-up">
+                <div><dt>White</dt><dd>{whitePlayer}</dd></div>
+                <div><dt>Black</dt><dd>{blackPlayer}</dd></div>
+              </dl>
+              {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
+              {moves.length === 0 ? (
+                <div className="empty-record">
+                  <span>01</span>
+                  <p>The game is ready. The first SAN move will appear here.</p>
+                </div>
+              ) : (
+                <ol className="move-record">
+                  {moves.map((move) => (
+                    <li className={move.ply === moves.length ? "current" : ""} key={`${move.ply}-${move.san}`}>
+                      <span>{move.ply}</span>
+                      <strong>{move.san}</strong>
+                      <div><b>{move.actor}</b><small>{move.source}{move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}</small></div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <div className="game-controls">
+                <button
+                  type="button"
+                  onClick={() => setRunning((value) => !value)}
+                  disabled={game.isGameOver()}
+                >
+                  {running ? "Pause" : "Resume"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void stepOnce()}
+                  disabled={running || Boolean(thinking) || game.isGameOver() || (mode === "human" && game.turn() === humanColor)}
+                >
+                  Next move
+                </button>
+                <button type="button" onClick={returnToSetup}>New game</button>
+              </div>
+            </section>
+          )}
+        </aside>
       </section>
-
-      <footer className="arena-footer">
-        <span>All inference happens on this device.</span>
-        <Link href="/">Return to the learning lab</Link>
-      </footer>
     </main>
   );
 }
@@ -533,13 +537,11 @@ function ModelLoader({
         </div>
       ) : null}
       {slot.model ? (
-        <dl className="model-facts">
-          <div><dt>Name</dt><dd>{slot.model.info.name}</dd></div>
-          <div><dt>Runtime</dt><dd>{slot.model.info.runtime}</dd></div>
-          <div><dt>Artifact</dt><dd>{formatBytes(slot.model.info.artifactBytes)}</dd></div>
-          <div><dt>Revision</dt><dd className={slot.model.info.pinned ? "verified" : "mutable"}>{slot.model.info.pinned ? "Pinned" : "Mutable"}</dd></div>
-          <div><dt>SHA-256</dt><dd><code>{slot.model.info.digest.slice(0, 12)}…</code></dd></div>
-        </dl>
+        <div className="model-summary">
+          <strong>{slot.model.info.name}</strong>
+          <span>{slot.model.info.runtime} · {formatBytes(slot.model.info.artifactBytes)} · {slot.model.info.pinned ? "Pinned" : "Mutable"}</span>
+          <code title={`SHA-256 ${slot.model.info.digest}`}>SHA {slot.model.info.digest.slice(0, 12)}…</code>
+        </div>
       ) : null}
       {slot.error ? <p className="model-error" role="alert">{slot.error}</p> : null}
     </article>
@@ -553,6 +555,14 @@ function describeGame(game: Chess, running: boolean, thinking: string | null): s
   const side = game.turn() === "w" ? "White" : "Black";
   if (thinking) return `${side} to move · calculating`;
   return `${side} to move${game.isCheck() ? " · check" : ""}${running ? "" : " · paused"}`;
+}
+
+function oppositeColor(color: Color): Color {
+  return color === "w" ? "b" : "w";
+}
+
+function randomColor(): Color {
+  return crypto.getRandomValues(new Uint8Array(1))[0] % 2 === 0 ? "w" : "b";
 }
 
 function pieceName(piece: PieceSymbol): string {

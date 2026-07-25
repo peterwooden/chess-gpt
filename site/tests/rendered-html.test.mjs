@@ -80,12 +80,28 @@ test("server-renders the client-only browser arena", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>Browser Arena · Chess GPT Learning Lab<\/title>/i);
-  assert.match(html, /Two URLs/i);
+  assert.match(html, /<title>ChessGPT Arena · Chess GPT Learning Lab<\/title>/i);
+  assert.match(html, /ChessGPT arena/i);
+  assert.match(html, /Set up game/i);
+  assert.match(html, /Player 1/i);
+  assert.match(html, /Player 2/i);
   assert.match(html, /Hugging Face model/i);
-  assert.match(html, /Human vs A/i);
-  assert.match(html, /A vs B/i);
-  assert.match(html, /All inference happens on this device/i);
+  assert.match(html, />White</i);
+  assert.match(html, />Random</i);
+  assert.match(html, />Black</i);
+  assert.match(html, /Start game/i);
+  assert.doesNotMatch(html, /Two URLs|Human vs A|A vs B/i);
+});
+
+test("arena defaults Player 1 to a random side and falls back to a human opponent", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+
+  assert.match(arena, /useState<SidePreference>\("random"\)/);
+  assert.match(arena, /modelA\.model && modelB\.model \? "models" : "human"/);
+  assert.match(arena, /if \(!modelA\.model && !modelB\.model\)/);
+  assert.match(arena, /const singleModel = modelA\.model \?\? modelB\.model/);
+  assert.match(arena, /setHumanColor\(modelA\.model \? oppositeColor\(resolvedPlayer1Color\) : resolvedPlayer1Color\)/);
+  assert.match(arena, /aria-pressed=\{sidePreference === side\.value\}/);
 });
 
 test("arena enforces a narrow, revision-aware model contract", async () => {
@@ -109,14 +125,15 @@ test("arena constrains the board to eight equal columns and rows", async () => {
 
 test("arena has a single-viewport laptop workspace", async () => {
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  const laptopStyles = styles.split("/* Laptop arena: single viewport */")[1] ?? "";
-  const pageRule = laptopStyles.match(/\.arena-page\s*\{[^}]*\}/)?.[0] ?? "";
-  const workbenchRule = laptopStyles.match(/\.arena-workbench\s*\{[^}]*\}/)?.[0] ?? "";
-  const boardRule = laptopStyles.match(/\.chessboard\s*\{[^}]*\}/)?.[0] ?? "";
+  const laptopStyles = styles.split("/* Arena v2: board with a contextual setup / move pane */")[1] ?? "";
+  const pageRule = laptopStyles.match(/\.arena-page-v2\s*\{[^}]*\}/g)?.at(-1) ?? "";
+  const workspaceRule = laptopStyles.match(/\.arena-workspace\s*\{[^}]*\}/g)?.at(-1) ?? "";
+  const boardRule = laptopStyles.match(/\.arena-page-v2 \.chessboard\s*\{[^}]*\}/g)?.at(-1) ?? "";
 
-  assert.match(laptopStyles, /@media \(min-width:\s*1100px\) and \(min-height:\s*700px\)/);
+  assert.match(laptopStyles, /@media \(min-width:\s*960px\) and \(min-height:\s*640px\)/);
   assert.match(pageRule, /height:\s*100svh/);
   assert.match(pageRule, /overflow:\s*hidden/);
-  assert.match(workbenchRule, /min-height:\s*0/);
+  assert.match(workspaceRule, /grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(20rem,\s*24rem\)/);
+  assert.match(workspaceRule, /min-height:\s*0/);
   assert.match(boardRule, /max-height:\s*100%/);
 });

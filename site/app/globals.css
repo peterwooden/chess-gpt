@@ -475,6 +475,198 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   }
 }
 
+/* Arena v2: board with a contextual setup / move pane */
+.arena-page-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 3.75rem auto;
+  min-height: 100svh;
+  background: var(--paper);
+}
+.arena-page-v2 .arena-nav {
+  position: sticky;
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 3.75rem;
+  padding-inline: max(1rem, calc((100vw - 76rem) / 2));
+}
+.arena-title {
+  color: var(--green);
+  font-family: Iowan Old Style, Baskerville, Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  text-decoration: none;
+}
+.arena-page-v2 .arena-nav > span { font-size: 0.58rem; }
+.arena-workspace {
+  display: grid;
+  grid-column: 1;
+  grid-row: 2;
+  gap: 1rem;
+  width: min(calc(100% - 2rem), 76rem);
+  margin-inline: auto;
+  padding: 1rem 0 2rem;
+}
+.arena-page-v2 .board-stage {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+}
+.arena-page-v2 .game-status {
+  min-height: 3.6rem;
+  padding: 0.55rem 0.75rem;
+}
+.arena-page-v2 .chessboard {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  border-width: 0.4rem;
+  box-shadow: none;
+}
+.arena-page-v2 .piece { font-size: clamp(1.6rem, min(8vw, 6vh), 4rem); }
+.arena-sidebar {
+  min-width: 0;
+  border: 1px solid var(--green);
+  background: rgb(255 253 247 / 0.72);
+}
+.setup-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 1rem;
+}
+.setup-heading { padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.setup-heading .eyebrow { margin-bottom: 0.35rem; font-size: 0.56rem; }
+.setup-heading h1 {
+  max-width: none;
+  font-size: clamp(2rem, 5vw, 2.7rem);
+  line-height: 1;
+}
+.setup-heading > p:last-child { margin: 0.65rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.45; }
+.arena-page-v2 .model-loader {
+  height: auto;
+  padding: 0.85rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
+}
+.arena-page-v2 .model-loader > header { margin-bottom: 0.55rem; padding: 0; border: 0; }
+.arena-page-v2 .model-loader > header span { font-size: 0.68rem; }
+.arena-page-v2 .model-loader > header small { font-size: 0.62rem; }
+.arena-page-v2 .model-loader > label { margin-bottom: 0.3rem; font-size: 0.55rem; }
+.arena-page-v2 .model-input-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem; }
+.arena-page-v2 .model-input-row input,
+.arena-page-v2 .model-input-row button { min-height: 2.25rem; }
+.arena-page-v2 .model-input-row button { padding-inline: 0.7rem; }
+.arena-page-v2 .load-progress { gap: 0.25rem; margin-top: 0.45rem; }
+.model-summary { display: grid; gap: 0.15rem; min-width: 0; margin-top: 0.55rem; padding-left: 0.55rem; border-left: 0.18rem solid var(--green); }
+.model-summary strong, .model-summary span, .model-summary code { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.model-summary strong { font-size: 0.7rem; }
+.model-summary span, .model-summary code { color: var(--muted); font-size: 0.57rem; }
+.arena-page-v2 .model-error { margin: 0.5rem 0 0; padding: 0.45rem 0.55rem; font-size: 0.65rem; }
+.side-picker { margin: 0; padding: 0.8rem 0; border: 0; border-bottom: 1px solid var(--line); }
+.side-picker legend { margin-bottom: 0.45rem; padding: 0; color: var(--muted); font-size: 0.56rem; font-weight: 850; letter-spacing: 0.06em; text-transform: uppercase; }
+.side-picker > div { display: grid; grid-template-columns: repeat(3, 1fr); }
+.side-picker button {
+  min-height: 2.25rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-right: 0;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.side-picker button:first-child { border-radius: 0.2rem 0 0 0.2rem; }
+.side-picker button:last-child { border-right: 1px solid var(--line); border-radius: 0 0.2rem 0.2rem 0; }
+.side-picker button.selected { position: relative; border-color: var(--green); color: var(--white); background: var(--green); }
+.side-picker button.selected + button { border-left-color: var(--green); }
+.setup-actions { display: grid; gap: 0.55rem; margin-top: auto; padding-top: 0.9rem; }
+.setup-actions > p:not(.arena-error) { margin: 0; color: var(--muted); font-size: 0.65rem; text-align: center; }
+.setup-actions > button {
+  min-height: 3rem;
+  border: 1px solid var(--green);
+  border-radius: 0.2rem;
+  color: var(--white);
+  background: var(--green);
+  font-weight: 850;
+  cursor: pointer;
+}
+.setup-actions > button:disabled { border-color: var(--line); color: #999487; background: #e5e0d4; cursor: default; }
+.arena-page-v2 .move-console {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 28rem;
+  height: 100%;
+  max-height: none;
+  border: 0;
+  background: transparent;
+}
+.arena-page-v2 .move-console > header { min-height: 3.6rem; padding: 0.55rem 0.75rem; }
+.match-up { display: grid; grid-template-columns: 1fr 1fr; margin: 0; border-bottom: 1px solid var(--line); }
+.match-up div { min-width: 0; padding: 0.65rem 0.75rem; }
+.match-up div + div { border-left: 1px solid var(--line); }
+.match-up dt { color: var(--muted); font-size: 0.56rem; font-weight: 850; letter-spacing: 0.07em; text-transform: uppercase; }
+.match-up dd { overflow: hidden; margin: 0.2rem 0 0; font-size: 0.68rem; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
+.arena-page-v2 .arena-error { margin: 0.65rem; font-size: 0.68rem; }
+.arena-page-v2 .empty-record { flex: 1; min-height: 9rem; padding: 1rem; }
+.arena-page-v2 .empty-record span { color: var(--line); font-family: ui-monospace, monospace; font-size: 1.5rem; font-weight: 900; }
+.arena-page-v2 .move-record { flex: 1; overflow-y: auto; min-height: 0; max-height: none; }
+.arena-page-v2 .move-record li { min-height: 3rem; }
+.game-controls { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 0.4rem; padding: 0.75rem; border-top: 1px solid var(--green); }
+.game-controls button {
+  min-height: 2.5rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--green);
+  border-radius: 0.2rem;
+  color: var(--green);
+  background: transparent;
+  font-size: 0.68rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+.game-controls button:last-child { color: var(--white); background: var(--green); }
+.game-controls button:disabled { border-color: var(--line); color: #999487; background: #e5e0d4; cursor: default; }
+
+@media (min-width: 960px) and (min-height: 640px) {
+  .arena-page-v2 {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 3.75rem minmax(0, 1fr);
+    overflow: hidden;
+    height: 100svh;
+    min-height: 0;
+  }
+  .arena-page-v2 .arena-nav { position: static; }
+  .arena-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+    padding: 1rem 0;
+  }
+  .arena-page-v2 .board-stage { grid-template-rows: auto minmax(0, 1fr); }
+  .arena-page-v2 .chessboard {
+    align-self: start;
+    justify-self: center;
+    width: auto;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+  }
+  .arena-sidebar { overflow: hidden; height: 100%; min-height: 0; }
+  .setup-pane { overflow-y: auto; height: 100%; min-height: 0; }
+  .arena-page-v2 .move-console { min-height: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }
