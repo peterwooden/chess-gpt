@@ -20,6 +20,17 @@ uv run pyright
 
 `chess-gpt-doctor` performs one tiny forward/backward pass and reports whether PyTorch selected the Apple MPS backend. PyTorch has a CPU fallback so correctness does not depend on acceleration.
 
+## First playable baseline
+
+Experiment `0001-basic-san-ngram` is the deliberately simple floor: it learns which SAN moves tend to follow the previous two moves, backs off to broader frequencies when needed, and filters every prediction through the legal moves in the current position. Its versioned specification is in [`experiments/0001-basic-san-ngram.toml`](experiments/0001-basic-san-ngram.toml); generated checkpoints and metrics stay under the ignored `runs/` directory.
+
+After obtaining the pinned dataset shard named in the experiment, train and ask for one move:
+
+```bash
+uv run chess-gpt-baseline train --data data/downloads/lichess-chess-tokens-cb90f1b/tokenised/shard-00040.parquet --output runs/0001-basic-san-ngram --max-games 10000 --validation-percent 10 --seed 20260725 --order 2 --top-moves-per-context 16
+uv run chess-gpt-baseline move --checkpoint runs/0001-basic-san-ngram/model.json.gz --moves e4 e5 Nf3
+```
+
 ## Repository map
 
 ```text

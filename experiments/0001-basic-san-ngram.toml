@@ -1,0 +1,30 @@
+[experiment]
+id = "0001-basic-san-ngram"
+status = "planned"
+question = "Can the smallest inspectable model trained on the pinned dataset always return a legal SAN move?"
+hypothesis = "A two-move backoff n-gram trained on 10,000 real games will produce legal moves and beat a deterministic legal-move fallback on held-out next-move accuracy."
+intentional_change = "Add the first complete data-to-checkpoint-to-SAN baseline; this is a floor, not a tournament contender."
+
+[dataset]
+repo_id = "shazmate/lichess-chess-tokens"
+revision = "cb90f1bb2eab0b905e84e14f2d1d24ec5f9d1d94"
+file = "tokenised/shard-00040.parquet"
+max_games = 10_000
+validation_percent = 10
+split = "blake2b(seed:site) modulo 100"
+
+[model]
+type = "SAN backoff n-gram"
+order = 2
+top_moves_per_context = 16
+legal_move_mask = true
+
+[reproducibility]
+seed = 20260725
+command = "uv run chess-gpt-baseline train --data data/downloads/lichess-chess-tokens-cb90f1b/tokenised/shard-00040.parquet --output runs/0001-basic-san-ngram --max-games 10000 --validation-percent 10 --seed 20260725 --order 2 --top-moves-per-context 16"
+
+[acceptance]
+minimum_valid_games = 9_900
+required_validation_legal_move_rate = 1.0
+requires_checkpoint_under_100_mb = true
+requires_functional_san_cli = true

@@ -23,6 +23,7 @@ dev = [
 [project.scripts]
 chess-gpt-doctor = "chess_gpt.doctor:main"
 chess-gpt-compute-cost = "chess_gpt.compute_cost:main"
+chess-gpt-baseline = "chess_gpt.baseline:main"
 
 [build-system]
 requires = ["hatchling"]
