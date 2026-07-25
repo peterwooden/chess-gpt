@@ -106,3 +106,17 @@ test("arena constrains the board to eight equal columns and rows", async () => {
   assert.match(boardRule, /grid-template-columns:\s*repeat\(8,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(boardRule, /grid-template-rows:\s*repeat\(8,\s*minmax\(0,\s*1fr\)\)/);
 });
+
+test("arena has a single-viewport laptop workspace", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const laptopStyles = styles.split("/* Laptop arena: single viewport */")[1] ?? "";
+  const pageRule = laptopStyles.match(/\.arena-page\s*\{[^}]*\}/)?.[0] ?? "";
+  const workbenchRule = laptopStyles.match(/\.arena-workbench\s*\{[^}]*\}/)?.[0] ?? "";
+  const boardRule = laptopStyles.match(/\.chessboard\s*\{[^}]*\}/)?.[0] ?? "";
+
+  assert.match(laptopStyles, /@media \(min-width:\s*1100px\) and \(min-height:\s*700px\)/);
+  assert.match(pageRule, /height:\s*100svh/);
+  assert.match(pageRule, /overflow:\s*hidden/);
+  assert.match(workbenchRule, /min-height:\s*0/);
+  assert.match(boardRule, /max-height:\s*100%/);
+});

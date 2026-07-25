@@ -405,7 +405,7 @@ export default function ArenaClient() {
         </div>
 
         <div className="arena-workbench">
-          <div>
+          <div className="board-stage">
             <div className="game-status" aria-live="polite">
               <span>{mode === "human" ? "Human match" : "Model match"}</span>
               <strong>{status}</strong>
