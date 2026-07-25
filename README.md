@@ -6,7 +6,7 @@ The priorities are: win fairly, learn ML engineering deeply, and turn creative i
 
 ## Current stage
 
-The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test; read the [full baseline record](docs/BASELINE_0001.md).
+The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test. Read the [full baseline record](docs/BASELINE_0001.md) or [play the pinned checkpoint](https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/fecf413cfe0e5dab427c4cec7a78aafa4410aa65) through the browser arena.
 
 The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner's latest diagnostic attempt scored 7/8 on the direct track and the follow-up prediction demonstrated the remaining train/validation/test concept. The resulting [adaptive Chapter 1 plan](docs/CHAPTER_1_PLAN.md) now begins with an interactive mission on honest game-level data splits; completion remains unrecorded until the learner returns its code and explanation.
 

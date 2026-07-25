@@ -77,6 +77,8 @@ def test_first_playable_baseline_records_a_passing_result() -> None:
     assert result["canonical_learned_state_bytes"] <= 100_000_000
     assert result["functional_san_cli"] is True
     assert result["acceptance_passed"] is True
+    assert manifest["publication"]["revision"] == "fecf413cfe0e5dab427c4cec7a78aafa4410aa65"
+    assert manifest["publication"]["browser_artifact_url"].endswith("/model.json.gz")
 
 
 def test_curriculum_tracks_prediction_driven_progress() -> None:

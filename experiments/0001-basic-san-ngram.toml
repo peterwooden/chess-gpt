@@ -51,3 +51,9 @@ self_play_smoke_test_plies = 80
 functional_san_cli = true
 hypothesis_supported = true
 acceptance_passed = true
+
+[publication]
+repo_id = "peterwooden/chess-gpt-demo-ngram"
+revision = "fecf413cfe0e5dab427c4cec7a78aafa4410aa65"
+model_card_url = "https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/fecf413cfe0e5dab427c4cec7a78aafa4410aa65"
+browser_artifact_url = "https://huggingface.co/peterwooden/chess-gpt-demo-ngram/resolve/fecf413cfe0e5dab427c4cec7a78aafa4410aa65/model.json.gz"

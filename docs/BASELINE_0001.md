@@ -67,3 +67,13 @@ Nc6
 ```
 
 An 80-ply self-play smoke test also completed with no illegal moves. This proves the interface is functional, not that the baseline plays strong chess: it has no board understanding, search, or long-range plan, and its self-play eventually becomes repetitive. Those weaknesses give us measurable targets for the first neural model.
+
+## Play it in the browser
+
+The verified checkpoint is published in the public [`peterwooden/chess-gpt-demo-ngram`](https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/fecf413cfe0e5dab427c4cec7a78aafa4410aa65) model repository. Open the [Chess GPT browser arena](https://chess-gpt-lab.peter-r-wooden.chatgpt.site/arena), load this pinned artifact as Model A, and choose **Human vs A**:
+
+```text
+https://huggingface.co/peterwooden/chess-gpt-demo-ngram/resolve/fecf413cfe0e5dab427c4cec7a78aafa4410aa65/model.json.gz
+```
+
+The Hub artifact has the same SHA-256 as the measured local checkpoint. Pinning the full Hub revision keeps future games tied to the model described by this experiment record.
