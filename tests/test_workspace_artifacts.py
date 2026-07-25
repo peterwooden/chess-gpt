@@ -76,3 +76,13 @@ def test_first_playable_baseline_records_a_passing_result() -> None:
     assert result["canonical_learned_state_bytes"] <= 100_000_000
     assert result["functional_san_cli"] is True
     assert result["acceptance_passed"] is True
+
+
+def test_curriculum_tracks_prediction_driven_progress() -> None:
+    curriculum = (ROOT / "CURRICULUM.md").read_text()
+
+    assert curriculum.count("## Chapter ") == 10
+    assert "- [ ] Placement diagnostic completed on the learning site" in curriculum
+    assert "hill climbing" in curriculum.lower()
+    assert "prediction" in curriculum.lower()
+    assert "five hours per week" in curriculum.lower()

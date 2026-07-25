@@ -2,11 +2,13 @@
 
 A teaching-first, reproducible laboratory for building a small chess language model and entering a three-friend tournament.
 
-The priorities are: win fairly, learn ML engineering deeply, and turn creative ideas into controlled experiments. Start with [MISSION.md](MISSION.md), then read the [founding intent](PROJECT_INTENT.md) and [tournament rules draft](docs/TOURNAMENT_RULES_DRAFT.md).
+The priorities are: win fairly, learn ML engineering deeply, and turn creative ideas into controlled experiments. Start with [MISSION.md](MISSION.md), follow the checkbox [curriculum](CURRICULUM.md), then read the [founding intent](PROJECT_INTENT.md) and [tournament rules draft](docs/TOURNAMENT_RULES_DRAFT.md).
 
 ## Current stage
 
 The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test; read the [full baseline record](docs/BASELINE_0001.md).
+
+The complete learning roadmap and adaptive placement diagnostic are ready in the Sites app. Chapter 1 will be tailored only after the learner completes the diagnostic and returns its checkpoint code.
 
 ## Local setup
 
@@ -34,6 +36,7 @@ uv run chess-gpt-baseline move --checkpoint runs/0001-basic-san-ngram/model.json
 ## Repository map
 
 ```text
+CURRICULUM.md       versioned course map and progress checklist
 assets/             shared lesson components
 data/               provenance manifests, never bulk data
 docs/               tournament and engineering decisions
@@ -56,4 +59,4 @@ One session should produce one small conceptual win and one trustworthy artifact
 4. explain the result;
 5. record what changed our understanding.
 
-The first lesson is being co-designed with the learner before a replacement is committed.
+The next step is the no-stakes placement diagnostic; its evidence determines the shape of Chapter 1.

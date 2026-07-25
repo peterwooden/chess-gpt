@@ -8,20 +8,31 @@
 - Do not hide important behavior behind a framework before the learner has implemented or inspected the underlying idea.
 - Use predictions, small exercises, and explanations from memory to build durable understanding—not only fluent recognition.
 - Preserve room for creative hypotheses, but demand controlled comparisons and negative results.
-- Plan for about one focused hour per week. Lessons should normally fit in 10–20 minutes and leave one small piece of independent practice.
+- Plan for about five hours per week, preferably spread across several sessions. Organize chapters into three or four focused 10–15 minute missions plus primary-source study, experiment work, and spaced review.
 - Work locally on the 16 GB M1 Pro for now. Use CPU/MPS for tiny models, tests, and profiling; do not design the early curriculum around cloud infrastructure.
 - The learner reports an approximately 1350 chess.com blitz rating. Use real chess examples, but verify familiarity with SAN rather than assuming it from rating alone.
 - Python, terminal/Git, calculus, linear algebra, and probability comfort remain unknown; establish these through small tasks rather than a long preliminary exam.
 - The learner usually accesses Codex from a phone through a remote session, where local HTML links display source instead of a rendered page; publish interactive lessons through Sites and return a normal web URL.
 - Interactive lessons should gate a short completion code behind correct retrieval answers so the learner can paste it back as lightweight evidence of completion.
+- Treat causal prediction as the central learning skill. Before changing a fundamental lever, require the learner to predict direction, rough magnitude, assumptions, confidence, and likely failure modes.
+- Do not require hand-written implementations as proof of understanding. Prefer exercises that compare three candidate implementations, identify defects, specify work for a coding agent, diagnose evidence, and explain surprises.
+- Teach mathematics to equation-literacy depth: understand every symbol, calculate tiny examples, and use equations to make predictions; omit formal proofs unless they unlock intuition.
+- Structure the curriculum as causal questions in dependency order. Show the whole roadmap, unlock lessons sequentially, and keep core outcomes fixed while adapting missions to diagnostic and experiment evidence.
+- Gate each chapter with a causal prediction, implementation-comparison challenge, and explanation of an observed result. Unlimited retries are allowed; record mastery only after the learner pastes the completion code and explains one prediction in their own words.
+- Use one purposeful 20–40 minute primary-source assignment per chapter rather than assigning whole books or multi-hour lectures without a concrete question.
+- Keep site progress device-local and account-free. Completion codes and learning records are the durable cross-device record.
+- Teach each mechanism first with a tiny fully inspectable example, then apply it immediately to the real chess data or model.
+- Collaborate on consequential choices involving data, targets, architecture, optimization, compute allocation, or evaluation. Routine agreed mechanical work may proceed without interruption.
+- Record the learner's prediction in every consequential versioned experiment before running it, then compare prediction with evidence afterward.
+- Present the site as a serious interactive field notebook: causal diagrams, small numerical simulators, implementation comparisons, experiment records, and restrained progress indicators rather than gamification.
 - Commit and push completed repository changes to `main` by default unless the learner explicitly asks to keep them local.
 - Do not incorporate competitors' distinctive techniques into lessons or experiments unless the learner explicitly chooses to study them.
 
 ## Default teaching loop
 
 1. State the concrete chess or engineering question.
-2. Ask the learner to predict what should happen and why.
-3. Build the smallest observable version.
+2. Ask the learner to predict direction, magnitude, assumptions, confidence, and failure modes.
+3. Have a coding agent build the smallest observable version after the consequential choices are agreed.
 4. Measure it and inspect failures.
 5. Have the learner explain the result in their own words.
 6. Record the non-obvious lesson and only then add complexity.

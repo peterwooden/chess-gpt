@@ -7,7 +7,7 @@ Build the strongest fair chess model in a three-friend tournament while learning
 ## Success looks like
 
 - Field a rules-compliant model and give it the best defensible chance of winning the tournament.
-- Explain, implement, and debug the path from chess data and tokens through loss, gradients, training, evaluation, inference, and match play.
+- Explain, predict, specify, inspect, and debug the path from chess data through loss, gradients, training, evaluation, inference, and match play.
 - Reproduce any reported result from a pinned data revision, Git commit, locked environment, explicit configuration, and recorded random seeds.
 - Maintain honest train, validation, test, and tournament evaluation boundaries, with the exact split policy agreed before tuning.
 - Turn original ideas into controlled experiments with stated hypotheses, measurements, and conclusions.
@@ -16,6 +16,7 @@ Build the strongest fair chess model in a three-friend tournament while learning
 
 - All three competitors will use the same frozen training data and an agreed model-size limit; the exact fairness contract is still to be defined.
 - The learner is not an ML engineer yet, so teaching must build intuition incrementally and connect every abstraction to code and evidence.
+- The learner will dedicate about five hours per week, preferably spread across several sessions.
 - Competition comes first, learning second, and creative expression third; good work should serve all three where possible.
 - Use current, reproducible ML engineering practices and avoid unexplained shortcuts.
 
