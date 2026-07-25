@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tomllib
 from html.parser import HTMLParser
 from pathlib import Path
@@ -87,5 +88,19 @@ def test_curriculum_tracks_prediction_driven_progress() -> None:
     assert "prediction" in curriculum.lower()
     assert "five hours per week" in curriculum.lower()
     assert curriculum.count("### RL extension ") == 4
-    assert "Part III section 15.4" in curriculum
-    assert "Part III section 17.1" in curriculum
+    assert "Part III §15.4" in curriculum
+    assert "Part III §17.1" in curriculum
+    assert curriculum.count("**Further reading**") == 14
+    assert curriculum.count("- **Primary:**") == 14
+    assert curriculum.count("- **Secondary:**") == 14
+
+    reading_lines = [
+        line
+        for line in curriculum.splitlines()
+        if line.startswith(("- **Primary:**", "- **Secondary:**"))
+    ]
+    assert len(reading_lines) == 28
+    assert all(
+        1 <= len(re.findall(r"\[[^]]+\]\([^)]+\)", line)) <= 3
+        for line in reading_lines
+    )
