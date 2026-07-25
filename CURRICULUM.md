@@ -27,7 +27,7 @@ Goodfellow, Bengio, and Courville is a companion reference, not a cover-to-cover
 - [x] Teaching contract agreed through learner interview
 - [x] High-trust primary sources curated in [`RESOURCES.md`](RESOURCES.md)
 - [x] First reproducible chess baseline trained as experiment `0001`
-- [ ] Placement diagnostic completed on the learning site
+- [x] Placement diagnostic completed on the learning site
 - [ ] Diagnostic code and one prediction explained to the teacher
 - [ ] Adaptive Chapter 1 missions generated
 

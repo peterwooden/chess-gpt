@@ -8,7 +8,9 @@ The priorities are: win fairly, learn ML engineering deeply, and turn creative i
 
 The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test; read the [full baseline record](docs/BASELINE_0001.md).
 
-The complete learning roadmap and adaptive placement diagnostic are ready in the Sites app. Chapter 1 will be tailored only after the learner completes the diagnostic and returns its checkpoint code.
+The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner completed the diagnostic on the bridge track with two focused gaps—probabilistic loss and honest train/validation/test usage—so those will be checked before Chapter 1 mastery work begins.
+
+The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It can download a compatible model from Hugging Face, run human-versus-model play, or run two models against each other while showing SAN moves and inference timing. The narrow, hash-verified interchange format is documented in the [browser model contract](docs/BROWSER_MODEL_CONTRACT.md).
 
 ## Local setup
 
@@ -45,6 +47,7 @@ learning-records/   demonstrated knowledge, not activity logs
 lessons/            short interactive teaching units
 reference/          durable glossaries and cheat sheets
 runs/               ignored generated metrics and checkpoints
+site/               published learning lab and browser model arena
 src/chess_gpt/      inspectable project code
 tests/              fast correctness checks
 ```
@@ -59,4 +62,4 @@ One session should produce one small conceptual win and one trustworthy artifact
 4. explain the result;
 5. record what changed our understanding.
 
-The next step is the no-stakes placement diagnostic; its evidence determines the shape of Chapter 1.
+The next teaching step is one short causal-prediction follow-up on the diagnostic gaps, then the adaptive Chapter 1 missions are designed collaboratively.

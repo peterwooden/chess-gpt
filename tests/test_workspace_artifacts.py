@@ -83,7 +83,8 @@ def test_curriculum_tracks_prediction_driven_progress() -> None:
     curriculum = (ROOT / "CURRICULUM.md").read_text()
 
     assert curriculum.count("## Chapter ") == 10
-    assert "- [ ] Placement diagnostic completed on the learning site" in curriculum
+    assert "- [x] Placement diagnostic completed on the learning site" in curriculum
+    assert (ROOT / "learning-records/0002-placement-diagnostic.md").is_file()
     assert "hill climbing" in curriculum.lower()
     assert "prediction" in curriculum.lower()
     assert "five hours per week" in curriculum.lower()

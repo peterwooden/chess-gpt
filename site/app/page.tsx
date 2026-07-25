@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 const STORAGE_KEY = "chess-gpt:diagnostic-v1";
 
@@ -162,9 +163,12 @@ export default function Home() {
     if (!raw) return;
     try {
       const saved = JSON.parse(raw) as SavedDiagnostic;
-      setAnswers(saved.answers ?? {});
-      setConfidence(saved.confidence ?? {});
-      setSubmitted(Boolean(saved.submitted));
+      const timer = window.setTimeout(() => {
+        setAnswers(saved.answers ?? {});
+        setConfidence(saved.confidence ?? {});
+        setSubmitted(Boolean(saved.submitted));
+      }, 0);
+      return () => window.clearTimeout(timer);
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -232,6 +236,7 @@ export default function Home() {
           <p className="lede">Learn machine learning by forecasting what each lever will do, testing it on a real chess model, and explaining the evidence.</p>
           <div className="hero-actions">
             <a className="primary-link" href="#diagnostic">Take the diagnostic <span>↓</span></a>
+            <Link className="text-link" href="/arena">Open the browser arena</Link>
             <a className="text-link" href="#roadmap">Inspect the roadmap</a>
           </div>
         </div>
