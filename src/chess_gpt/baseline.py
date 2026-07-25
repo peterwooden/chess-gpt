@@ -262,21 +262,28 @@ def git_revision() -> str:
 
 def evaluate(model: SanNgramModel, games: Sequence[GameRecord]) -> dict[str, float | int]:
     correct = 0
+    fallback_correct = 0
     context_hits = 0
     predictions = 0
     for game in games:
+        board = chess.Board()
         history: list[str] = []
         for target in game.moves:
             prediction = model.predict(history)
+            fallback = min(board.san(move) for move in board.legal_moves)
             predictions += 1
             correct += int(prediction.san == target)
+            fallback_correct += int(fallback == target)
             context_hits += int(prediction.source.endswith("context"))
+            board.push_san(target)
             history.append(target)
     denominator = max(1, predictions)
     return {
         "validation_games": len(games),
         "validation_plies": predictions,
         "validation_top1_accuracy": correct / denominator,
+        "validation_deterministic_fallback_top1_accuracy": fallback_correct
+        / denominator,
         "validation_context_hit_rate": context_hits / denominator,
         "validation_legal_move_rate": 1.0,
     }
