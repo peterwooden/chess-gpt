@@ -1,5 +1,7 @@
 # Placement diagnostic completed
 
+Status: superseded by LR-0003
+
 The learner completed the no-stakes placement diagnostic with checkpoint code `CGPT-D0-6-7D-H0` on 2026-07-25.
 
 ## Evidence
