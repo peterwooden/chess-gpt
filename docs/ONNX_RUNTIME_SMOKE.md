@@ -25,7 +25,7 @@ The public fixture is [`peterwooden/chess-gpt-onnx-smoke`](https://huggingface.c
 peterwooden/chess-gpt-onnx-smoke@d2a54a143350ec36ec52fc9a90c226ad48bf5b80
 ```
 
-## Current red result
+## Original red result
 
 On 27 July 2026, the public arena downloaded and verified the package, then failed while its pinned ONNX Runtime Web 1.27.0 tried to initialize:
 
@@ -33,6 +33,8 @@ On 27 July 2026, the public arena downloaded and verified the package, then fail
 no available backend found. ERR: [wasm] RuntimeError: Aborted(Error: Package access to XMLHttpRequest is forbidden.). Build with -sASSERTIONS for more info.
 ```
 
-The arena disables `XMLHttpRequest` before calling the package entrypoint, while ONNX Runtime initializes its WASM execution engine lazily during `InferenceSession.create()`. The fixture therefore provides a stable red test for runner-owned runtime provisioning; adding model complexity cannot resolve it.
+The arena disabled `XMLHttpRequest` before calling the package entrypoint, while ONNX Runtime initialized its WASM execution engine lazily during `InferenceSession.create()`. The fixture therefore isolated runner-owned runtime provisioning from model complexity.
 
-Once the runner provides its own WASM binary in memory before restricting package capabilities, the same immutable package should load and return a legal move without acquiring any additional submission artifact.
+## Fixed result
+
+The runner now loads its matching, content-addressed WASM binary, assigns the bytes to `ort.env.wasm.wasmBinary`, and only then restricts package capabilities. In a local production build, the same immutable Hugging Face package loaded and returned legal SAN `a3` without adding a runtime artifact to the submission.

@@ -1,4 +1,6 @@
 import * as ort from "onnxruntime-web/webgpu";
+import runtimeWasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
+import { provisionOnnxRuntime } from "./onnx-runtime-provisioning.mjs";
 
 type PackageGame = {
   chooseMove(input: { history: readonly string[]; legalMoves: readonly string[] }): Promise<string>;
@@ -56,6 +58,7 @@ async function load(request: WorkerRequest): Promise<void> {
   if (!(request.entrypoint instanceof ArrayBuffer) || !Array.isArray(request.artifacts)) {
     throw new Error("The package worker received incomplete files.");
   }
+  await provisionOnnxRuntime({ ort, runtimeUrl: runtimeWasmUrl });
   restrictContestantCapabilities();
   const entrypointUrl = URL.createObjectURL(
     new Blob([request.entrypoint], { type: "text/javascript" }),
