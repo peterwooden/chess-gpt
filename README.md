@@ -10,7 +10,7 @@ The repository now has a reproducible, functional floor: a count-based SAN langu
 
 The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner's latest diagnostic attempt scored 7/8 on the direct track and the follow-up prediction demonstrated the remaining train/validation/test concept. The resulting [adaptive Chapter 1 plan](docs/CHAPTER_1_PLAN.md) now begins with an interactive mission on honest game-level data splits; completion remains unrecorded until the learner returns its code and explanation.
 
-The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It downloads and verifies the unified package from Hugging Face, runs its entrypoint in a dedicated Worker, and supports human-versus-model or model-versus-model play while showing SAN moves and inference timing. The exact submission and inference contract is the [tournament rules technical appendix](docs/TOURNAMENT_RULES.md#technical-appendix-model-package-v1).
+The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It downloads and verifies the unified package from Hugging Face, runs its entrypoint in a dedicated Worker, and supports human-versus-model or model-versus-model play while showing SAN moves and inference timing. Verified files from full 40-character commit-SHA references use a best-effort browser cache and are re-verified before execution; branches, tags, and short hashes always bypass that cache. The exact submission and inference contract is the [tournament rules technical appendix](docs/TOURNAMENT_RULES.md#technical-appendix-model-package-v1).
 
 ## Local setup
 

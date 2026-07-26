@@ -1,8 +1,13 @@
 import { init, parse, type ImportSpecifier } from "es-module-lexer";
+import {
+  createImmutableDownloadCache,
+  isImmutableRevision,
+} from "./immutable-download-cache.mjs";
 
 const PACKAGE_SCHEMA = "chess-gpt-package-v1";
 const PACKAGE_LIMIT_BYTES = 100_000_000;
 const HF_HOSTS = new Set(["huggingface.co", "www.huggingface.co"]);
+const immutableDownloadCache = createImmutableDownloadCache();
 
 export type LoadProgress = {
   stage: "manifest" | "entrypoint" | "artifact";
@@ -70,7 +75,7 @@ export function normalizeModelReference(rawReference: string): NormalizedReferen
     const [, owner, repository, revision = "main"] = match;
     return {
       manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
-      pinned: isPinnedRevision(revision),
+      pinned: isImmutableRevision(revision),
     };
   }
 
@@ -86,12 +91,12 @@ export function normalizeModelReference(rawReference: string): NormalizedReferen
   if ((operation === "blob" || operation === "resolve") && revision) {
     parts[2] = "resolve";
     url.pathname = `/${parts.join("/")}`;
-    return { manifestUrl: url.toString(), pinned: isPinnedRevision(revision) };
+    return { manifestUrl: url.toString(), pinned: isImmutableRevision(revision) };
   }
   if (operation === "tree" && revision) {
     return {
       manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
-      pinned: isPinnedRevision(revision),
+      pinned: isImmutableRevision(revision),
     };
   }
   if (parts.length === 2) {
@@ -108,43 +113,57 @@ export async function loadBrowserModel(
   onProgress: (progress: LoadProgress) => void,
 ): Promise<BrowserChessModel> {
   const reference = normalizeModelReference(rawReference);
-  const manifestBytes = await fetchBytes(
-    reference.manifestUrl,
-    "manifest",
-    "manifest.json",
-    PACKAGE_LIMIT_BYTES,
-    onProgress,
-  );
-  const decoded = decodeJson(manifestBytes, "package manifest");
-  const manifest = parseManifest(decoded);
-  const declaredBytes = manifest.entrypoint.bytes
-    + Object.values(manifest.artifacts).reduce((total, artifact) => total + artifact.bytes, 0);
-  const packageBytes = manifestBytes.byteLength + declaredBytes;
-  if (packageBytes > PACKAGE_LIMIT_BYTES) {
-    throw new Error(`The package is ${formatBytes(packageBytes)}, over the 100 MB limit.`);
-  }
+  const manifestBytes = await immutableDownloadCache.load({
+    url: reference.manifestUrl,
+    immutable: reference.pinned,
+    maximumBytes: PACKAGE_LIMIT_BYTES,
+    download: () => fetchBytes(
+      reference.manifestUrl,
+      "manifest",
+      "manifest.json",
+      PACKAGE_LIMIT_BYTES,
+      onProgress,
+    ),
+    validate: async (bytes) => { parsePackage(bytes); },
+  });
+  const { manifest, packageBytes } = parsePackage(manifestBytes);
 
   const entrypointUrl = packageFileUrl(reference.manifestUrl, manifest.entrypoint.path);
-  const entrypointBytes = await fetchBytes(
-    entrypointUrl,
-    "entrypoint",
-    manifest.entrypoint.path,
-    manifest.entrypoint.bytes,
-    onProgress,
-  );
-  await verifyArtifact(entrypointBytes, manifest.entrypoint, "entrypoint");
-  await assertSelfContainedEntrypoint(entrypointBytes);
+  const entrypointBytes = await immutableDownloadCache.load({
+    url: entrypointUrl,
+    immutable: reference.pinned,
+    maximumBytes: manifest.entrypoint.bytes,
+    download: () => fetchBytes(
+      entrypointUrl,
+      "entrypoint",
+      manifest.entrypoint.path,
+      manifest.entrypoint.bytes,
+      onProgress,
+    ),
+    validate: async (bytes) => {
+      await verifyArtifact(bytes, manifest.entrypoint, "entrypoint");
+      await assertSelfContainedEntrypoint(bytes);
+    },
+  });
 
   const artifacts: Array<{ name: string; bytes: Uint8Array }> = [];
   for (const [name, descriptor] of Object.entries(manifest.artifacts)) {
-    const bytes = await fetchBytes(
-      packageFileUrl(reference.manifestUrl, descriptor.path),
-      "artifact",
-      name,
-      descriptor.bytes,
-      onProgress,
-    );
-    await verifyArtifact(bytes, descriptor, `artifact “${name}”`);
+    const artifactUrl = packageFileUrl(reference.manifestUrl, descriptor.path);
+    const bytes = await immutableDownloadCache.load({
+      url: artifactUrl,
+      immutable: reference.pinned,
+      maximumBytes: descriptor.bytes,
+      download: () => fetchBytes(
+        artifactUrl,
+        "artifact",
+        name,
+        descriptor.bytes,
+        onProgress,
+      ),
+      validate: async (candidate) => {
+        await verifyArtifact(candidate, descriptor, `artifact “${name}”`);
+      },
+    });
     artifacts.push({ name, bytes });
   }
 
@@ -306,6 +325,17 @@ function parseManifest(value: unknown): PackageManifest {
   };
 }
 
+function parsePackage(bytes: Uint8Array): { manifest: PackageManifest; packageBytes: number } {
+  const manifest = parseManifest(decodeJson(bytes, "package manifest"));
+  const declaredBytes = manifest.entrypoint.bytes
+    + Object.values(manifest.artifacts).reduce((total, artifact) => total + artifact.bytes, 0);
+  const packageBytes = bytes.byteLength + declaredBytes;
+  if (packageBytes > PACKAGE_LIMIT_BYTES) {
+    throw new Error(`The package is ${formatBytes(packageBytes)}, over the 100 MB limit.`);
+  }
+  return { manifest, packageBytes };
+}
+
 function parseDescriptor(value: unknown, label: string): ArtifactDescriptor {
   if (!isRecord(value)) throw new Error(`The ${label} descriptor is missing.`);
   if (!isSafeRelativePath(value.path)) {
@@ -350,7 +380,11 @@ async function fetchBytes(
   maximumBytes: number,
   onProgress: (progress: LoadProgress) => void,
 ): Promise<Uint8Array> {
-  const response = await fetch(url, { credentials: "omit", redirect: "follow" });
+  const response = await fetch(url, {
+    credentials: "omit",
+    redirect: "follow",
+    cache: "no-store",
+  });
   if (!response.ok) throw new Error(`Hugging Face returned ${response.status} for ${label}.`);
   const totalHeader = Number(response.headers.get("content-length"));
   const totalBytes = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : null;
@@ -412,10 +446,6 @@ function decodeJson(bytes: Uint8Array, label: string): unknown {
   } catch {
     throw new Error(`The ${label} is not valid JSON.`);
   }
-}
-
-function isPinnedRevision(revision: string): boolean {
-  return /^[0-9a-f]{40}$/i.test(revision);
 }
 
 function formatBytes(bytes: number): string {
