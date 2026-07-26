@@ -51,6 +51,24 @@ def test_tournament_rules_are_five_bold_labelled_bullets() -> None:
     assert all(line.startswith("- **") for line in bullets)
 
 
+def test_arena_hugging_face_requirements_stay_brief_and_complete() -> None:
+    requirements = (ROOT / "docs/ARENA_HUGGING_FACE_REQUIREMENTS.md").read_text()
+    bullets = [line for line in requirements.splitlines() if line.startswith("- ")]
+
+    assert 5 <= len(bullets) <= 8
+    assert all(line.startswith("- **") for line in bullets)
+    for required_term in (
+        "public Hugging Face",
+        "ONNX",
+        "SAN",
+        "input_ids",
+        "SHA-256",
+        "150 MB",
+        "40-character-commit-sha",
+    ):
+        assert required_term in requirements
+
+
 def test_first_experiment_records_the_observed_result() -> None:
     path = ROOT / "experiments/0000-local-autodiff-smoke.toml"
     with path.open("rb") as file:
