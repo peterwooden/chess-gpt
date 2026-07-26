@@ -116,6 +116,16 @@ test("arena renders filled pieces, player strips, captures, and material advanta
   assert.match(arena, /className="captured-pieces"/);
 });
 
+test("arena consolidates match status in the move pane", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(arena, /className="game-status"/);
+  assert.match(arena, /<span>\{mode === "human" \? "Human match" : "Model match"\}<\/span>/);
+  assert.match(arena, /<strong aria-live="polite">\{status\}<\/strong>/);
+  assert.match(arena, /className="move-header-meta"/);
+  assert.match(arena, /\{history\.length\} plies/);
+});
+
 test("arena enforces a narrow, revision-aware model contract", async () => {
   const modelLoader = await readFile(new URL("../app/arena/model.ts", import.meta.url), "utf8");
 
@@ -148,6 +158,6 @@ test("arena has a single-viewport laptop workspace", async () => {
   assert.match(pageRule, /overflow:\s*hidden/);
   assert.match(workspaceRule, /grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(20rem,\s*24rem\)/);
   assert.match(workspaceRule, /min-height:\s*0/);
-  assert.match(playerBoardRule, /width:\s*min\(100%,\s*calc\(100svh - 15\.5rem\)\)/);
+  assert.match(playerBoardRule, /width:\s*min\(100%,\s*calc\(100svh - 11\.75rem\)\)/);
   assert.match(boardRule, /height:\s*auto/);
 });

@@ -372,11 +372,6 @@ export default function ArenaClient() {
 
       <section className="arena-workspace" aria-label="Chess arena">
         <div className="board-stage">
-          <div className="game-status" aria-live="polite">
-            <span>{gameStarted ? mode === "human" ? "Human match" : "Model match" : "Board ready"}</span>
-            <strong>{gameStarted ? status : "Choose players and press Start"}</strong>
-            <small>{gameStarted ? `${history.length} plies · ${Math.ceil(history.length / 2)} moves` : "Local inference"}</small>
-          </div>
           <div className={`board-frame${gameStarted ? " with-players" : ""}`}>
             {gameStarted ? <PlayerStrip {...topPlayerSummary} /> : null}
             <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
@@ -484,8 +479,14 @@ export default function ArenaClient() {
           ) : (
             <section className="move-console" aria-label="Game progress">
               <header>
-                <div><span>Moves</span><strong>{thinking ? `${thinking} is thinking` : running ? "Game running" : "Game paused"}</strong></div>
-                <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
+                <div>
+                  <span>{mode === "human" ? "Human match" : "Model match"}</span>
+                  <strong aria-live="polite">{status}</strong>
+                </div>
+                <div className="move-header-meta">
+                  <small>{history.length} plies · {Math.ceil(history.length / 2)} moves</small>
+                  <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
+                </div>
               </header>
               {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
               {moves.length === 0 ? (
