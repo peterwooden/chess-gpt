@@ -1,3 +1,5 @@
+import { init, parse, type ImportSpecifier } from "es-module-lexer";
+
 const PACKAGE_SCHEMA = "chess-gpt-package-v1";
 const PACKAGE_LIMIT_BYTES = 100_000_000;
 const HF_HOSTS = new Set(["huggingface.co", "www.huggingface.co"]);
@@ -131,6 +133,7 @@ export async function loadBrowserModel(
     onProgress,
   );
   await verifyArtifact(entrypointBytes, manifest.entrypoint, "entrypoint");
+  await assertSelfContainedEntrypoint(entrypointBytes);
 
   const artifacts: Array<{ name: string; bytes: Uint8Array }> = [];
   for (const [name, descriptor] of Object.entries(manifest.artifacts)) {
@@ -208,19 +211,31 @@ function createWorkerClient(worker: Worker) {
     pending.clear();
   }
 
+  function failWorker(message: string) {
+    if (terminated) return;
+    terminated = true;
+    worker.terminate();
+    rejectPending(message);
+  }
+
   worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
     const response = event.data;
     const request = pending.get(response.id);
     if (!request) return;
     pending.delete(response.id);
-    if (response.ok) request.resolve(response.value);
-    else request.reject(new Error(response.error ?? "The package worker failed."));
+    if (response.ok) {
+      request.resolve(response.value);
+    } else {
+      const message = response.error ?? "The package worker failed.";
+      request.reject(new Error(message));
+      failWorker(message);
+    }
   });
   worker.addEventListener("error", (event) => {
-    rejectPending(event.message || "The package worker crashed.");
+    failWorker(event.message || "The package worker crashed.");
   });
   worker.addEventListener("messageerror", () => {
-    rejectPending("The package worker returned an unreadable message.");
+    failWorker("The package worker returned an unreadable message.");
   });
 
   return {
@@ -230,7 +245,14 @@ function createWorkerClient(worker: Worker) {
       nextId += 1;
       return new Promise<unknown>((resolve, reject) => {
         pending.set(id, { resolve, reject });
-        worker.postMessage({ id, type, ...payload }, transfer);
+        try {
+          worker.postMessage({ id, type, ...payload }, transfer);
+        } catch (error) {
+          pending.delete(id);
+          const message = error instanceof Error ? error.message : "The package request failed.";
+          reject(new Error(message));
+          failWorker(message);
+        }
       });
     },
     terminate() {
@@ -240,6 +262,19 @@ function createWorkerClient(worker: Worker) {
       rejectPending("The package worker has stopped.");
     },
   };
+}
+
+async function assertSelfContainedEntrypoint(bytes: Uint8Array): Promise<void> {
+  await init;
+  let imports: ReadonlyArray<ImportSpecifier>;
+  try {
+    [imports] = parse(new TextDecoder().decode(bytes));
+  } catch {
+    throw new Error("The package entrypoint is not valid JavaScript module syntax.");
+  }
+  if (imports.length > 0) {
+    throw new Error("The package entrypoint must be self-contained and may not import other modules.");
+  }
 }
 
 function parseManifest(value: unknown): PackageManifest {

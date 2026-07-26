@@ -183,13 +183,18 @@ export default function ArenaClient() {
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];
     setStarting(true);
     setGameError(null);
-    try {
-      await Promise.all([
-        modelA.model?.newGame(seed),
-        modelB.model?.newGame(seed ^ 0x9e3779b9),
-      ]);
-    } catch (error) {
-      setGameError(error instanceof Error ? error.message : "A model could not start a fresh game.");
+    const startingModels = [
+      modelA.model && { model: modelA.model, seed },
+      modelB.model && { model: modelB.model, seed: seed ^ 0x9e3779b9 },
+    ].filter((item): item is { model: BrowserChessModel; seed: number } => Boolean(item));
+    const startResults = await Promise.allSettled(
+      startingModels.map(({ model, seed: modelSeed }) => model.newGame(modelSeed)),
+    );
+    const failedIndex = startResults.findIndex((result) => result.status === "rejected");
+    if (failedIndex >= 0) {
+      const result = startResults[failedIndex] as PromiseRejectedResult;
+      const detail = result.reason instanceof Error ? result.reason.message : "failed to start";
+      setGameError(`${startingModels[failedIndex].model.info.name} loses before move 1: ${detail}`);
       setStarting(false);
       return;
     }

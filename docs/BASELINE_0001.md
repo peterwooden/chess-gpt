@@ -88,3 +88,10 @@ uv run chess-gpt-package \
 ```
 
 The older compressed `model.json.gz` remains in the Hub repository as a historical artifact, but the unified arena accepts only `chess-gpt-package-v1`.
+
+### What the package test taught us
+
+- The manifest works as a root digest: hashing it commits to the entrypoint and model hashes it contains, so the arena can display one short package identity after verifying the whole graph.
+- The 100 MB rule must be checked on canonical files, not transfer size: this model's 1.41 MB gzip becomes a 6.69 MB package when its learned state is represented uncompressed.
+- A Worker gives the runner clean lifecycle and termination, but it is not a hostile-code sandbox; import parsing and blocked Worker capabilities enforce the trusted-participant contract without pretending to provide a complete security boundary.
+- The pure-JavaScript adapter proves package v1 end to end, but ONNX remains unproven: ONNX Runtime Web may lazily load a WASM asset after package loading, which conflicts with the literal zero-network rule. We have left the agreed rule unchanged; before accepting an ONNX submission, the three participants should either agree that runner-owned same-origin runtime assets are exempt or require the runner to preload/bundle them before contestant code begins.

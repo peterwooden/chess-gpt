@@ -124,16 +124,15 @@ function seededRandom(seed: number): () => number {
 }
 
 function restrictContestantCapabilities(): void {
-  const originalFetch = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
-    const rawUrl = input instanceof Request ? input.url : String(input);
-    const url = new URL(rawUrl, self.location.href);
-    if (url.origin !== self.location.origin) {
-      return Promise.reject(new Error("Package network access is forbidden."));
-    }
-    return originalFetch(input, init);
-  };
-  for (const name of ["WebSocket", "EventSource", "XMLHttpRequest", "indexedDB", "caches"]) {
+  globalThis.fetch = () => Promise.reject(new Error("Package network access is forbidden."));
+  for (const name of [
+    "WebSocket",
+    "EventSource",
+    "XMLHttpRequest",
+    "importScripts",
+    "indexedDB",
+    "caches",
+  ]) {
     try {
       Object.defineProperty(globalThis, name, {
         configurable: true,

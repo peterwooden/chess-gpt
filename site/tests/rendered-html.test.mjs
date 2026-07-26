@@ -143,12 +143,14 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelLoader, /100_000_000/);
   assert.match(modelLoader, /legalMoves/);
   assert.match(modelLoader, /new Worker/);
+  assert.match(modelLoader, /es-module-lexer/);
   assert.match(modelWorker, /loadPackage/);
   assert.match(modelWorker, /newGame/);
   assert.match(modelWorker, /chooseMove/);
   assert.match(modelWorker, /URL\.createObjectURL/);
   assert.doesNotMatch(`${modelLoader}\n${modelWorker}`, /\beval\s*\(|new Function\s*\(/);
   assert.doesNotMatch(modelLoader, /chess-gpt-browser-v1|model\.json\.gz/);
+  assert.match(modelWorker, /globalThis\.fetch = \(\) => Promise\.reject/);
 });
 
 test("the SAN n-gram adapter implements package v1 without arena-specific imports", async () => {
