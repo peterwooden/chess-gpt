@@ -113,19 +113,15 @@ export async function loadBrowserModel(
   onProgress: (progress: LoadProgress) => void,
 ): Promise<BrowserChessModel> {
   const reference = normalizeModelReference(rawReference);
-  const manifestBytes = await immutableDownloadCache.load({
-    url: reference.manifestUrl,
-    immutable: reference.pinned,
-    maximumBytes: PACKAGE_LIMIT_BYTES,
-    download: () => fetchBytes(
-      reference.manifestUrl,
-      "manifest",
-      "manifest.json",
-      PACKAGE_LIMIT_BYTES,
-      onProgress,
-    ),
-    validate: async (bytes) => { parsePackage(bytes); },
-  });
+  // The manifest is the live root of trust for every declared file hash, so it
+  // is deliberately fetched fresh even when the repository revision is immutable.
+  const manifestBytes = await fetchBytes(
+    reference.manifestUrl,
+    "manifest",
+    "manifest.json",
+    PACKAGE_LIMIT_BYTES,
+    onProgress,
+  );
   const { manifest, packageBytes } = parsePackage(manifestBytes);
 
   const entrypointUrl = packageFileUrl(reference.manifestUrl, manifest.entrypoint.path);
