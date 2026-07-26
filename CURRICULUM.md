@@ -45,7 +45,7 @@ Goodfellow, Bengio, and Courville is a companion reference, not a cover-to-cover
 
 **Further reading**
 
-- **Primary:** [the pinned Lichess dataset artifact](https://huggingface.co/datasets/shazmate/lichess-chess-tokens/tree/cb90f1bb2eab0b905e84e14f2d1d24ec5f9d1d94) — inspect the actual schema and provenance; [Kohavi, “A Study of Cross-Validation and Bootstrap”](https://www.ijcai.org/Proceedings/95-2/Papers/016.pdf) — focus on the experimental comparison of validation methods.
+- **Primary:** [the Lichess open database](https://database.lichess.org/) — inspect the source and monthly standard-rated PGN files frozen in [`data/dataset.toml`](data/dataset.toml); [Kohavi, “A Study of Cross-Validation and Bootstrap”](https://www.ijcai.org/Proceedings/95-2/Papers/016.pdf) — focus on the experimental comparison of validation methods.
 - **Secondary:** [Jurafsky & Martin, *Speech and Language Processing*, Chapter 3](https://web.stanford.edu/~jurafsky/slp3/ed3book.pdf) — n-grams, evaluation, and perplexity; [Goodfellow et al., *Deep Learning*, §§5.1–5.5](https://www.deeplearningbook.org/contents/ml.html) — learning algorithms, capacity, splits, estimators, and likelihood.
 
 ## Chapter 2 — How can a number learn to prefer a move?

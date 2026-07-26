@@ -308,7 +308,7 @@ export default function LessonClient() {
         </div>
         <div className="source-list">
           <a href="https://github.com/peterwooden/chess-gpt/blob/main/src/chess_gpt/baseline.py#L43"><span><strong>GameRecord + is_validation_game</strong><small>Project evidence · inspect lines 43 and 107</small></span><i>↗</i></a>
-          <a href="https://huggingface.co/datasets/shazmate/lichess-chess-tokens/tree/cb90f1bb2eab0b905e84e14f2d1d24ec5f9d1d94"><span><strong>Pinned dataset artifact</strong><small>Primary evidence · inspect schema and provenance</small></span><i>↗</i></a>
+          <a href="https://database.lichess.org/"><span><strong>Frozen dataset source</strong><small>Primary evidence · inspect monthly PGN files and checksums</small></span><i>↗</i></a>
           <a href="https://www.deeplearningbook.org/contents/ml.html"><span><strong>Deep Learning §§5.1–5.3</strong><small>Secondary explanation · generalization and partitions</small></span><i>↗</i></a>
         </div>
       </section>

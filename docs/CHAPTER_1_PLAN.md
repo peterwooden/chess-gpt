@@ -14,7 +14,7 @@ This is the direct path selected after diagnostic `CGPT-D0-7-7F-H0` and the lear
 
 ## Mission 1 sources
 
-- **Project evidence:** [`src/chess_gpt/baseline.py`](../src/chess_gpt/baseline.py) for `GameRecord` and `is_validation_game`; [`data/dataset-candidate.toml`](../data/dataset-candidate.toml) for the candidate revision.
+- **Project evidence:** [`src/chess_gpt/baseline.py`](../src/chess_gpt/baseline.py) for the pre-tournament `GameRecord` and `is_validation_game` example; [`data/dataset.toml`](../data/dataset.toml) for the frozen tournament split.
 - **Primary source:** [Kohavi, “A Study of Cross-Validation and Bootstrap”](https://www.ijcai.org/Proceedings/95-2/Papers/016.pdf), especially the motivation and experimental comparison.
 - **Secondary source:** [Goodfellow, Bengio & Courville, *Deep Learning*, §§5.1–5.3](https://www.deeplearningbook.org/contents/ml.html), especially generalization and data partitions.
 

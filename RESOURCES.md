@@ -2,8 +2,8 @@
 
 ## Knowledge
 
-- [Dataset: `shazmate/lichess-chess-tokens`](https://huggingface.co/datasets/shazmate/lichess-chess-tokens)
-  The shared candidate training corpus and tokenizer pipeline. Use for: schema inspection, data provenance, split design, vocabulary pinning, and the eventual frozen tournament snapshot.
+- [Lichess open database](https://database.lichess.org/)
+  The official source of the frozen January–March 2026 training games and April 2026 validation games. Use [`data/dataset.toml`](data/dataset.toml) for the exact files and checksums.
 - [GPCT: Generative Pretrained Chess Transformer](https://github.com/shahazmat/chess-transformer-model)
   A competitor's public model and inference interface. Use for: agreeing tournament compatibility and establishing a playing-strength benchmark—not as curriculum material or unquestioned ground truth.
 - [Neural Networks: Zero to Hero — Andrej Karpathy](https://karpathy.ai/zero-to-hero.html)
@@ -54,7 +54,5 @@
 
 ## Gaps
 
-- A written, agreed tournament fairness and match protocol from all three competitors.
-- A frozen dataset/tokenizer revision whose files, hashes, and vocabulary generation agree.
 - A primary tournament baseline report with exact parameter count, training budget, seeds, checkpoint, and match results.
 - The learner's compute budget and deadline, needed before choosing the production training plan.

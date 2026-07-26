@@ -1,0 +1,36 @@
+[dataset]
+status = "frozen"
+source = "https://database.lichess.org/"
+variant = "standard"
+rated_only = true
+format = "pgn.zst"
+split_unit = "calendar-month"
+frozen_at = "2026-07-26"
+
+[[files]]
+month = "2026-01"
+split = "train"
+url = "https://database.lichess.org/standard/lichess_db_standard_rated_2026-01.pgn.zst"
+sha256 = "53388f5c5be7eb2c3ce4d5071d7453a35ada6cea4f965bc6118cf1edb05e40e5"
+
+[[files]]
+month = "2026-02"
+split = "train"
+url = "https://database.lichess.org/standard/lichess_db_standard_rated_2026-02.pgn.zst"
+sha256 = "feeffa53b5056b2776f8e2e6c638a83eaaa1d1ffbaa88f711299db6c2b156c01"
+
+[[files]]
+month = "2026-03"
+split = "train"
+url = "https://database.lichess.org/standard/lichess_db_standard_rated_2026-03.pgn.zst"
+sha256 = "d3adc2bcc58e85f4398ece2f7f8ea422c5ec5269a7d2921257bc31c5b914180f"
+
+[[files]]
+month = "2026-04"
+split = "validation"
+url = "https://database.lichess.org/standard/lichess_db_standard_rated_2026-04.pgn.zst"
+sha256 = "a6dc976bda3e6f543929e9448420482f2fe827b09e16c1005ca9a6ef66e7336d"
+
+[verification]
+algorithm = "sha256"
+upstream_checksums = "https://database.lichess.org/standard/sha256sums.txt"

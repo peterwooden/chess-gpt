@@ -2,7 +2,7 @@
 
 A teaching-first, reproducible laboratory for building a small chess language model and entering a three-friend tournament.
 
-The priorities are: win fairly, learn ML engineering deeply, and turn creative ideas into controlled experiments. Start with [MISSION.md](MISSION.md), follow the checkbox [curriculum](CURRICULUM.md), then read the [founding intent](PROJECT_INTENT.md) and [tournament rules draft](docs/TOURNAMENT_RULES_DRAFT.md).
+The priorities are: win fairly, learn ML engineering deeply, and turn creative ideas into controlled experiments. Start with [MISSION.md](MISSION.md), follow the checkbox [curriculum](CURRICULUM.md), then read the [founding intent](PROJECT_INTENT.md) and finalized [tournament rules](docs/TOURNAMENT_RULES.md).
 
 ## Current stage
 
@@ -10,7 +10,7 @@ The repository now has a reproducible, functional floor: a count-based SAN langu
 
 The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner's latest diagnostic attempt scored 7/8 on the direct track and the follow-up prediction demonstrated the remaining train/validation/test concept. The resulting [adaptive Chapter 1 plan](docs/CHAPTER_1_PLAN.md) now begins with an interactive mission on honest game-level data splits; completion remains unrecorded until the learner returns its code and explanation.
 
-The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It can download a compatible model from Hugging Face, run human-versus-model play, or run two models against each other while showing SAN moves and inference timing. Start with the [brief Hugging Face requirements](docs/ARENA_HUGGING_FACE_REQUIREMENTS.md), then use the [full browser model contract](docs/BROWSER_MODEL_CONTRACT.md) when exporting.
+The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It can download a compatible model from Hugging Face, run human-versus-model play, or run two models against each other while showing SAN moves and inference timing. The unified submission package and inference contract is the [tournament rules technical appendix](docs/TOURNAMENT_RULES.md#technical-appendix-model-package-v1); the current arena still needs to be migrated to that interface.
 
 ## Local setup
 
@@ -26,7 +26,7 @@ uv run pyright
 
 ## First playable baseline
 
-Experiment `0001-basic-san-ngram` is the deliberately simple floor: it learns which SAN moves tend to follow the previous two moves, backs off to broader frequencies when needed, and filters every prediction through the legal moves in the current position. Its [versioned specification](experiments/0001-basic-san-ngram.toml) contains the measured result; generated checkpoints and metrics stay under the ignored `runs/` directory.
+Experiment `0001-basic-san-ngram` is the deliberately simple, pre-tournament floor: it learns which SAN moves tend to follow the previous two moves, backs off to broader frequencies when needed, and filters every prediction through the legal moves in the current position. It predates the agreed Lichess monthly corpus and is therefore not tournament-eligible. Its [versioned specification](experiments/0001-basic-san-ngram.toml) contains the measured result; generated checkpoints and metrics stay under the ignored `runs/` directory.
 
 After obtaining the pinned dataset shard named in the experiment, train and ask for one move:
 

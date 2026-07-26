@@ -35,38 +35,42 @@ def test_local_lesson_links_resolve() -> None:
             assert (document.parent / target).resolve().exists(), f"{document}: missing {link}"
 
 
-def test_candidate_dataset_is_not_mistaken_for_a_freeze() -> None:
-    with (ROOT / "data/dataset-candidate.toml").open("rb") as file:
+def test_tournament_dataset_is_frozen_by_month_and_checksum() -> None:
+    with (ROOT / "data/dataset.toml").open("rb") as file:
         manifest = tomllib.load(file)
 
-    assert manifest["dataset"]["status"] == "candidate-not-frozen"
-    assert manifest["compatibility"]["compatible"] is False
+    assert manifest["dataset"]["status"] == "frozen"
+    files = manifest["files"]
+    assert [(item["month"], item["split"]) for item in files] == [
+        ("2026-01", "train"),
+        ("2026-02", "train"),
+        ("2026-03", "train"),
+        ("2026-04", "validation"),
+    ]
+    assert all(re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) for item in files)
 
 
 def test_tournament_rules_are_five_bold_labelled_bullets() -> None:
-    rules = (ROOT / "docs/TOURNAMENT_RULES_DRAFT.md").read_text().splitlines()
-    bullets = [line for line in rules if line.startswith("- ")]
+    rules = (ROOT / "docs/TOURNAMENT_RULES.md").read_text()
+    summary = rules.split("## Technical appendix", 1)[0]
+    bullets = [line for line in summary.splitlines() if line.startswith("- ")]
 
     assert len(bullets) == 5
     assert all(line.startswith("- **") for line in bullets)
 
 
-def test_arena_hugging_face_requirements_stay_brief_and_complete() -> None:
-    requirements = (ROOT / "docs/ARENA_HUGGING_FACE_REQUIREMENTS.md").read_text()
-    bullets = [line for line in requirements.splitlines() if line.startswith("- ")]
-
-    assert 5 <= len(bullets) <= 8
-    assert all(line.startswith("- **") for line in bullets)
+def test_tournament_rules_include_unified_package_contract() -> None:
+    rules = (ROOT / "docs/TOURNAMENT_RULES.md").read_text()
     for required_term in (
         "public Hugging Face",
-        "ONNX",
-        "SAN",
-        "input_ids",
-        "SHA-256",
-        "150 MB",
-        "40-character-commit-sha",
+        "chess-gpt-package-v1",
+        "100,000,000",
+        "loadPackage",
+        "legalMoves",
+        "dedicated Web Worker",
+        "immediate game loss",
     ):
-        assert required_term in requirements
+        assert required_term in rules
 
 
 def test_first_experiment_records_the_observed_result() -> None:

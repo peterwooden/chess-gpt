@@ -1,6 +1,6 @@
 # Baseline 0001: a functional chess model
 
-On 25 July 2026, experiment `0001-basic-san-ngram` trained the repository's first functional chess model. Given a legal history in Standard Algebraic Notation (SAN), its command-line interface prints exactly one legal SAN move.
+On 25 July 2026, experiment `0001-basic-san-ngram` trained the repository's first functional chess model. Given a legal history in Standard Algebraic Notation (SAN), its command-line interface prints exactly one legal SAN move. This experiment predates the agreed Lichess monthly corpus and is a teaching baseline, not a tournament-eligible submission.
 
 ## What it learned
 

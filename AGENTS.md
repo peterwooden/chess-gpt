@@ -1,6 +1,6 @@
 # Working agreement for this repository
 
-Before making project decisions, read `MISSION.md`, `PROJECT_INTENT.md`, `NOTES.md`, and `docs/TOURNAMENT_RULES_DRAFT.md`.
+Before making project decisions, read `MISSION.md`, `PROJECT_INTENT.md`, `NOTES.md`, and `docs/TOURNAMENT_RULES.md`.
 
 ## Teaching
 
@@ -17,9 +17,9 @@ Before making project decisions, read `MISSION.md`, `PROJECT_INTENT.md`, `NOTES.
 
 ## Data and tournament fairness
 
-- Treat the Hugging Face dataset revision in `data/dataset-candidate.toml` as a candidate until all three competitors freeze it in writing.
-- Do not add outside games, pretrained weights, engine labels, or synthetic data unless the agreed tournament rules permit them; the current draft allows search and auxiliary inference systems that obey its learned-state and interface limits.
-- Count all model-specific learned state, including weights, embeddings, biases, learned buffers, quantization scales, codebooks, and constants, when checking the 100 MB submission cap.
+- Use only the frozen monthly files and split assignments in `data/dataset.toml` for tournament experiments.
+- Do not add outside games, pretrained weights, engine labels, or synthetic data unless the agreed tournament rules permit them; search and auxiliary inference systems must fit inside the same submitted package and interface.
+- Count the manifest, entrypoint, model artifacts, vocabulary, configuration, and model-specific constants in the 100 MB submission cap as specified by the rules.
 
 ## Engineering
 

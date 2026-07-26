@@ -14,7 +14,7 @@ Build the strongest fair chess model in a three-friend tournament while learning
 
 ## Constraints
 
-- All three competitors will use the same frozen training data and an agreed model-size limit; the exact fairness contract is still to be defined.
+- All three competitors will use the frozen data, package-size limit, compute budget, inference interface, and match protocol in the finalized [`docs/TOURNAMENT_RULES.md`](docs/TOURNAMENT_RULES.md).
 - The learner is not an ML engineer yet, so teaching must build intuition incrementally and connect every abstraction to code and evidence.
 - The learner will dedicate about five hours per week, preferably spread across several sessions.
 - Competition comes first, learning second, and creative expression third; good work should serve all three where possible.

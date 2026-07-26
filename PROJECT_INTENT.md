@@ -14,6 +14,10 @@ Recorded on 2026-07-24. This file preserves the founding brief. It is the durabl
 
 These priorities are complementary: a strong baseline makes creative experiments measurable, and understanding the system makes good competitive ideas more likely.
 
+## Current tournament agreement
+
+The three participants have agreed the finalized [`docs/TOURNAMENT_RULES.md`](docs/TOURNAMENT_RULES.md). The frozen corpus is Lichess standard rated games from January through March 2026 for training and April 2026 for validation; [`data/dataset.toml`](data/dataset.toml) records the exact files and official checksums. The original founding brief above remains verbatim historical context.
+
 ## Working commitments
 
 - Freeze the tournament rules, dataset revision, tokenizer, and evaluation protocol before comparing models.
@@ -35,7 +39,7 @@ These priorities are complementary: a strong baseline makes creative experiments
 - The GPCT source is [`shahazmat/chess-transformer-model`](https://github.com/shahazmat/chess-transformer-model). Commit `38536855597d064f4b5d04005ce1587f45359881` was inspected on 2026-07-24.
 - At that commit, GPCT's `full` profile is 12 layers, 12 heads, width 768, context 512, and batch size 128. Its transformer blocks contain about 85.1M parameters; the complete tied-embedding nanoGPT model is about 89.5M parameters with a 5,273-token vocabulary. This explains why the meaning of "50M" must be explicit.
 
-## Decisions still needed
+## Historical questions at kickoff
 
 - The complete fairness contract: parameter-count formula, context length, training-token or compute budget, allowed data transformations, inference method, legal-move masking, search, time controls, hardware normalization, and submission format.
 - The authoritative frozen dataset/tokenizer revision and whether competitors may create their own train/validation/test split from it.
