@@ -8,6 +8,10 @@ import {
   type BrowserChessModel,
   type LoadProgress,
 } from "./model";
+import {
+  readSharedModelReferences,
+  withSharedModelReference,
+} from "./share-url.mjs";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
 const MODEL_AUTOPLAY_DELAY_MS = 650;
@@ -85,6 +89,12 @@ export default function ArenaClient() {
   const [gameError, setGameError] = useState<string | null>(null);
 
   useEffect(() => {
+    const shared = readSharedModelReferences(window.location.href);
+    if (shared) {
+      setModelA((current) => ({ ...current, reference: shared.a }));
+      setModelB((current) => ({ ...current, reference: shared.b }));
+      return;
+    }
     const saved = window.localStorage.getItem(MODEL_URLS_KEY);
     if (!saved) return;
     try {
@@ -147,6 +157,12 @@ export default function ArenaClient() {
           await loaded.dispose();
           return;
         }
+        const shareUrl = withSharedModelReference(
+          window.location.href,
+          slot,
+          current.reference,
+        );
+        window.history.replaceState(window.history.state, "", shareUrl);
         setSlot((value) => ({
           ...value,
           phase: "ready",
