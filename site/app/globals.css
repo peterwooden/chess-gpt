@@ -509,6 +509,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   padding: 1rem 0 2rem;
 }
 .arena-page-v2 .board-stage {
+  position: relative;
   display: grid;
   grid-template-rows: auto auto;
   align-content: start;
@@ -530,6 +531,42 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   box-shadow: none;
 }
 .arena-page-v2 .piece { font-size: clamp(1.6rem, min(8vw, 6vh), 4rem); }
+.board-frame { display: grid; min-width: 0; align-content: start; }
+.board-frame.with-players { grid-template-rows: auto auto auto; }
+.player-strip {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  min-height: 3rem;
+  padding: 0.38rem 0.55rem;
+  border: 1px solid var(--green);
+  border-bottom: 0;
+}
+.player-strip.white { color: var(--ink); background: var(--white); }
+.player-strip.black { color: var(--white); background: #1b3027; }
+.board-frame .chessboard + .player-strip { border-top: 0; border-bottom: 1px solid var(--green); }
+.player-identity { display: flex; gap: 0.55rem; align-items: baseline; min-width: 0; }
+.player-identity > span { flex: none; color: var(--muted); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.player-strip.black .player-identity > span { color: #b8d5c7; }
+.player-identity > strong { overflow: hidden; font-size: 0.72rem; white-space: nowrap; text-overflow: ellipsis; }
+.captured-pieces { display: flex; overflow: hidden; gap: 0.08rem; align-items: center; min-height: 1.15rem; }
+.captured-piece { font-family: "Arial Unicode MS", "Noto Sans Symbols 2", serif; font-size: 1.15rem; line-height: 1; }
+.captured-piece.black { color: #18241d; }
+.captured-piece.white { color: #fffdf7; text-shadow: 0 1px 0 #18241d, 1px 0 0 #18241d, 0 -1px 0 #18241d, -1px 0 0 #18241d; }
+.no-captures { color: var(--line); font-size: 0.7rem; }
+.player-strip.black .no-captures { color: #6e887b; }
+.material-lead { margin-left: 0.3rem; color: var(--amber); font-family: ui-monospace, monospace; font-size: 0.72rem; }
+.player-strip.black .material-lead { color: #efb17d; }
+.arena-page-v2 .promotion-picker {
+  position: absolute;
+  z-index: 6;
+  bottom: 3.75rem;
+  left: 50%;
+  width: min(calc(100% - 2rem), 28rem);
+  margin: 0;
+  translate: -50% 0;
+  box-shadow: 0 0.8rem 2rem rgb(20 63 49 / 0.22);
+}
 .arena-sidebar {
   min-width: 0;
   border: 1px solid var(--green);
@@ -612,11 +649,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   background: transparent;
 }
 .arena-page-v2 .move-console > header { min-height: 3.6rem; padding: 0.55rem 0.75rem; }
-.match-up { display: grid; grid-template-columns: 1fr 1fr; margin: 0; border-bottom: 1px solid var(--line); }
-.match-up div { min-width: 0; padding: 0.65rem 0.75rem; }
-.match-up div + div { border-left: 1px solid var(--line); }
-.match-up dt { color: var(--muted); font-size: 0.56rem; font-weight: 850; letter-spacing: 0.07em; text-transform: uppercase; }
-.match-up dd { overflow: hidden; margin: 0.2rem 0 0; font-size: 0.68rem; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
 .arena-page-v2 .arena-error { margin: 0.65rem; font-size: 0.68rem; }
 .arena-page-v2 .empty-record { flex: 1; min-height: 9rem; padding: 1rem; }
 .arena-page-v2 .empty-record span { color: var(--line); font-family: ui-monospace, monospace; font-size: 1.5rem; font-weight: 900; }
@@ -654,13 +686,17 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
     padding: 1rem 0;
   }
   .arena-page-v2 .board-stage { grid-template-rows: auto minmax(0, 1fr); }
-  .arena-page-v2 .chessboard {
+  .board-frame {
     align-self: start;
     justify-self: center;
-    width: auto;
+    width: min(100%, calc(100svh - 9.5rem));
+  }
+  .board-frame.with-players { width: min(100%, calc(100svh - 15.5rem)); }
+  .arena-page-v2 .chessboard {
+    width: 100%;
     max-width: 100%;
-    height: 100%;
-    max-height: 100%;
+    height: auto;
+    max-height: none;
   }
   .arena-sidebar { overflow: hidden; height: 100%; min-height: 0; }
   .setup-pane { overflow-y: auto; height: 100%; min-height: 0; }

@@ -14,9 +14,11 @@ const MODEL_AUTOPLAY_DELAY_MS = 650;
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1] as const;
 const PIECES: Record<Color, Record<PieceSymbol, string>> = {
-  w: { p: "♙", n: "♘", b: "♗", r: "♖", q: "♕", k: "♔" },
+  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
   b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
 };
+const CAPTURE_VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const CAPTURE_ORDER: PieceSymbol[] = ["q", "r", "b", "n", "p"];
 
 type ModelSlot = {
   reference: string;
@@ -37,12 +39,21 @@ type MoveRecord = {
   elapsedMs: number | null;
   from: Square;
   to: Square;
+  color: Color;
+  captured?: PieceSymbol;
 };
 
 type PromotionChoice = {
   from: Square;
   to: Square;
   pieces: PieceSymbol[];
+};
+
+type PlayerStripProps = {
+  color: Color;
+  name: string;
+  captured: PieceSymbol[];
+  lead: number;
 };
 
 function emptySlot(): ModelSlot {
@@ -206,6 +217,8 @@ export default function ArenaClient() {
             elapsedMs,
             from: move.from,
             to: move.to,
+            color: move.color,
+            captured: move.captured,
           },
         ]);
         setGameVersion((value) => value + 1);
@@ -283,6 +296,8 @@ export default function ArenaClient() {
           elapsedMs: null,
           from: move.from,
           to: move.to,
+          color: move.color,
+          captured: move.captured,
         },
       ]);
       setSelectedSquare(null);
@@ -328,6 +343,25 @@ export default function ArenaClient() {
   const player2Name = modelB.model?.info.name ?? "Human";
   const whitePlayer = player1Color === "w" ? player1Name : player2Name;
   const blackPlayer = player1Color === "b" ? player1Name : player2Name;
+  const whiteCapturedPieces = capturedPieces(moves, "w");
+  const blackCapturedPieces = capturedPieces(moves, "b");
+  const whiteCapturePoints = capturePoints(whiteCapturedPieces);
+  const blackCapturePoints = capturePoints(blackCapturedPieces);
+  const materialLead = whiteCapturePoints - blackCapturePoints;
+  const whitePlayerSummary: PlayerStripProps = {
+    color: "w",
+    name: whitePlayer,
+    captured: whiteCapturedPieces,
+    lead: Math.max(0, materialLead),
+  };
+  const blackPlayerSummary: PlayerStripProps = {
+    color: "b",
+    name: blackPlayer,
+    captured: blackCapturedPieces,
+    lead: Math.max(0, -materialLead),
+  };
+  const topPlayerSummary = orientation === "w" ? blackPlayerSummary : whitePlayerSummary;
+  const bottomPlayerSummary = orientation === "w" ? whitePlayerSummary : blackPlayerSummary;
 
   return (
     <main className="arena-page arena-page-v2">
@@ -343,31 +377,35 @@ export default function ArenaClient() {
             <strong>{gameStarted ? status : "Choose players and press Start"}</strong>
             <small>{gameStarted ? `${history.length} plies · ${Math.ceil(history.length / 2)} moves` : "Local inference"}</small>
           </div>
-          <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
-            {boardRanks.flatMap((rank) =>
-              boardFiles.map((file) => {
-                const square = `${file}${rank}` as Square;
-                const piece = game.get(square);
-                const light = (FILES.indexOf(file) + rank) % 2 === 1;
-                const selected = square === selectedSquare;
-                const target = targetSquares.has(square);
-                const last = square === latestMove?.from || square === latestMove?.to;
-                return (
-                  <button
-                    type="button"
-                    role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${pieceName(piece.type)}` : " empty"}`}
-                    className={`board-square ${light ? "light" : "dark"}${selected ? " selected" : ""}${target ? " target" : ""}${last ? " last" : ""}`}
-                    onClick={() => chooseSquare(square)}
-                    key={square}
-                  >
-                    {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
-                    {(orientation === "w" ? rank === 1 : rank === 8) ? <small className="file-label">{file}</small> : null}
-                    {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
-                  </button>
-                );
-              }),
-            )}
+          <div className={`board-frame${gameStarted ? " with-players" : ""}`}>
+            {gameStarted ? <PlayerStrip {...topPlayerSummary} /> : null}
+            <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
+              {boardRanks.flatMap((rank) =>
+                boardFiles.map((file) => {
+                  const square = `${file}${rank}` as Square;
+                  const piece = game.get(square);
+                  const light = (FILES.indexOf(file) + rank) % 2 === 1;
+                  const selected = square === selectedSquare;
+                  const target = targetSquares.has(square);
+                  const last = square === latestMove?.from || square === latestMove?.to;
+                  return (
+                    <button
+                      type="button"
+                      role="gridcell"
+                      aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${pieceName(piece.type)}` : " empty"}`}
+                      className={`board-square ${light ? "light" : "dark"}${selected ? " selected" : ""}${target ? " target" : ""}${last ? " last" : ""}`}
+                      onClick={() => chooseSquare(square)}
+                      key={square}
+                    >
+                      {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
+                      {(orientation === "w" ? rank === 1 : rank === 8) ? <small className="file-label">{file}</small> : null}
+                      {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
+                    </button>
+                  );
+                }),
+              )}
+            </div>
+            {gameStarted ? <PlayerStrip {...bottomPlayerSummary} /> : null}
           </div>
           {promotion ? (
             <div className="promotion-picker" role="dialog" aria-label="Choose promotion piece">
@@ -449,10 +487,6 @@ export default function ArenaClient() {
                 <div><span>Moves</span><strong>{thinking ? `${thinking} is thinking` : running ? "Game running" : "Game paused"}</strong></div>
                 <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
               </header>
-              <dl className="match-up">
-                <div><dt>White</dt><dd>{whitePlayer}</dd></div>
-                <div><dt>Black</dt><dd>{blackPlayer}</dd></div>
-              </dl>
               {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
               {moves.length === 0 ? (
                 <div className="empty-record">
@@ -492,6 +526,32 @@ export default function ArenaClient() {
         </aside>
       </section>
     </main>
+  );
+}
+
+function PlayerStrip({ color, name, captured, lead }: PlayerStripProps) {
+  const colorName = color === "w" ? "White" : "Black";
+  const capturedColor = oppositeColor(color);
+
+  return (
+    <section className={`player-strip ${color === "w" ? "white" : "black"}`} aria-label={`${colorName} player`}>
+      <div className="player-identity">
+        <span>{colorName}</span>
+        <strong>{name}</strong>
+      </div>
+      <div className="captured-pieces" aria-label={`${colorName} captured pieces`}>
+        {captured.length > 0 ? captured.map((piece, index) => (
+          <span
+            className={`captured-piece ${capturedColor === "w" ? "white" : "black"}`}
+            aria-label={`Captured ${capturedColor === "w" ? "white" : "black"} ${pieceName(piece)}`}
+            key={`${piece}-${index}`}
+          >
+            {PIECES[capturedColor][piece]}
+          </span>
+        )) : <span className="no-captures" aria-hidden="true">—</span>}
+        {lead > 0 ? <strong className="material-lead">+{lead}</strong> : null}
+      </div>
+    </section>
   );
 }
 
@@ -563,6 +623,16 @@ function oppositeColor(color: Color): Color {
 
 function randomColor(): Color {
   return crypto.getRandomValues(new Uint8Array(1))[0] % 2 === 0 ? "w" : "b";
+}
+
+function capturedPieces(moves: MoveRecord[], color: Color): PieceSymbol[] {
+  return moves
+    .flatMap((move) => move.color === color && move.captured ? [move.captured] : [])
+    .sort((left, right) => CAPTURE_ORDER.indexOf(left) - CAPTURE_ORDER.indexOf(right));
+}
+
+function capturePoints(pieces: PieceSymbol[]): number {
+  return pieces.reduce((total, piece) => total + CAPTURE_VALUES[piece], 0);
 }
 
 function pieceName(piece: PieceSymbol): string {

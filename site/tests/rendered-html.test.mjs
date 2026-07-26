@@ -104,6 +104,18 @@ test("arena defaults Player 1 to a random side and falls back to a human opponen
   assert.match(arena, /aria-pressed=\{sidePreference === side\.value\}/);
 });
 
+test("arena renders filled pieces, player strips, captures, and material advantage", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+
+  assert.match(arena, /w:\s*\{ p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" \}/);
+  assert.match(arena, /captured:\s*move\.captured/);
+  assert.match(arena, /CAPTURE_VALUES[^}]*p:\s*1[^}]*n:\s*3[^}]*b:\s*3[^}]*r:\s*5[^}]*q:\s*9/s);
+  assert.match(arena, /const materialLead = whiteCapturePoints - blackCapturePoints/);
+  assert.match(arena, /orientation === "w" \? blackPlayerSummary : whitePlayerSummary/);
+  assert.match(arena, /player-strip \$\{color ===/);
+  assert.match(arena, /className="captured-pieces"/);
+});
+
 test("arena enforces a narrow, revision-aware model contract", async () => {
   const modelLoader = await readFile(new URL("../app/arena/model.ts", import.meta.url), "utf8");
 
@@ -129,11 +141,13 @@ test("arena has a single-viewport laptop workspace", async () => {
   const pageRule = laptopStyles.match(/\.arena-page-v2\s*\{[^}]*\}/g)?.at(-1) ?? "";
   const workspaceRule = laptopStyles.match(/\.arena-workspace\s*\{[^}]*\}/g)?.at(-1) ?? "";
   const boardRule = laptopStyles.match(/\.arena-page-v2 \.chessboard\s*\{[^}]*\}/g)?.at(-1) ?? "";
+  const playerBoardRule = laptopStyles.match(/\.board-frame\.with-players\s*\{[^}]*\}/g)?.at(-1) ?? "";
 
   assert.match(laptopStyles, /@media \(min-width:\s*960px\) and \(min-height:\s*640px\)/);
   assert.match(pageRule, /height:\s*100svh/);
   assert.match(pageRule, /overflow:\s*hidden/);
   assert.match(workspaceRule, /grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(20rem,\s*24rem\)/);
   assert.match(workspaceRule, /min-height:\s*0/);
-  assert.match(boardRule, /max-height:\s*100%/);
+  assert.match(playerBoardRule, /width:\s*min\(100%,\s*calc\(100svh - 15\.5rem\)\)/);
+  assert.match(boardRule, /height:\s*auto/);
 });
