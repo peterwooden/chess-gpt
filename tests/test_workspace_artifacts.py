@@ -101,6 +101,10 @@ def test_first_playable_baseline_records_a_passing_result() -> None:
     assert result["acceptance_passed"] is True
     assert manifest["publication"]["revision"] == "fecf413cfe0e5dab427c4cec7a78aafa4410aa65"
     assert manifest["publication"]["browser_artifact_url"].endswith("/model.json.gz")
+    assert manifest["publication"]["package_v1_revision"] == (
+        "bea221167728c33f0a5df54051cd27717cae6586"
+    )
+    assert manifest["publication"]["package_v1_canonical_bytes"] == 6_689_698
 
 
 def test_curriculum_tracks_prediction_driven_progress() -> None:

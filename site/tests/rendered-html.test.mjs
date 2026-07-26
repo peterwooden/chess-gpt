@@ -135,13 +135,49 @@ test("arena consolidates match status in the move pane", async () => {
 
 test("arena enforces a narrow, revision-aware model contract", async () => {
   const modelLoader = await readFile(new URL("../app/arena/model.ts", import.meta.url), "utf8");
+  const modelWorker = await readFile(new URL("../app/arena/model-worker.ts", import.meta.url), "utf8");
 
-  assert.match(modelLoader, /chess-gpt-browser-v1/);
+  assert.match(modelLoader, /chess-gpt-package-v1/);
   assert.match(modelLoader, /huggingface\.co/);
   assert.match(modelLoader, /sha256/i);
+  assert.match(modelLoader, /100_000_000/);
   assert.match(modelLoader, /legalMoves/);
-  assert.match(modelLoader, /150 MB browser safety limit/);
-  assert.doesNotMatch(modelLoader, /\beval\s*\(|new Function\s*\(/);
+  assert.match(modelLoader, /new Worker/);
+  assert.match(modelWorker, /loadPackage/);
+  assert.match(modelWorker, /newGame/);
+  assert.match(modelWorker, /chooseMove/);
+  assert.match(modelWorker, /URL\.createObjectURL/);
+  assert.doesNotMatch(`${modelLoader}\n${modelWorker}`, /\beval\s*\(|new Function\s*\(/);
+  assert.doesNotMatch(modelLoader, /chess-gpt-browser-v1|model\.json\.gz/);
+});
+
+test("the SAN n-gram adapter implements package v1 without arena-specific imports", async () => {
+  const source = await readFile(
+    new URL("../../adapters/san-ngram/entry.js", import.meta.url),
+    "utf8",
+  );
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+  const adapter = await import(moduleUrl);
+  const state = {
+    format_version: 1,
+    model_type: "san_backoff_ngram",
+    order: 1,
+    metadata: { experiment_id: "test-ngram" },
+    ngrams: { "1": { e4: [["e5", 2]] } },
+    side_counts: { "0": [["e4", 3]], "1": [["e5", 2]] },
+  };
+  const artifacts = new Map([
+    ["model", new TextEncoder().encode(JSON.stringify(state))],
+  ]);
+
+  const loaded = await adapter.loadPackage({ artifacts, config: {}, ort: {} });
+  const game = await loaded.newGame({ random: () => 0.5 });
+
+  assert.equal(await game.chooseMove({ history: [], legalMoves: ["d4", "e4"] }), "e4");
+  assert.equal(await game.chooseMove({ history: ["e4"], legalMoves: ["c5", "e5"] }), "e5");
+  await game.dispose();
+  await loaded.dispose();
+  assert.doesNotMatch(source, /from\s+["']|import\s*\(/);
 });
 
 test("arena constrains the board to eight equal columns and rows", async () => {

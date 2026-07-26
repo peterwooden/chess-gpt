@@ -70,10 +70,21 @@ An 80-ply self-play smoke test also completed with no illegal moves. This proves
 
 ## Play it in the browser
 
-The verified checkpoint is published in the public [`peterwooden/chess-gpt-demo-ngram`](https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/fecf413cfe0e5dab427c4cec7a78aafa4410aa65) model repository. Open the [Chess GPT browser arena](https://chess-gpt-lab.peter-r-wooden.chatgpt.site/arena), load this pinned artifact as Model A, and choose **Human vs A**:
+The verified checkpoint is exported through the unified package contract in the public [`peterwooden/chess-gpt-demo-ngram`](https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/bea221167728c33f0a5df54051cd27717cae6586) model repository. Open the [Chess GPT browser arena](https://chess-gpt-lab.peter-r-wooden.chatgpt.site/arena), enter this pinned package reference for Player 1, and load it:
 
 ```text
-https://huggingface.co/peterwooden/chess-gpt-demo-ngram/resolve/fecf413cfe0e5dab427c4cec7a78aafa4410aa65/model.json.gz
+peterwooden/chess-gpt-demo-ngram@bea221167728c33f0a5df54051cd27717cae6586
 ```
 
-The Hub artifact has the same SHA-256 as the measured local checkpoint. Pinning the full Hub revision keeps future games tied to the model described by this experiment record.
+The package contains a self-contained JavaScript adapter and the canonical 6,687,169-byte model state. The arena verified all 6,689,698 package bytes, started a fresh game in a dedicated Worker, and reproduced the command-line model's `Nf3` and `Nc3` choices for the histories tested. Its manifest SHA-256 is `fc1160f487f315036fc320a7e7ced5a2e8cf9872345318a2959f8f727b949702`.
+
+Recreate the package from the measured checkpoint:
+
+```bash
+uv run chess-gpt-package \
+  --checkpoint runs/0001-basic-san-ngram/model.json.gz \
+  --entrypoint adapters/san-ngram/entry.js \
+  --output runs/0001-basic-san-ngram/browser
+```
+
+The older compressed `model.json.gz` remains in the Hub repository as a historical artifact, but the unified arena accepts only `chess-gpt-package-v1`.

@@ -75,6 +75,7 @@ export default function ArenaClient() {
   const [player1Color, setPlayer1Color] = useState<Color>("w");
   const [sidePreference, setSidePreference] = useState<SidePreference>("random");
   const [running, setRunning] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [thinking, setThinking] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [, setGameVersion] = useState(0);
@@ -172,13 +173,26 @@ export default function ArenaClient() {
     setSlot((current) => ({ ...current, reference, error: null }));
   }
 
-  function beginGame() {
+  async function beginGame() {
     if (!modelA.model && !modelB.model) {
       setGameError("Load at least one model before starting a game.");
       return;
     }
     const nextMode: PlayMode = modelA.model && modelB.model ? "models" : "human";
     const resolvedPlayer1Color = sidePreference === "random" ? randomColor() : sidePreference;
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+    setStarting(true);
+    setGameError(null);
+    try {
+      await Promise.all([
+        modelA.model?.newGame(seed),
+        modelB.model?.newGame(seed ^ 0x9e3779b9),
+      ]);
+    } catch (error) {
+      setGameError(error instanceof Error ? error.message : "A model could not start a fresh game.");
+      setStarting(false);
+      return;
+    }
     gameEpoch.current += 1;
     gameRef.current = new Chess();
     setMode(nextMode);
@@ -191,6 +205,7 @@ export default function ArenaClient() {
     setGameError(null);
     setGameStarted(true);
     setRunning(true);
+    setStarting(false);
     setGameVersion((value) => value + 1);
   }
 
@@ -226,7 +241,8 @@ export default function ArenaClient() {
       } catch (error) {
         if (gameEpoch.current !== epoch) return;
         setRunning(false);
-        setGameError(error instanceof Error ? error.message : `${actor} failed to return a legal move.`);
+        const detail = error instanceof Error ? error.message : "failed to return a legal move";
+        setGameError(`${actor} loses: ${detail}`);
       } finally {
         if (gameEpoch.current === epoch) setThinking(null);
       }
@@ -472,8 +488,8 @@ export default function ArenaClient() {
               <div className="setup-actions">
                 {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
                 <p>{modelA.model && modelB.model ? "Model versus model" : modelA.model || modelB.model ? "The empty player slot will be Human" : "Load at least one model"}</p>
-                <button type="button" onClick={beginGame} disabled={(!modelA.model && !modelB.model) || modelA.phase === "loading" || modelB.phase === "loading"}>
-                  Start game
+                <button type="button" onClick={() => void beginGame()} disabled={starting || (!modelA.model && !modelB.model) || modelA.phase === "loading" || modelB.phase === "loading"}>
+                  {starting ? "Starting…" : "Start game"}
                 </button>
               </div>
             </section>
@@ -595,7 +611,7 @@ function ModelLoader({
       {slot.phase === "loading" && slot.progress ? (
         <div className="load-progress" aria-live="polite">
           <div><i style={{ width: percent === null ? "24%" : `${percent}%` }} /></div>
-          <span>{slot.progress.stage} · {formatBytes(slot.progress.loadedBytes)}{slot.progress.totalBytes ? ` / ${formatBytes(slot.progress.totalBytes)}` : ""}</span>
+          <span>{slot.progress.label} · {formatBytes(slot.progress.loadedBytes)}{slot.progress.totalBytes ? ` / ${formatBytes(slot.progress.totalBytes)}` : ""}</span>
         </div>
       ) : null}
       {slot.model ? (

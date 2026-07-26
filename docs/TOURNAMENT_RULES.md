@@ -72,6 +72,6 @@ Each game MUST receive fresh logical adapter state, although an immutable model 
 
 ### Runner and failures
 
-The entrypoint runs in a dedicated Web Worker so the runner can isolate lifecycle and terminate failures; participants are trusted, so this worker is not treated as a hostile-code security boundary. Network access is forbidden after the declared package files load. Any load error, exception, worker crash, non-string result, invalid SAN, or illegal move is an immediate game loss with no retry or fallback move.
+The entrypoint runs in a dedicated Web Worker so the runner can isolate lifecycle and terminate failures; participants are trusted, so this worker is not treated as a hostile-code security boundary. Contestant code is forbidden from initiating network access after the declared package files load, although the arena-provided runtime may load its own same-origin assets. Any load error, exception, worker crash, non-string result, invalid SAN, or illegal move is an immediate game loss with no retry or fallback move.
 
 Version 1 has no per-move inference-time limit. A later rules revision MAY introduce one before a future tournament.

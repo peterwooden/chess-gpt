@@ -6,11 +6,11 @@ The priorities are: win fairly, learn ML engineering deeply, and turn creative i
 
 ## Current stage
 
-The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test. Read the [full baseline record](docs/BASELINE_0001.md) or [play the pinned checkpoint](https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/fecf413cfe0e5dab427c4cec7a78aafa4410aa65) through the browser arena.
+The repository now has a reproducible, functional floor: a count-based SAN language model trained on 10,000 games. It achieved 22.41% held-out next-move accuracy, returned legal moves on every validation position, and completed an 80-ply self-play smoke test. Read the [full baseline record](docs/BASELINE_0001.md) or [play its package-v1 export](https://huggingface.co/peterwooden/chess-gpt-demo-ngram/tree/bea221167728c33f0a5df54051cd27717cae6586) through the browser arena.
 
 The complete learning roadmap and adaptive placement diagnostic are live in the Sites app. The learner's latest diagnostic attempt scored 7/8 on the direct track and the follow-up prediction demonstrated the remaining train/validation/test concept. The resulting [adaptive Chapter 1 plan](docs/CHAPTER_1_PLAN.md) now begins with an interactive mission on honest game-level data splits; completion remains unrecorded until the learner returns its code and explanation.
 
-The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It can download a compatible model from Hugging Face, run human-versus-model play, or run two models against each other while showing SAN moves and inference timing. The unified submission package and inference contract is the [tournament rules technical appendix](docs/TOURNAMENT_RULES.md#technical-appendix-model-package-v1); the current arena still needs to be migrated to that interface.
+The same site now includes a client-only [browser arena](site/app/arena/page.tsx). It downloads and verifies the unified package from Hugging Face, runs its entrypoint in a dedicated Worker, and supports human-versus-model or model-versus-model play while showing SAN moves and inference timing. The exact submission and inference contract is the [tournament rules technical appendix](docs/TOURNAMENT_RULES.md#technical-appendix-model-package-v1).
 
 ## Local setup
 

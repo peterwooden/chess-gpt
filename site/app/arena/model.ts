@@ -1,10 +1,10 @@
-import * as ort from "onnxruntime-web/webgpu";
-
-const MAX_ARTIFACT_BYTES = 150_000_000;
+const PACKAGE_SCHEMA = "chess-gpt-package-v1";
+const PACKAGE_LIMIT_BYTES = 100_000_000;
 const HF_HOSTS = new Set(["huggingface.co", "www.huggingface.co"]);
 
 export type LoadProgress = {
-  stage: "manifest" | "vocabulary" | "model";
+  stage: "manifest" | "entrypoint" | "artifact";
+  label: string;
   loadedBytes: number;
   totalBytes: number | null;
 };
@@ -16,7 +16,7 @@ export type ModelPrediction = {
 
 export type BrowserModelInfo = {
   name: string;
-  runtime: "SAN n-gram" | "ONNX · next SAN";
+  runtime: "Package v1";
   sourceUrl: string;
   pinned: boolean;
   digest: string;
@@ -25,50 +25,36 @@ export type BrowserModelInfo = {
 
 export type BrowserChessModel = {
   info: BrowserModelInfo;
+  newGame(seed: number): Promise<void>;
   predict(history: string[], legalMoves: string[]): Promise<ModelPrediction>;
   dispose(): Promise<void>;
 };
 
 type NormalizedReference = {
-  artifactUrl: string;
+  manifestUrl: string;
   pinned: boolean;
-};
-
-type NgramState = {
-  format_version: number;
-  model_type: "san_backoff_ngram";
-  order: number;
-  metadata?: { experiment_id?: string };
-  ngrams: Record<string, Record<string, Array<[string, number]>>>;
-  side_counts: Record<string, Array<[string, number]>>;
-};
-
-type BrowserManifest = {
-  schema: "chess-gpt-browser-v1";
-  name: string;
-  runtime: "onnx-next-san";
-  context_length: number;
-  model: ArtifactDescriptor;
-  vocabulary: ArtifactDescriptor & {
-    bos_token?: string;
-    unknown_token?: string;
-  };
-  inputs: {
-    input_ids: string;
-    attention_mask?: string;
-  };
-  output: {
-    logits: string;
-  };
 };
 
 type ArtifactDescriptor = {
   path: string;
   sha256: string;
-  bytes?: number;
+  bytes: number;
 };
 
-type VocabularyFile = string[] | { tokens: string[] };
+type PackageManifest = {
+  schema: typeof PACKAGE_SCHEMA;
+  name: string;
+  entrypoint: ArtifactDescriptor;
+  artifacts: Record<string, ArtifactDescriptor>;
+  config: unknown;
+};
+
+type WorkerResponse = {
+  id: number;
+  ok: boolean;
+  value?: unknown;
+  error?: string;
+};
 
 export function normalizeModelReference(rawReference: string): NormalizedReference {
   const reference = rawReference.trim();
@@ -81,41 +67,38 @@ export function normalizeModelReference(rawReference: string): NormalizedReferen
     }
     const [, owner, repository, revision = "main"] = match;
     return {
-      artifactUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
+      manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
       pinned: isPinnedRevision(revision),
     };
   }
 
   const url = new URL(reference);
   if (!HF_HOSTS.has(url.hostname)) {
-    throw new Error("For this first harness, model artifacts must come from huggingface.co.");
+    throw new Error("Model packages must come from a public huggingface.co repository.");
   }
   url.hostname = "huggingface.co";
   const parts = url.pathname.split("/").filter(Boolean);
   if (parts.length < 2) throw new Error("The Hugging Face URL must identify a model repository.");
 
   const [owner, repository, operation, revision] = parts;
-  if (operation === "blob" && revision) {
+  if ((operation === "blob" || operation === "resolve") && revision) {
     parts[2] = "resolve";
     url.pathname = `/${parts.join("/")}`;
-    return { artifactUrl: url.toString(), pinned: isPinnedRevision(revision) };
-  }
-  if (operation === "resolve" && revision) {
-    return { artifactUrl: url.toString(), pinned: isPinnedRevision(revision) };
+    return { manifestUrl: url.toString(), pinned: isPinnedRevision(revision) };
   }
   if (operation === "tree" && revision) {
     return {
-      artifactUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
+      manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
       pinned: isPinnedRevision(revision),
     };
   }
   if (parts.length === 2) {
     return {
-      artifactUrl: `https://huggingface.co/${owner}/${repository}/resolve/main/browser/manifest.json`,
+      manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/main/browser/manifest.json`,
       pinned: false,
     };
   }
-  throw new Error("Use a repository URL, a tree URL, or a direct resolve/blob artifact URL.");
+  throw new Error("Use a repository URL, tree URL, or direct browser/manifest.json URL.");
 }
 
 export async function loadBrowserModel(
@@ -123,190 +106,226 @@ export async function loadBrowserModel(
   onProgress: (progress: LoadProgress) => void,
 ): Promise<BrowserChessModel> {
   const reference = normalizeModelReference(rawReference);
-  const firstArtifact = await fetchBytes(reference.artifactUrl, "manifest", onProgress);
-
-  if (new URL(reference.artifactUrl).pathname.endsWith(".gz")) {
-    return loadNgramModel(firstArtifact, reference);
+  const manifestBytes = await fetchBytes(
+    reference.manifestUrl,
+    "manifest",
+    "manifest.json",
+    PACKAGE_LIMIT_BYTES,
+    onProgress,
+  );
+  const decoded = decodeJson(manifestBytes, "package manifest");
+  const manifest = parseManifest(decoded);
+  const declaredBytes = manifest.entrypoint.bytes
+    + Object.values(manifest.artifacts).reduce((total, artifact) => total + artifact.bytes, 0);
+  const packageBytes = manifestBytes.byteLength + declaredBytes;
+  if (packageBytes > PACKAGE_LIMIT_BYTES) {
+    throw new Error(`The package is ${formatBytes(packageBytes)}, over the 100 MB limit.`);
   }
 
-  const decoded = decodeJson(firstArtifact, "model manifest");
-  if (isNgramState(decoded)) {
-    return createNgramModel(decoded, reference, firstArtifact.byteLength, await sha256Hex(firstArtifact));
-  }
-  if (!isBrowserManifest(decoded)) {
-    throw new Error("Unsupported artifact. Expected a SAN n-gram checkpoint or chess-gpt-browser-v1 manifest.");
-  }
-  return loadOnnxModel(decoded, reference, onProgress);
-}
+  const entrypointUrl = packageFileUrl(reference.manifestUrl, manifest.entrypoint.path);
+  const entrypointBytes = await fetchBytes(
+    entrypointUrl,
+    "entrypoint",
+    manifest.entrypoint.path,
+    manifest.entrypoint.bytes,
+    onProgress,
+  );
+  await verifyArtifact(entrypointBytes, manifest.entrypoint, "entrypoint");
 
-async function loadNgramModel(
-  compressed: Uint8Array,
-  reference: NormalizedReference,
-): Promise<BrowserChessModel> {
-  if (typeof DecompressionStream === "undefined") {
-    throw new Error("This browser cannot decompress the model. Use a current browser or an uncompressed JSON artifact.");
-  }
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
-  const decompressed = new Uint8Array(await new Response(stream).arrayBuffer());
-  const decoded = decodeJson(decompressed, "SAN n-gram checkpoint");
-  if (!isNgramState(decoded)) throw new Error("The checkpoint is not a supported SAN n-gram model.");
-  return createNgramModel(decoded, reference, compressed.byteLength, await sha256Hex(compressed));
-}
-
-function createNgramModel(
-  state: NgramState,
-  reference: NormalizedReference,
-  artifactBytes: number,
-  digest: string,
-): BrowserChessModel {
-  return {
-    info: {
-      name: state.metadata?.experiment_id ?? "SAN backoff n-gram",
-      runtime: "SAN n-gram",
-      sourceUrl: reference.artifactUrl,
-      pinned: reference.pinned,
-      digest,
-      artifactBytes,
-    },
-    async predict(history, legalMoves) {
-      const legal = new Set(legalMoves);
-      for (let order = Math.min(state.order, history.length); order > 0; order -= 1) {
-        const context = history.slice(-order).join("\t");
-        const best = bestLegal(state.ngrams[String(order)]?.[context] ?? [], legal);
-        if (best) return { san: best, source: `${order}-move context` };
-      }
-      const side = String(history.length % 2);
-      const best = bestLegal(state.side_counts[side] ?? [], legal);
-      if (best) return { san: best, source: "side-to-move frequency" };
-      return { san: [...legal].sort()[0], source: "deterministic legal fallback" };
-    },
-    async dispose() {},
-  };
-}
-
-async function loadOnnxModel(
-  manifest: BrowserManifest,
-  reference: NormalizedReference,
-  onProgress: (progress: LoadProgress) => void,
-): Promise<BrowserChessModel> {
-  const vocabularyUrl = siblingUrl(reference.artifactUrl, manifest.vocabulary.path);
-  const vocabularyBytes = await fetchBytes(vocabularyUrl, "vocabulary", onProgress);
-  await verifyArtifact(vocabularyBytes, manifest.vocabulary, "vocabulary");
-  const vocabularyFile = decodeJson(vocabularyBytes, "SAN vocabulary") as VocabularyFile;
-  const tokens = Array.isArray(vocabularyFile) ? vocabularyFile : vocabularyFile.tokens;
-  if (!Array.isArray(tokens) || tokens.length === 0 || tokens.some((token) => typeof token !== "string")) {
-    throw new Error("The vocabulary must be a non-empty JSON string array or { tokens: string[] }.");
+  const artifacts: Array<{ name: string; bytes: Uint8Array }> = [];
+  for (const [name, descriptor] of Object.entries(manifest.artifacts)) {
+    const bytes = await fetchBytes(
+      packageFileUrl(reference.manifestUrl, descriptor.path),
+      "artifact",
+      name,
+      descriptor.bytes,
+      onProgress,
+    );
+    await verifyArtifact(bytes, descriptor, `artifact “${name}”`);
+    artifacts.push({ name, bytes });
   }
 
-  const modelUrl = siblingUrl(reference.artifactUrl, manifest.model.path);
-  const modelBytes = await fetchBytes(modelUrl, "model", onProgress);
-  await verifyArtifact(modelBytes, manifest.model, "ONNX model");
-  const tokenIds = new Map(tokens.map((token, index) => [token, index]));
-  const useWebGpu = typeof navigator !== "undefined" && "gpu" in navigator;
-  const session = await ort.InferenceSession.create(modelBytes, {
-    executionProviders: useWebGpu ? ["webgpu", "wasm"] : ["wasm"],
-  });
-
-  for (const inputName of [manifest.inputs.input_ids, manifest.inputs.attention_mask].filter(Boolean)) {
-    if (!session.inputNames.includes(inputName as string)) {
-      await session.release();
-      throw new Error(`The ONNX model does not expose the declared input “${inputName}”.`);
-    }
-  }
-  if (!session.outputNames.includes(manifest.output.logits)) {
-    await session.release();
-    throw new Error(`The ONNX model does not expose the declared output “${manifest.output.logits}”.`);
+  const worker = new Worker(new URL("./model-worker.ts", import.meta.url), { type: "module" });
+  const client = createWorkerClient(worker);
+  try {
+    const artifactPayload = artifacts.map(({ name, bytes }) => ({ name, bytes: bytes.buffer }));
+    await client.request(
+      "load",
+      {
+        entrypoint: entrypointBytes.buffer,
+        artifacts: artifactPayload,
+        config: manifest.config,
+      },
+      [entrypointBytes.buffer, ...artifactPayload.map((artifact) => artifact.bytes)],
+    );
+  } catch (error) {
+    client.terminate();
+    throw error;
   }
 
-  const digest = await sha256Hex(modelBytes);
+  const digest = await sha256Hex(manifestBytes);
   return {
     info: {
       name: manifest.name,
-      runtime: "ONNX · next SAN",
-      sourceUrl: reference.artifactUrl,
+      runtime: "Package v1",
+      sourceUrl: reference.manifestUrl,
       pinned: reference.pinned,
       digest,
-      artifactBytes: modelBytes.byteLength + vocabularyBytes.byteLength,
+      artifactBytes: packageBytes,
+    },
+    async newGame(seed) {
+      await client.request("newGame", { seed: seed >>> 0 });
     },
     async predict(history, legalMoves) {
-      const unknownId = manifest.vocabulary.unknown_token
-        ? tokenIds.get(manifest.vocabulary.unknown_token)
-        : undefined;
-      const historyIds = history.map((san) => tokenIds.get(san) ?? unknownId);
-      if (historyIds.some((token) => token === undefined)) {
-        const missing = history.find((san) => !tokenIds.has(san));
-        throw new Error(`The model vocabulary cannot encode SAN move “${missing}”.`);
-      }
-      const bosId = manifest.vocabulary.bos_token
-        ? tokenIds.get(manifest.vocabulary.bos_token)
-        : undefined;
-      if (manifest.vocabulary.bos_token && bosId === undefined) {
-        throw new Error("The manifest's BOS token is absent from its vocabulary.");
-      }
-      const ids = [...(bosId === undefined ? [] : [bosId]), ...(historyIds as number[])].slice(
-        -manifest.context_length,
-      );
-      if (ids.length === 0) {
-        throw new Error("An empty history requires a vocabulary BOS token.");
-      }
-
-      const dimensions: [number, number] = [1, ids.length];
-      const feeds: Record<string, ort.Tensor> = {
-        [manifest.inputs.input_ids]: new ort.Tensor(
-          "int64",
-          BigInt64Array.from(ids, (value) => BigInt(value)),
-          dimensions,
-        ),
-      };
-      if (manifest.inputs.attention_mask) {
-        feeds[manifest.inputs.attention_mask] = new ort.Tensor(
-          "int64",
-          BigInt64Array.from({ length: ids.length }, () => 1n),
-          dimensions,
-        );
-      }
-      const outputs = await session.run(feeds);
-      const logits = outputs[manifest.output.logits];
-      const vocabularySize = tokens.length;
-      if (!logits || logits.dims.at(-1) !== vocabularySize) {
-        throw new Error("The logits' final dimension does not match the SAN vocabulary.");
-      }
-      const offset = logits.data.length - vocabularySize;
-      let chosen: string | null = null;
-      let chosenLogit = Number.NEGATIVE_INFINITY;
-      for (const san of legalMoves) {
-        const tokenId = tokenIds.get(san);
-        if (tokenId === undefined) continue;
-        const logit = Number(logits.data[offset + tokenId]);
-        if (logit > chosenLogit || (logit === chosenLogit && san > (chosen ?? ""))) {
-          chosen = san;
-          chosenLogit = logit;
-        }
-      }
-      if (chosen) return { san: chosen, source: useWebGpu ? "ONNX · WebGPU" : "ONNX · WASM" };
-      return { san: [...legalMoves].sort()[0], source: "deterministic legal fallback" };
+      const san = await client.request("chooseMove", { history, legalMoves });
+      if (typeof san !== "string") throw new Error("The package returned a non-string move.");
+      if (!legalMoves.includes(san)) throw new Error(`The package returned illegal SAN move “${san}”.`);
+      return { san, source: "Package v1" };
     },
     async dispose() {
-      await session.release();
+      try {
+        await Promise.race([
+          client.request("dispose", {}),
+          new Promise((resolve) => window.setTimeout(resolve, 1_000)),
+        ]);
+      } finally {
+        client.terminate();
+      }
     },
   };
+}
+
+function createWorkerClient(worker: Worker) {
+  let nextId = 1;
+  let terminated = false;
+  const pending = new Map<
+    number,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
+
+  function rejectPending(message: string) {
+    for (const request of pending.values()) request.reject(new Error(message));
+    pending.clear();
+  }
+
+  worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
+    const response = event.data;
+    const request = pending.get(response.id);
+    if (!request) return;
+    pending.delete(response.id);
+    if (response.ok) request.resolve(response.value);
+    else request.reject(new Error(response.error ?? "The package worker failed."));
+  });
+  worker.addEventListener("error", (event) => {
+    rejectPending(event.message || "The package worker crashed.");
+  });
+  worker.addEventListener("messageerror", () => {
+    rejectPending("The package worker returned an unreadable message.");
+  });
+
+  return {
+    request(type: string, payload: Record<string, unknown>, transfer: Transferable[] = []) {
+      if (terminated) return Promise.reject(new Error("The package worker has stopped."));
+      const id = nextId;
+      nextId += 1;
+      return new Promise<unknown>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        worker.postMessage({ id, type, ...payload }, transfer);
+      });
+    },
+    terminate() {
+      if (terminated) return;
+      terminated = true;
+      worker.terminate();
+      rejectPending("The package worker has stopped.");
+    },
+  };
+}
+
+function parseManifest(value: unknown): PackageManifest {
+  if (!isRecord(value) || value.schema !== PACKAGE_SCHEMA) {
+    throw new Error(`Unsupported package. Expected schema ${PACKAGE_SCHEMA}.`);
+  }
+  if (typeof value.name !== "string" || !value.name.trim()) {
+    throw new Error("The package manifest requires a non-empty name.");
+  }
+  const entrypoint = parseDescriptor(value.entrypoint, "entrypoint");
+  if (!isRecord(value.artifacts) || !("config" in value)) {
+    throw new Error("The package manifest requires artifacts and config fields.");
+  }
+
+  const artifacts: Record<string, ArtifactDescriptor> = {};
+  for (const [name, rawDescriptor] of Object.entries(value.artifacts)) {
+    if (!name) throw new Error("Artifact names must be non-empty.");
+    artifacts[name] = parseDescriptor(rawDescriptor, `artifact “${name}”`);
+  }
+  const paths = [entrypoint.path, ...Object.values(artifacts).map((item) => item.path)];
+  if (new Set(paths).size !== paths.length) throw new Error("Package file paths must be unique.");
+
+  return {
+    schema: PACKAGE_SCHEMA,
+    name: value.name,
+    entrypoint,
+    artifacts,
+    config: value.config,
+  };
+}
+
+function parseDescriptor(value: unknown, label: string): ArtifactDescriptor {
+  if (!isRecord(value)) throw new Error(`The ${label} descriptor is missing.`);
+  if (!isSafeRelativePath(value.path)) {
+    throw new Error(`The ${label} path must stay beneath browser/ and may not contain '..'.`);
+  }
+  if (!Number.isInteger(value.bytes) || (value.bytes as number) < 0) {
+    throw new Error(`The ${label} must declare its exact byte length.`);
+  }
+  if (typeof value.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.sha256)) {
+    throw new Error(`The ${label} must declare a lowercase SHA-256 digest.`);
+  }
+  return { path: value.path as string, bytes: value.bytes as number, sha256: value.sha256 };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSafeRelativePath(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && !value.startsWith("/")
+    && !value.includes("\\")
+    && !value.includes("?")
+    && !value.includes("#")
+    && !value.split("/").some((part) => part === "" || part === "." || part === "..");
+}
+
+function packageFileUrl(manifestUrl: string, relativePath: string): string {
+  const base = new URL(".", manifestUrl);
+  const url = new URL(relativePath, base);
+  if (!HF_HOSTS.has(url.hostname) || !url.pathname.startsWith(base.pathname)) {
+    throw new Error("Package files must remain beneath browser/ in the same Hugging Face repository.");
+  }
+  return url.toString();
 }
 
 async function fetchBytes(
   url: string,
   stage: LoadProgress["stage"],
+  label: string,
+  maximumBytes: number,
   onProgress: (progress: LoadProgress) => void,
 ): Promise<Uint8Array> {
   const response = await fetch(url, { credentials: "omit", redirect: "follow" });
-  if (!response.ok) throw new Error(`Hugging Face returned ${response.status} for ${stage}.`);
+  if (!response.ok) throw new Error(`Hugging Face returned ${response.status} for ${label}.`);
   const totalHeader = Number(response.headers.get("content-length"));
   const totalBytes = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : null;
-  if (totalBytes !== null && totalBytes > MAX_ARTIFACT_BYTES) {
-    throw new Error(`${stage} is larger than the 150 MB browser safety limit.`);
+  if (totalBytes !== null && totalBytes > maximumBytes) {
+    throw new Error(`${label} is larger than its allowed byte length.`);
   }
   if (!response.body) {
     const bytes = new Uint8Array(await response.arrayBuffer());
-    onProgress({ stage, loadedBytes: bytes.byteLength, totalBytes: bytes.byteLength });
+    if (bytes.byteLength > maximumBytes) throw new Error(`${label} exceeded its allowed byte length.`);
+    onProgress({ stage, label, loadedBytes: bytes.byteLength, totalBytes: bytes.byteLength });
     return bytes;
   }
 
@@ -317,12 +336,12 @@ async function fetchBytes(
     const { done, value } = await reader.read();
     if (done) break;
     loadedBytes += value.byteLength;
-    if (loadedBytes > MAX_ARTIFACT_BYTES) {
+    if (loadedBytes > maximumBytes) {
       await reader.cancel();
-      throw new Error(`${stage} exceeded the 150 MB browser safety limit.`);
+      throw new Error(`${label} exceeded its allowed byte length.`);
     }
     chunks.push(value);
-    onProgress({ stage, loadedBytes, totalBytes });
+    onProgress({ stage, label, loadedBytes, totalBytes: totalBytes ?? maximumBytes });
   }
   const bytes = new Uint8Array(loadedBytes);
   let offset = 0;
@@ -333,17 +352,23 @@ async function fetchBytes(
   return bytes;
 }
 
-function isPinnedRevision(revision: string): boolean {
-  return /^[0-9a-f]{40}$/i.test(revision);
+async function verifyArtifact(
+  bytes: Uint8Array,
+  descriptor: ArtifactDescriptor,
+  label: string,
+): Promise<void> {
+  if (descriptor.bytes !== bytes.byteLength) {
+    throw new Error(`The ${label} size does not match its manifest.`);
+  }
+  const actual = await sha256Hex(bytes);
+  if (actual !== descriptor.sha256) {
+    throw new Error(`The ${label} SHA-256 digest does not match its manifest.`);
+  }
 }
 
-function siblingUrl(manifestUrl: string, relativePath: string): string {
-  if (!relativePath || relativePath.startsWith("/") || relativePath.includes("..")) {
-    throw new Error("Manifest artifact paths must be non-empty relative paths without '..'.");
-  }
-  const url = new URL(relativePath, manifestUrl);
-  if (!HF_HOSTS.has(url.hostname)) throw new Error("Manifest artifacts must stay on huggingface.co.");
-  return url.toString();
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function decodeJson(bytes: Uint8Array, label: string): unknown {
@@ -354,56 +379,10 @@ function decodeJson(bytes: Uint8Array, label: string): unknown {
   }
 }
 
-function isNgramState(value: unknown): value is NgramState {
-  if (!value || typeof value !== "object") return false;
-  const state = value as Partial<NgramState>;
-  return state.format_version === 1 && state.model_type === "san_backoff_ngram";
+function isPinnedRevision(revision: string): boolean {
+  return /^[0-9a-f]{40}$/i.test(revision);
 }
 
-function isBrowserManifest(value: unknown): value is BrowserManifest {
-  if (!value || typeof value !== "object") return false;
-  const manifest = value as Partial<BrowserManifest>;
-  return (
-    manifest.schema === "chess-gpt-browser-v1" &&
-    manifest.runtime === "onnx-next-san" &&
-    typeof manifest.name === "string" &&
-    Number.isInteger(manifest.context_length) &&
-    (manifest.context_length ?? 0) > 0 &&
-    Boolean(manifest.model && manifest.vocabulary && manifest.inputs && manifest.output)
-  );
-}
-
-function bestLegal(pairs: Array<[string, number]>, legalMoves: Set<string>): string | null {
-  let chosen: string | null = null;
-  let chosenCount = -1;
-  for (const [san, count] of pairs) {
-    if (!legalMoves.has(san)) continue;
-    if (count > chosenCount || (count === chosenCount && san > (chosen ?? ""))) {
-      chosen = san;
-      chosenCount = count;
-    }
-  }
-  return chosen;
-}
-
-async function verifyArtifact(
-  bytes: Uint8Array,
-  descriptor: ArtifactDescriptor,
-  label: string,
-): Promise<void> {
-  if (!/^[0-9a-f]{64}$/i.test(descriptor.sha256)) {
-    throw new Error(`The ${label} must declare a full SHA-256 digest.`);
-  }
-  if (descriptor.bytes !== undefined && descriptor.bytes !== bytes.byteLength) {
-    throw new Error(`The ${label} size does not match its manifest.`);
-  }
-  const actual = await sha256Hex(bytes);
-  if (actual !== descriptor.sha256.toLowerCase()) {
-    throw new Error(`The ${label} SHA-256 digest does not match its manifest.`);
-  }
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+function formatBytes(bytes: number): string {
+  return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
