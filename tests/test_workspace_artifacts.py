@@ -105,6 +105,11 @@ def test_first_playable_baseline_records_a_passing_result() -> None:
         "bea221167728c33f0a5df54051cd27717cae6586"
     )
     assert manifest["publication"]["package_v1_canonical_bytes"] == 6_689_698
+    assert manifest["package_validation"]["code_revision"] == (
+        "987533c34125a89a4b8f2bed0535b2f517ff953c"
+    )
+    assert manifest["package_validation"]["actual_training_flops"] == 0
+    assert manifest["package_validation"]["external_cost_usd"] == 0.0
 
 
 def test_curriculum_tracks_prediction_driven_progress() -> None:

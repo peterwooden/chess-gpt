@@ -62,3 +62,17 @@ package_v1_revision = "bea221167728c33f0a5df54051cd27717cae6586"
 package_v1_reference = "peterwooden/chess-gpt-demo-ngram@bea221167728c33f0a5df54051cd27717cae6586"
 package_v1_manifest_sha256 = "fc1160f487f315036fc320a7e7ced5a2e8cf9872345318a2959f8f727b949702"
 package_v1_canonical_bytes = 6_689_698
+
+[package_validation]
+completed_at = "2026-07-26T05:27:49Z"
+code_revision = "987533c34125a89a4b8f2bed0535b2f517ff953c"
+environment_lock = "site/package-lock.json"
+environment_lock_sha256 = "53d3198b397a08930dacbcd2328a6e7edd1d12c9fed669c82e7029b11725152b"
+environment = "Codex in-app browser on macOS 26.5.1; browser engine version unavailable"
+seed = "not applicable; adapter is deterministic and never calls the supplied random function"
+verification = "Load pinned package in local arena; model plays Nf3; human plays e5; model plays Nc3; compare both model moves with the checkpoint CLI"
+observed_model_moves = ["Nf3", "Nc3"]
+browser_console_warnings = 0
+browser_console_errors = 0
+actual_training_flops = 0
+external_cost_usd = 0.0
