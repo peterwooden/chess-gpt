@@ -409,6 +409,7 @@ export default function ArenaClient() {
                 {promotion.pieces.map((piece) => (
                   <button
                     type="button"
+                    className="promotion-piece"
                     onClick={() => playHumanMove(promotion.from, promotion.to, piece)}
                     aria-label={`Promote to ${pieceName(piece)}`}
                     key={piece}

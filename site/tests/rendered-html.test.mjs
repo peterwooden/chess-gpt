@@ -106,14 +106,21 @@ test("arena defaults Player 1 to a random side and falls back to a human opponen
 
 test("arena renders filled pieces, player strips, captures, and material advantage", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const font = await readFile(new URL("../public/fonts/chess-merida-unicode.ttf", import.meta.url));
 
   assert.match(arena, /w:\s*\{ p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" \}/);
+  assert.match(arena, /className="promotion-piece"/);
   assert.match(arena, /captured:\s*move\.captured/);
   assert.match(arena, /CAPTURE_VALUES[^}]*p:\s*1[^}]*n:\s*3[^}]*b:\s*3[^}]*r:\s*5[^}]*q:\s*9/s);
   assert.match(arena, /const materialLead = whiteCapturePoints - blackCapturePoints/);
   assert.match(arena, /orientation === "w" \? blackPlayerSummary : whitePlayerSummary/);
   assert.match(arena, /player-strip \$\{color ===/);
   assert.match(arena, /className="captured-pieces"/);
+  assert.match(styles, /@font-face\s*\{[^}]*font-family:\s*"Chess Merida"[^}]*chess-merida-unicode\.ttf/s);
+  assert.match(styles, /\.piece\s*\{[^}]*font-family:\s*"Chess Merida"/s);
+  assert.match(styles, /\.captured-piece\s*\{[^}]*font-family:\s*"Chess Merida"/s);
+  assert.ok(font.byteLength > 0);
 });
 
 test("arena consolidates match status in the move pane", async () => {
