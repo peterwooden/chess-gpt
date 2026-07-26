@@ -43,7 +43,7 @@ The submission MUST be a public Hugging Face model repository containing `browse
 
 The entrypoint and artifact paths MUST be unique relative paths beneath `browser/`, MUST NOT contain `..`, and MUST resolve inside the same Hugging Face repository. `bytes` MUST equal the uncompressed file size and `sha256` MUST be the file's lowercase SHA-256 digest. The manifest, entrypoint, and all declared artifacts together MUST total no more than `100,000,000` bytes; the manifest counts by its downloaded byte length and does not hash itself. Artifact names and `config` contents are submission-defined, and no undeclared model-specific file or dependency may be loaded.
 
-The author MAY maintain any source layout, but the submitted entrypoint MUST be one self-contained JavaScript module. The runner supplies its pinned ONNX Runtime Web instance as `ort`; that runtime is not part of the submission-size total.
+The author MAY maintain any source layout, but the submitted entrypoint MUST be one self-contained JavaScript module. The runner supplies ONNX Runtime Web 1.27.0 as `ort`, including its matching WASM binary; neither counts toward the submission-size limit.
 
 ### JavaScript interface
 
