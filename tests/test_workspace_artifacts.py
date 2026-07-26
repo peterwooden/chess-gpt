@@ -2,37 +2,29 @@ from __future__ import annotations
 
 import re
 import tomllib
-from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class LinkCollector(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__()
-        self.links: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag not in {"a", "link"}:
-            return
-        for name, value in attrs:
-            if name == "href" and value is not None:
-                self.links.append(value)
-
-
-def test_local_lesson_links_resolve() -> None:
-    documents = [*ROOT.glob("lessons/*.html"), *ROOT.glob("reference/*.html")]
-    assert documents
+def test_learning_site_internal_routes_resolve() -> None:
+    documents = [
+        ROOT / "site/app/page.tsx",
+        ROOT / "site/app/chapter-1/data-splits/lesson-client.tsx",
+        ROOT / "site/app/glossary/page.tsx",
+    ]
+    assert all(document.is_file() for document in documents)
 
     for document in documents:
-        parser = LinkCollector()
-        parser.feed(document.read_text())
-        for link in parser.links:
+        for link in re.findall(r'href=["\']([^"\']+)["\']', document.read_text()):
             if link.startswith(("http://", "https://", "#")):
                 continue
-            target = link.split("#", 1)[0]
-            assert (document.parent / target).resolve().exists(), f"{document}: missing {link}"
+            route = link.split("?", 1)[0].split("#", 1)[0]
+            assert route.startswith("/"), f"{document}: unexpected relative route {link}"
+            route_page = ROOT / "site/app" / route.removeprefix("/") / "page.tsx"
+            if route == "/":
+                route_page = ROOT / "site/app/page.tsx"
+            assert route_page.is_file(), f"{document}: missing route {link}"
 
 
 def test_tournament_dataset_is_frozen_by_month_and_checksum() -> None:
@@ -126,7 +118,8 @@ def test_curriculum_tracks_prediction_driven_progress() -> None:
     assert "Part III §17.1" in curriculum
     assert "- [x] Adaptive Chapter 1 missions generated" in curriculum
     assert (ROOT / "docs/CHAPTER_1_PLAN.md").is_file()
-    assert (ROOT / "lessons/0001-honest-chess-data-splits.html").is_file()
+    assert (ROOT / "site/app/chapter-1/data-splits/lesson-client.tsx").is_file()
+    assert (ROOT / "site/app/glossary/page.tsx").is_file()
     assert curriculum.count("**Further reading**") == 14
     assert curriculum.count("- **Primary:**") == 14
     assert curriculum.count("- **Secondary:**") == 14
