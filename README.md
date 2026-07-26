@@ -39,15 +39,12 @@ uv run chess-gpt-baseline move --checkpoint runs/0001-basic-san-ngram/model.json
 
 ```text
 CURRICULUM.md       versioned course map and progress checklist
-assets/             shared lesson components
 data/               provenance manifests, never bulk data
 docs/               tournament and engineering decisions
 experiments/        versioned hypotheses and run specifications
 learning-records/   demonstrated knowledge, not activity logs
-lessons/            short interactive teaching units
-reference/          durable glossaries and cheat sheets
 runs/               ignored generated metrics and checkpoints
-site/               published learning lab and browser model arena
+site/               published learning lab: lessons, glossary, browser model arena
 src/chess_gpt/      inspectable project code
 tests/              fast correctness checks
 ```

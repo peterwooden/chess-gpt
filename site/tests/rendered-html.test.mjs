@@ -54,11 +54,15 @@ test("server-renders the first chapter mission", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Split games, not positions · Chess GPT Learning Lab<\/title>/i);
+  assert.match(html, /A score that lies politely/i);
   assert.match(html, /Predict the direction of the error/i);
+  assert.match(html, /The exam answers are hiding in the study guide/i);
+  assert.match(html, /Watch the leak inflate a score/i);
   assert.match(html, /Shuffle expanded positions/i);
   assert.match(html, /Hash stable game identity/i);
   assert.match(html, /Retrieval checkpoint/i);
   assert.match(html, /The code is still sealed/i);
+  assert.match(html, /MLU-Explain/i);
 });
 
 test("chapter mission gates a device-local completion code", async () => {
@@ -72,6 +76,31 @@ test("chapter mission gates a device-local completion code", async () => {
   assert.match(lesson, /forecastCorrect && implementationCorrect && progress\.retrievalChecked && retrievalCorrect/);
   assert.match(lesson, /progress\.implementation === 2/);
   assert.match(lesson, /what identity must remain stable/i);
+  assert.match(lesson, /retrievalAttempts/);
+  assert.match(lesson, /blob\/[0-9a-f]{40}\/src\/chess_gpt\/baseline\.py/);
+});
+
+test("the split simulator is deterministic and server-renderable", async () => {
+  const simulator = await readFile(
+    new URL("../app/chapter-1/data-splits/split-simulator.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(simulator, /mulberry32/);
+  assert.match(simulator, /TRUE_SKILL = 0\.3/);
+  assert.doesNotMatch(simulator, /Math\.random|Date\.now/);
+});
+
+test("server-renders the glossary with stable anchors", async () => {
+  const response = await render("/glossary");
+  assert.equal(response.status, 200);
+
+  const html = await response.text();
+  assert.match(html, /<title>Glossary · Chess GPT Learning Lab<\/title>/i);
+  assert.match(html, /id="data-leakage"/);
+  assert.match(html, /id="split-unit"/);
+  assert.match(html, /id="validation-split"/);
+  assert.match(html, /Generalization/);
 });
 
 test("server-renders the client-only browser arena", async () => {
