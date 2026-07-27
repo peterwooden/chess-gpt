@@ -763,6 +763,7 @@ export default function ArenaClient() {
               {gameEnded && review.phase !== "idle" ? (
                 <GameReviewSummary
                   review={review}
+                  players={players}
                   onRetry={() => setReviewAttempt((attempt) => attempt + 1)}
                 />
               ) : null}
@@ -879,7 +880,15 @@ function MoveCell({
   );
 }
 
-function GameReviewSummary({ review, onRetry }: { review: ReviewState; onRetry: () => void }) {
+function GameReviewSummary({
+  review,
+  players,
+  onRetry,
+}: {
+  review: ReviewState;
+  players: Players;
+  onRetry: () => void;
+}) {
   if (review.phase === "loading" || review.phase === "analyzing") {
     const completed = review.progress?.completed ?? 0;
     const total = review.progress?.total;
@@ -905,16 +914,27 @@ function GameReviewSummary({ review, onRetry }: { review: ReviewState; onRetry: 
       aria-label={`Post-game review by ${review.result.engine}`}
       title={`${review.result.engine} · ${review.result.nodesPerPosition.toLocaleString()} nodes per position`}
     >
-      <PlayerReviewSummary color="White" review={review.result.players.w} />
-      <PlayerReviewSummary color="Black" review={review.result.players.b} />
+      <PlayerReviewSummary color="White" name={players.w} review={review.result.players.w} />
+      <PlayerReviewSummary color="Black" name={players.b} review={review.result.players.b} />
     </section>
   );
 }
 
-function PlayerReviewSummary({ color, review }: { color: string; review: PlayerReview }) {
+function PlayerReviewSummary({
+  color,
+  name,
+  review,
+}: {
+  color: string;
+  name: string;
+  review: PlayerReview;
+}) {
   return (
     <div className="review-player">
-      <span>{color}</span>
+      <div className="review-player-heading">
+        <span>{color}</span>
+        <b title={name}>{name}</b>
+      </div>
       <strong><b>{Math.round(review.accuracy)}%</b> accuracy</strong>
       <div className="review-categories">
         <ReviewGroup label="Good" judgements={POSITIVE_JUDGEMENTS} review={review} />

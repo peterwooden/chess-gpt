@@ -751,11 +751,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .review-summary { display: grid; grid-template-columns: 1fr 1fr; flex: none; border-bottom: 1px solid var(--green); }
 .review-player { display: grid; gap: 0.28rem; min-width: 0; padding: 0.55rem 0.7rem; border-right: 1px solid var(--line); }
 .review-player:last-child { border-right: 0; }
-.review-player > span { color: var(--muted); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; }
+.review-player-heading { display: flex; gap: 0.38rem; align-items: baseline; min-width: 0; }
+.review-player-heading > span { flex: none; color: var(--muted); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; }
+.review-player-heading > b { overflow: hidden; color: var(--ink); font-size: 0.5rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .review-player > strong { display: flex; gap: 0.32rem; align-items: baseline; color: var(--muted); font-size: 0.56rem; font-weight: 750; }
 .review-player > strong b { color: var(--ink); font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.25rem; font-weight: 550; letter-spacing: -0.035em; }
 .review-categories { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 0.08rem; }
-.review-group { display: grid; gap: 0.2rem; min-width: 0; }
+.review-group { display: grid; align-content: start; gap: 0.2rem; min-width: 0; }
 .review-group > small { color: var(--muted); font-size: 0.42rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
 .review-stat { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.25rem; align-items: center; min-width: 0; }
 .review-stat > span:not(.review-pill) { overflow: hidden; color: var(--muted); font-size: 0.48rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
