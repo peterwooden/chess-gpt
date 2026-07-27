@@ -718,8 +718,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .arena-page-v2 .move-record { flex: 1; overflow-y: auto; min-height: 0; max-height: none; }
 .game-controls { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 0.4rem; padding: 0.75rem; border-top: 1px solid var(--green); }
 .game-controls.game-ended { grid-template-columns: 1fr 1.2fr; }
-.game-controls button,
-.share-menu > summary {
+.game-controls button {
   min-height: 2.5rem;
   padding: 0 0.55rem;
   border: 1px solid var(--green);
@@ -731,30 +730,22 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   cursor: pointer;
 }
 .game-controls .new-game-button { color: var(--white); background: var(--green); }
+.game-controls .share-toggle span { margin-left: 0.35rem; }
 .game-controls button:disabled { border-color: var(--line); color: #999487; background: #e5e0d4; cursor: default; }
 .share-feedback { margin: 0; padding: 0.35rem 0.75rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.62rem; text-align: right; }
-.share-menu { position: relative; min-width: 0; }
-.share-menu > summary { display: flex; align-items: center; justify-content: center; list-style: none; }
-.share-menu > summary::-webkit-details-marker { display: none; }
-.share-menu > summary::after { margin-left: 0.4rem; content: "▴"; }
-.share-menu[open] > summary { color: var(--white); background: var(--green); }
-.share-menu > div {
-  position: absolute;
-  z-index: 8;
-  right: 0;
-  bottom: calc(100% + 0.45rem);
+.share-options {
+  position: static;
   display: grid;
-  overflow: hidden;
-  width: min(19rem, calc(100vw - 3.5rem));
-  border: 1px solid var(--green);
+  flex: none;
+  width: 100%;
+  border-top: 1px solid var(--green);
   background: var(--paper-light);
-  box-shadow: 0 0.7rem 1.8rem rgb(20 63 49 / 0.2);
 }
-.share-menu > div button { display: grid; gap: 0.2rem; min-height: 0; padding: 0.75rem; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; }
-.share-menu > div button:last-child { border-bottom: 0; }
-.share-menu > div button:hover { background: var(--green-soft); }
-.share-menu > div strong { font-size: 0.7rem; }
-.share-menu > div span { color: var(--muted); font-size: 0.59rem; font-weight: 600; line-height: 1.35; }
+.share-options button { display: grid; gap: 0.2rem; min-height: 0; padding: 0.75rem; border: 0; border-bottom: 1px solid var(--line); color: var(--green); background: transparent; text-align: left; cursor: pointer; }
+.share-options button:last-child { border-bottom: 0; }
+.share-options button:hover { background: var(--green-soft); }
+.share-options strong { font-size: 0.7rem; }
+.share-options span { color: var(--muted); font-size: 0.59rem; font-weight: 600; line-height: 1.35; }
 
 @media (min-width: 960px) and (min-height: 640px) {
   .arena-page-v2 {

@@ -170,11 +170,14 @@ test("arena uses a compact score sheet and shares completed games as PGN", async
   assert.match(arena, /<span>Move<\/span><b>White<\/b><b>Black<\/b>/);
   assert.match(arena, /moveRows\.map/);
   assert.match(arena, /record\.scrollTop = record\.scrollHeight/);
-  assert.match(arena, /<summary>Share<\/summary>/);
+  assert.match(arena, /className="share-toggle"/);
   assert.match(arena, /Models \+ PGN/);
   assert.match(arena, /readSharedPgn/);
   assert.match(arena, /restored\.loadPgn\(sharedPgn\)/);
   assert.match(styles, /grid-template-columns:\s*2\.5rem minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+  assert.match(arena, /aria-expanded=\{shareOpen\}/);
+  assert.match(styles, /\.share-options\s*\{[^}]*position:\s*static/s);
+  assert.doesNotMatch(styles, /\.share-menu > div\s*\{[^}]*position:\s*absolute/s);
 });
 
 test("arena enforces a narrow, revision-aware model contract", async () => {

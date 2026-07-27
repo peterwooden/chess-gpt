@@ -70,7 +70,6 @@ function emptySlot(): ModelSlot {
 
 export default function ArenaClient() {
   const gameRef = useRef(new Chess());
-  const shareMenuRef = useRef<HTMLDetailsElement>(null);
   const moveRecordRef = useRef<HTMLOListElement>(null);
   const gameEpoch = useRef(0);
   const loadEpoch = useRef({ a: 0, b: 0 });
@@ -90,6 +89,7 @@ export default function ArenaClient() {
   const [gameStarted, setGameStarted] = useState(false);
   const [players, setPlayers] = useState<Players>({ w: "White", b: "Black" });
   const [finishedStatus, setFinishedStatus] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
   const [, setGameVersion] = useState(0);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
@@ -270,6 +270,7 @@ export default function ArenaClient() {
     setThinking(null);
     setGameError(null);
     setFinishedStatus(null);
+    setShareOpen(false);
     setShareMessage("");
     setGameStarted(true);
     setRunning(true);
@@ -430,6 +431,7 @@ export default function ArenaClient() {
     setPromotion(null);
     setGameError(null);
     setFinishedStatus(null);
+    setShareOpen(false);
     setShareMessage("");
     setPlayers({ w: "White", b: "Black" });
     setGameStarted(false);
@@ -464,7 +466,7 @@ export default function ArenaClient() {
         ? createSharePgn(game, players, mode, player1Color, humanColor, gameError)
         : null,
     });
-    shareMenuRef.current?.removeAttribute("open");
+    setShareOpen(false);
     try {
       if (navigator.share) {
         await navigator.share({
@@ -631,21 +633,29 @@ export default function ArenaClient() {
                 </div>
               )}
               {gameEnded && shareMessage ? <p className="share-feedback" role="status">{shareMessage}</p> : null}
+              {gameEnded && shareOpen ? (
+                <div className="share-options" id="arena-share-options" role="menu" aria-label="Share game">
+                  <button type="button" role="menuitem" onClick={() => void shareGame(false)}>
+                    <strong>Models only</strong>
+                    <span>Start a fresh game with these model references.</span>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => void shareGame(true)}>
+                    <strong>Models + PGN</strong>
+                    <span>Open this completed game and its move history.</span>
+                  </button>
+                </div>
+              ) : null}
               <div className={`game-controls${gameEnded ? " game-ended" : ""}`}>
                 {gameEnded ? (
-                  <details className="share-menu" ref={shareMenuRef}>
-                    <summary>Share</summary>
-                    <div role="menu" aria-label="Share game">
-                      <button type="button" role="menuitem" onClick={() => void shareGame(false)}>
-                        <strong>Models only</strong>
-                        <span>Start a fresh game with these model references.</span>
-                      </button>
-                      <button type="button" role="menuitem" onClick={() => void shareGame(true)}>
-                        <strong>Models + PGN</strong>
-                        <span>Open this completed game and its move history.</span>
-                      </button>
-                    </div>
-                  </details>
+                  <button
+                    className="share-toggle"
+                    type="button"
+                    aria-expanded={shareOpen}
+                    aria-controls="arena-share-options"
+                    onClick={() => setShareOpen((open) => !open)}
+                  >
+                    Share <span aria-hidden="true">{shareOpen ? "▾" : "▴"}</span>
+                  </button>
                 ) : (
                   <>
                     <button
