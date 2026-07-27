@@ -220,6 +220,8 @@ test("completed games receive a compact Stockfish accuracy review", async () => 
   assert.match(styles, /\.review-pill\.blunder\.active\s*\{[^}]*background:/s);
   assert.match(styles, /\.review-categories\s*\{[^}]*grid-template-columns:\s*1fr 1fr/s);
   assert.match(styles, /\.review-stat\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto/s);
+  assert.match(styles, /\.review-loss\s*\{[^}]*margin-left:\s*auto/s);
+  assert.doesNotMatch(styles, /\.score-move \.review-pill\s*\{[^}]*margin-left:\s*auto/s);
   assert.match(styles, /\.review-pill\.inactive\s*\{[^}]*background:/s);
 });
 
