@@ -75,11 +75,30 @@ type PromotionChoice = {
 type PlayerStripProps = {
   color: Color;
   name: string;
+  profileId?: string | null;
   captured: PieceSymbol[];
   lead: number;
 };
 
 type Players = Record<Color, string>;
+type PlayerProfiles = Record<Color, string | null>;
+
+type StoredGame = {
+  id: string;
+  whitePlayerId: string | null;
+  blackPlayerId: string | null;
+  whiteName: string;
+  blackName: string;
+  whiteModelReference: string | null;
+  blackModelReference: string | null;
+  pgn: string;
+};
+
+type SaveState = {
+  phase: "idle" | "saving" | "saved" | "error";
+  gameId: string | null;
+  message: string;
+};
 
 type ReviewState = {
   phase: "idle" | "loading" | "analyzing" | "complete" | "error";
@@ -96,12 +115,14 @@ function emptyReview(): ReviewState {
   return { phase: "idle", progress: null, result: null, error: null };
 }
 
-export default function ArenaClient() {
+export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; name: string | null } }) {
   const gameRef = useRef(new Chess());
   const moveRecordRef = useRef<HTMLOListElement>(null);
   const gameEpoch = useRef(0);
   const reviewAbort = useRef<AbortController | null>(null);
   const loadEpoch = useRef({ a: 0, b: 0 });
+  const activeGameId = useRef("");
+  const activeGameStartedAt = useRef("");
   const loadedModels = useRef<{ a: BrowserChessModel | null; b: BrowserChessModel | null }>({
     a: null,
     b: null,
@@ -117,6 +138,9 @@ export default function ArenaClient() {
   const [thinking, setThinking] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [players, setPlayers] = useState<Players>({ w: "White", b: "Black" });
+  const [playerProfiles, setPlayerProfiles] = useState<PlayerProfiles>({ w: null, b: null });
+  const [recordingEnabled, setRecordingEnabled] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>({ phase: "idle", gameId: null, message: "" });
   const [finishedStatus, setFinishedStatus] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareMessage, setShareMessage] = useState("");
@@ -131,6 +155,59 @@ export default function ArenaClient() {
   const [reviewAttempt, setReviewAttempt] = useState(0);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const restorePgn = (pgn: string, stored?: StoredGame) => {
+      const restored = new Chess();
+      restored.loadPgn(pgn);
+      const headers = restored.getHeaders();
+      gameRef.current = restored;
+      const white = stored?.whiteName ?? headers.White ?? "White";
+      const black = stored?.blackName ?? headers.Black ?? "Black";
+      setMoves(recordsFromGame(restored, white, black));
+      setPlayers({ w: white, b: black });
+      setPlayerProfiles({
+        w: stored?.whitePlayerId ?? null,
+        b: stored?.blackPlayerId ?? null,
+      });
+      const modelReferences = [stored?.whiteModelReference, stored?.blackModelReference].filter(
+        (value): value is string => Boolean(value),
+      );
+      if (stored) {
+        setModelA((current) => ({ ...current, reference: modelReferences[0] ?? "" }));
+        setModelB((current) => ({ ...current, reference: modelReferences[1] ?? "" }));
+        setMode(modelReferences.length === 2 ? "models" : "human");
+        const firstModelColor: Color = stored.whiteModelReference ? "w" : "b";
+        setPlayer1Color(firstModelColor);
+        setHumanColor(firstModelColor === "w" ? "b" : "w");
+        setSaveState({ phase: "saved", gameId: stored.id, message: "Saved to history." });
+      } else {
+        setMode(headers.Mode === "models" ? "models" : "human");
+        setPlayer1Color(headers.PlayerOneColor === "Black" ? "b" : "w");
+        setHumanColor(headers.HumanColor === "Black" ? "b" : "w");
+      }
+      setRecordingEnabled(false);
+      setFinishedStatus(describePgnResult(restored));
+      setGameStarted(true);
+      setRunning(false);
+      setGameVersion((value) => value + 1);
+    };
+
+    const url = new URL(window.location.href);
+    const storedGameId = url.searchParams.get("game")?.trim();
+    if (storedGameId) {
+      void fetch(`/api/games/${encodeURIComponent(storedGameId)}`, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("This recorded game could not be loaded.");
+          return response.json() as Promise<{ game: StoredGame }>;
+        })
+        .then(({ game }) => restorePgn(game.pgn, game))
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setGameError(error instanceof Error ? error.message : "This recorded game could not be loaded.");
+        });
+      return () => controller.abort();
+    }
+
     const shared = readSharedModelReferences(window.location.href);
     if (shared) {
       setModelA((current) => ({ ...current, reference: shared.a }));
@@ -152,23 +229,12 @@ export default function ArenaClient() {
     const sharedPgn = readSharedPgn(window.location.href);
     if (sharedPgn) {
       try {
-        const restored = new Chess();
-        restored.loadPgn(sharedPgn);
-        const headers = restored.getHeaders();
-        gameRef.current = restored;
-        setMoves(recordsFromGame(restored, headers.White ?? "White", headers.Black ?? "Black"));
-        setPlayers({ w: headers.White ?? "White", b: headers.Black ?? "Black" });
-        setMode(headers.Mode === "models" ? "models" : "human");
-        setPlayer1Color(headers.PlayerOneColor === "Black" ? "b" : "w");
-        setHumanColor(headers.HumanColor === "Black" ? "b" : "w");
-        setFinishedStatus(describePgnResult(restored));
-        setGameStarted(true);
-        setRunning(false);
-        setGameVersion((value) => value + 1);
+        restorePgn(sharedPgn);
       } catch {
         setGameError("This shared PGN could not be loaded.");
       }
     }
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -250,6 +316,55 @@ export default function ArenaClient() {
   const reviewByPly = new Map(review.result?.moves.map((move) => [move.ply, move]) ?? []);
 
   useEffect(() => {
+    if (!recordingEnabled || !gameStarted || !gameEnded || moves.length === 0 || saveState.phase !== "idle") return;
+    const participantFor = (color: Color) => {
+      const slot = color === player1Color ? modelA : modelB;
+      return slot.model
+        ? { kind: "model" as const, reference: slot.model.info.reference }
+        : { kind: "human" as const };
+    };
+    setSaveState({ phase: "saving", gameId: null, message: "Saving game…" });
+    const pgn = createSharePgn(game, players, mode, player1Color, humanColor, gameError);
+    void fetch("/api/games", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: activeGameId.current,
+        pgn,
+        playedAt: activeGameStartedAt.current,
+        white: participantFor("w"),
+        black: participantFor("b"),
+      }),
+    }).then(async (response) => {
+      const payload = await response.json() as { game?: StoredGame; error?: string };
+      if (!response.ok || !payload.game) throw new Error(payload.error ?? "The game could not be saved.");
+      setPlayers({ w: payload.game.whiteName, b: payload.game.blackName });
+      setPlayerProfiles({ w: payload.game.whitePlayerId, b: payload.game.blackPlayerId });
+      setSaveState({ phase: "saved", gameId: payload.game.id, message: "Saved to history." });
+    }).catch((error) => {
+      setSaveState({
+        phase: "error",
+        gameId: null,
+        message: error instanceof Error ? error.message : "The game could not be saved.",
+      });
+    });
+  }, [
+    gameEnded,
+    gameError,
+    game,
+    gameStarted,
+    humanColor,
+    mode,
+    modelA,
+    modelB,
+    moves.length,
+    player1Color,
+    players,
+    recordingEnabled,
+    saveState.phase,
+  ]);
+
+  useEffect(() => {
     if (!gameStarted || !gameEnded || moves.length === 0) return;
     reviewAbort.current?.abort();
     const controller = new AbortController();
@@ -302,11 +417,12 @@ export default function ArenaClient() {
         const shareUrl = withSharedModelReference(
           window.location.href,
           slot,
-          current.reference,
+          loaded.info.reference,
         );
         window.history.replaceState(window.history.state, "", shareUrl);
         setSlot((value) => ({
           ...value,
+          reference: loaded.info.reference,
           phase: "ready",
           progress: null,
           model: loaded,
@@ -338,8 +454,9 @@ export default function ArenaClient() {
     }
     const nextMode: PlayMode = modelA.model && modelB.model ? "models" : "human";
     const resolvedPlayer1Color = sidePreference === "random" ? randomColor() : sidePreference;
-    const nextPlayer1Name = modelA.model?.info.name ?? "Human";
-    const nextPlayer2Name = modelB.model?.info.name ?? "Human";
+    const humanName = viewer.signedIn ? viewer.name ?? "Signed-in player" : "Anonymous";
+    const nextPlayer1Name = modelA.model?.info.name ?? humanName;
+    const nextPlayer2Name = modelB.model?.info.name ?? humanName;
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];
     setStarting(true);
     setGameError(null);
@@ -361,6 +478,8 @@ export default function ArenaClient() {
     gameEpoch.current += 1;
     reviewAbort.current?.abort();
     gameRef.current = new Chess();
+    activeGameId.current = crypto.randomUUID();
+    activeGameStartedAt.current = new Date().toISOString();
     setMode(nextMode);
     setPlayer1Color(resolvedPlayer1Color);
     setHumanColor(modelA.model ? oppositeColor(resolvedPlayer1Color) : resolvedPlayer1Color);
@@ -368,6 +487,9 @@ export default function ArenaClient() {
       [resolvedPlayer1Color]: nextPlayer1Name,
       [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Name,
     } as Players);
+    setPlayerProfiles({ w: null, b: null });
+    setRecordingEnabled(true);
+    setSaveState({ phase: "idle", gameId: null, message: "" });
     setMoves([]);
     setViewedPly(null);
     setHistoryPlaying(false);
@@ -542,10 +664,12 @@ export default function ArenaClient() {
     gameEpoch.current += 1;
     reviewAbort.current?.abort();
     gameRef.current = new Chess();
+    const setupUrl = new URL(window.location.href);
+    setupUrl.searchParams.delete("game");
     window.history.replaceState(
       window.history.state,
       "",
-      buildArenaShareUrl(window.location.href, {
+      buildArenaShareUrl(setupUrl, {
         a: modelA.reference,
         b: modelB.reference,
         pgn: null,
@@ -564,6 +688,9 @@ export default function ArenaClient() {
     setShareMessage("");
     setReview(emptyReview());
     setPlayers({ w: "White", b: "Black" });
+    setPlayerProfiles({ w: null, b: null });
+    setRecordingEnabled(false);
+    setSaveState({ phase: "idle", gameId: null, message: "" });
     setGameStarted(false);
     setGameVersion((value) => value + 1);
   }
@@ -577,12 +704,14 @@ export default function ArenaClient() {
   const whitePlayerSummary: PlayerStripProps = {
     color: "w",
     name: players.w,
+    profileId: playerProfiles.w,
     captured: whiteCapturedPieces,
     lead: Math.max(0, materialLead),
   };
   const blackPlayerSummary: PlayerStripProps = {
     color: "b",
     name: players.b,
+    profileId: playerProfiles.b,
     captured: blackCapturedPieces,
     lead: Math.max(0, -materialLead),
   };
@@ -590,13 +719,17 @@ export default function ArenaClient() {
   const bottomPlayerSummary = orientation === "w" ? whitePlayerSummary : blackPlayerSummary;
 
   async function shareGame(includePgn: boolean) {
-    const url = buildArenaShareUrl(window.location.href, {
-      a: modelA.reference,
-      b: modelB.reference,
-      pgn: includePgn
-        ? createSharePgn(game, players, mode, player1Color, humanColor, gameError)
-        : null,
-    });
+    const base = new URL(window.location.href);
+    base.searchParams.delete("game");
+    const url = includePgn && saveState.gameId
+      ? `${window.location.origin}/arena?game=${encodeURIComponent(saveState.gameId)}`
+      : buildArenaShareUrl(base, {
+          a: modelA.reference,
+          b: modelB.reference,
+          pgn: includePgn
+            ? createSharePgn(game, players, mode, player1Color, humanColor, gameError)
+            : null,
+        });
     setShareOpen(false);
     try {
       if (navigator.share) {
@@ -619,6 +752,7 @@ export default function ArenaClient() {
     <main className="arena-page arena-page-v2">
       <nav className="arena-nav" aria-label="Arena navigation">
         <Link href="/" className="arena-title">ChessGPT arena</Link>
+        <div className="arena-nav-links"><Link href="/history">History</Link></div>
       </nav>
 
       <section className="arena-workspace" aria-label="Chess arena">
@@ -723,6 +857,11 @@ export default function ArenaClient() {
 
               <div className="setup-actions">
                 {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
+                <p className="identity-notice">
+                  {viewer.signedIn
+                    ? `Human games will be recorded as ${viewer.name ?? "your signed-in player"}.`
+                    : <><Link href="/signin-with-chatgpt?return_to=%2Farena">Sign in with ChatGPT</Link> to attach human games to your history.</>}
+                </p>
                 <p>{modelA.model && modelB.model ? "Model versus model" : modelA.model || modelB.model ? "The empty player slot will be Human" : "Load at least one model"}</p>
                 <button type="button" onClick={() => void beginGame()} disabled={starting || (!modelA.model && !modelB.model) || modelA.phase === "loading" || modelB.phase === "loading"}>
                   {starting ? "Starting…" : "Start game"}
@@ -798,6 +937,7 @@ export default function ArenaClient() {
                 <GameReviewSummary
                   review={review}
                   players={players}
+                  profiles={playerProfiles}
                   onRetry={() => setReviewAttempt((attempt) => attempt + 1)}
                 />
               ) : null}
@@ -824,6 +964,13 @@ export default function ArenaClient() {
                 </div>
               )}
               {gameEnded && shareMessage ? <p className="share-feedback" role="status">{shareMessage}</p> : null}
+              {gameEnded && saveState.message ? (
+                <p className={`save-feedback ${saveState.phase}`} role="status">
+                  <span>{saveState.message}</span>
+                  {saveState.phase === "saved" && saveState.gameId ? <Link href={`/arena?game=${saveState.gameId}`}>Recorded game</Link> : null}
+                  {saveState.phase === "error" ? <button type="button" onClick={() => setSaveState({ phase: "idle", gameId: null, message: "" })}>Retry</button> : null}
+                </p>
+              ) : null}
               {gameEnded && shareOpen ? (
                 <div className="share-options" id="arena-share-options" role="menu" aria-label="Share game">
                   <button type="button" role="menuitem" onClick={() => void shareGame(false)}>
@@ -831,7 +978,7 @@ export default function ArenaClient() {
                     <span>Start a fresh game with these model references.</span>
                   </button>
                   <button type="button" role="menuitem" onClick={() => void shareGame(true)}>
-                    <strong>Models + PGN</strong>
+                    <strong>Models + game</strong>
                     <span>Open this completed game and its move history.</span>
                   </button>
                 </div>
@@ -917,10 +1064,12 @@ function MoveCell({
 function GameReviewSummary({
   review,
   players,
+  profiles,
   onRetry,
 }: {
   review: ReviewState;
   players: Players;
+  profiles: PlayerProfiles;
   onRetry: () => void;
 }) {
   if (review.phase === "loading" || review.phase === "analyzing") {
@@ -948,8 +1097,8 @@ function GameReviewSummary({
       aria-label={`Post-game review by ${review.result.engine}`}
       title={`${review.result.engine} · ${review.result.nodesPerPosition.toLocaleString()} nodes per position`}
     >
-      <PlayerReviewSummary color="White" name={players.w} review={review.result.players.w} />
-      <PlayerReviewSummary color="Black" name={players.b} review={review.result.players.b} />
+      <PlayerReviewSummary color="White" name={players.w} profileId={profiles.w} review={review.result.players.w} />
+      <PlayerReviewSummary color="Black" name={players.b} profileId={profiles.b} review={review.result.players.b} />
     </section>
   );
 }
@@ -957,17 +1106,19 @@ function GameReviewSummary({
 function PlayerReviewSummary({
   color,
   name,
+  profileId,
   review,
 }: {
   color: string;
   name: string;
+  profileId?: string | null;
   review: PlayerReview;
 }) {
   return (
     <div className="review-player">
       <div className="review-player-heading">
         <span>{color}</span>
-        <b title={name}>{name}</b>
+        {profileId ? <Link href={`/players/${profileId}`} title={name}>{name}</Link> : <b title={name}>{name}</b>}
       </div>
       <strong><b>{Math.round(review.accuracy)}%</b> accuracy</strong>
       <div className="review-categories">
@@ -1022,7 +1173,7 @@ function judgementName(judgement: ReviewJudgement): string {
   return JUDGEMENT_META[judgement].label;
 }
 
-function PlayerStrip({ color, name, captured, lead }: PlayerStripProps) {
+function PlayerStrip({ color, name, profileId, captured, lead }: PlayerStripProps) {
   const colorName = color === "w" ? "White" : "Black";
   const capturedColor = oppositeColor(color);
 
@@ -1030,7 +1181,7 @@ function PlayerStrip({ color, name, captured, lead }: PlayerStripProps) {
     <section className={`player-strip ${color === "w" ? "white" : "black"}`} aria-label={`${colorName} player`}>
       <div className="player-identity">
         <span>{colorName}</span>
-        <strong>{name}</strong>
+        {profileId ? <Link href={`/players/${profileId}`}>{name}</Link> : <strong>{name}</strong>}
       </div>
       <div className="captured-pieces" aria-label={`${colorName} captured pieces`}>
         {captured.length > 0 ? captured.map((piece, index) => (
@@ -1179,7 +1330,7 @@ function createSharePgn(
   shared.setHeader("HumanColor", humanColor === "w" ? "White" : "Black");
   shared.setHeader(
     "Termination",
-    sanitizePgnHeader(gameError ?? priorHeaders.Termination ?? terminationForGame(game)),
+    sanitizePgnHeader(gameError ? `forfeit: ${gameError}` : priorHeaders.Termination ?? terminationForGame(game)),
   );
   return shared.pgn({ maxWidth: 0 });
 }

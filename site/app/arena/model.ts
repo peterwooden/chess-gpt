@@ -1,8 +1,6 @@
 import { init, parse, type ImportSpecifier } from "es-module-lexer";
-import {
-  createImmutableDownloadCache,
-  isImmutableRevision,
-} from "./immutable-download-cache.mjs";
+import { createImmutableDownloadCache } from "./immutable-download-cache.mjs";
+import { resolveHuggingFaceReference } from "./hugging-face-reference.mjs";
 
 const PACKAGE_SCHEMA = "chess-gpt-package-v1";
 const PACKAGE_LIMIT_BYTES = 100_000_000;
@@ -25,6 +23,9 @@ export type BrowserModelInfo = {
   name: string;
   runtime: "Package v1";
   sourceUrl: string;
+  reference: string;
+  repository: string;
+  revision: string;
   pinned: boolean;
   digest: string;
   artifactBytes: number;
@@ -35,11 +36,6 @@ export type BrowserChessModel = {
   newGame(seed: number): Promise<void>;
   predict(history: string[], legalMoves: string[]): Promise<ModelPrediction>;
   dispose(): Promise<void>;
-};
-
-type NormalizedReference = {
-  manifestUrl: string;
-  pinned: boolean;
 };
 
 type ArtifactDescriptor = {
@@ -63,61 +59,13 @@ type WorkerResponse = {
   error?: string;
 };
 
-export function normalizeModelReference(rawReference: string): NormalizedReference {
-  const reference = rawReference.trim();
-  if (!reference) throw new Error("Enter a Hugging Face model URL or owner/repository@revision.");
-
-  if (!reference.startsWith("http://") && !reference.startsWith("https://")) {
-    const match = /^([^/@\s]+)\/([^@/\s]+)(?:@([^\s]+))?$/.exec(reference);
-    if (!match) {
-      throw new Error("Use owner/repository@revision or a huggingface.co model URL.");
-    }
-    const [, owner, repository, revision = "main"] = match;
-    return {
-      manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
-      pinned: isImmutableRevision(revision),
-    };
-  }
-
-  const url = new URL(reference);
-  if (!HF_HOSTS.has(url.hostname)) {
-    throw new Error("Model packages must come from a public huggingface.co repository.");
-  }
-  url.hostname = "huggingface.co";
-  const parts = url.pathname.split("/").filter(Boolean);
-  if (parts.length < 2) throw new Error("The Hugging Face URL must identify a model repository.");
-
-  const [owner, repository, operation, revision] = parts;
-  if ((operation === "blob" || operation === "resolve") && revision) {
-    parts[2] = "resolve";
-    url.pathname = `/${parts.join("/")}`;
-    return { manifestUrl: url.toString(), pinned: isImmutableRevision(revision) };
-  }
-  if (operation === "tree" && revision) {
-    return {
-      manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/${revision}/browser/manifest.json`,
-      pinned: isImmutableRevision(revision),
-    };
-  }
-  if (parts.length === 2) {
-    return {
-      manifestUrl: `https://huggingface.co/${owner}/${repository}/resolve/main/browser/manifest.json`,
-      pinned: false,
-    };
-  }
-  throw new Error("Use a repository URL, tree URL, or direct browser/manifest.json URL.");
-}
-
 export async function loadBrowserModel(
   rawReference: string,
   onProgress: (progress: LoadProgress) => void,
 ): Promise<BrowserChessModel> {
-  const reference = normalizeModelReference(rawReference);
-  // The manifest is the live root of trust for every declared file hash, so it
-  // is deliberately fetched fresh even when the repository revision is immutable.
+  const reference = await resolveHuggingFaceReference(rawReference);
   const manifestBytes = await fetchBytes(
     reference.manifestUrl,
-    "manifest",
     "manifest.json",
     PACKAGE_LIMIT_BYTES,
     onProgress,
@@ -127,7 +75,7 @@ export async function loadBrowserModel(
   const entrypointUrl = packageFileUrl(reference.manifestUrl, manifest.entrypoint.path);
   const entrypointBytes = await immutableDownloadCache.load({
     url: entrypointUrl,
-    immutable: reference.pinned,
+    immutable: true,
     maximumBytes: manifest.entrypoint.bytes,
     download: () => fetchBytes(
       entrypointUrl,
@@ -147,7 +95,7 @@ export async function loadBrowserModel(
     const artifactUrl = packageFileUrl(reference.manifestUrl, descriptor.path);
     const bytes = await immutableDownloadCache.load({
       url: artifactUrl,
-      immutable: reference.pinned,
+      immutable: true,
       maximumBytes: descriptor.bytes,
       download: () => fetchBytes(
         artifactUrl,
@@ -187,7 +135,10 @@ export async function loadBrowserModel(
       name: manifest.name,
       runtime: "Package v1",
       sourceUrl: reference.manifestUrl,
-      pinned: reference.pinned,
+      reference: reference.reference,
+      repository: reference.repository,
+      revision: reference.revision,
+      pinned: true,
       digest,
       artifactBytes: packageBytes,
     },
