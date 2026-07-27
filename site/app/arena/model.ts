@@ -66,6 +66,7 @@ export async function loadBrowserModel(
   const reference = await resolveHuggingFaceReference(rawReference);
   const manifestBytes = await fetchBytes(
     reference.manifestUrl,
+    "manifest",
     "manifest.json",
     PACKAGE_LIMIT_BYTES,
     onProgress,
@@ -383,7 +384,9 @@ async function verifyArtifact(
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digestInput = new Uint8Array(bytes.byteLength);
+  digestInput.set(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", digestInput);
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
