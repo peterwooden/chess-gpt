@@ -156,7 +156,7 @@ test("arena consolidates match status in the move pane", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
 
   assert.doesNotMatch(arena, /className="game-status"/);
-  assert.match(arena, /\{mode === "human" \? "Human match" : "Model match"\}/);
+  assert.match(arena, /mode === "human" \? "Human match" : "Model match"/);
   assert.match(arena, /live at move \$\{Math\.ceil\(moves\.length \/ 2\)\}/);
   assert.match(arena, /<strong aria-live="polite">\{displayedStatus\}<\/strong>/);
   assert.match(arena, /className="move-header-meta"/);
@@ -198,6 +198,24 @@ test("arena can review every played position without leaving the live game", asy
   assert.match(styles, /\.history-navigation\s*\{[^}]*border-bottom:\s*1px solid var\(--green\)/s);
   assert.match(styles, /\.move-record\s*\{[^}]*position:\s*relative/s);
   assert.match(styles, /@media \(max-width:\s*959px\)[\s\S]*\.arena-sidebar\s*\{[^}]*flex:\s*1/s);
+});
+
+test("completed games receive a compact Stockfish accuracy review", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const review = await readFile(new URL("../app/arena/stockfish-review.mjs", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(arena, /analyzeGameWithStockfish/);
+  assert.match(arena, /<b>\{Math\.round\(review\.accuracy\)\}%<\/b> accuracy/);
+  assert.match(arena, /\["inaccuracy", "mistake", "blunder"\]/);
+  assert.match(arena, /count === null \|\| count > 0/);
+  assert.match(arena, /review\.counts\[judgement\]/);
+  assert.match(review, /STOCKFISH_NODES_PER_POSITION = 30_000/);
+  assert.match(review, /loss >= 30/);
+  assert.match(review, /loss >= 20/);
+  assert.match(review, /loss >= 10/);
+  assert.match(styles, /\.review-pill\.blunder\.active\s*\{[^}]*background:/s);
+  assert.match(styles, /\.review-pill\.inactive\s*\{[^}]*background:/s);
 });
 
 test("arena enforces a narrow, revision-aware model contract", async () => {

@@ -1,0 +1,8 @@
+Stockfish.js 18.0.7
+https://github.com/nmrugg/stockfish.js/tree/v18.0.0
+
+Based on Stockfish 18
+https://github.com/official-stockfish/Stockfish/tree/sf_18
+
+This directory contains the lite single-threaded WebAssembly distribution.
+The complete GNU GPL version 3 license is included as COPYING.txt.

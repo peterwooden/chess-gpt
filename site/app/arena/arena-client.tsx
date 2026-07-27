@@ -14,6 +14,14 @@ import {
   readSharedPgn,
   withSharedModelReference,
 } from "./share-url.mjs";
+import {
+  analyzeGameWithStockfish,
+  type GameReview,
+  type MoveReview,
+  type PlayerReview,
+  type ReviewJudgement,
+  type ReviewProgress,
+} from "./stockfish-review.mjs";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
 const MODEL_AUTOPLAY_DELAY_MS = 650;
@@ -64,14 +72,26 @@ type PlayerStripProps = {
 
 type Players = Record<Color, string>;
 
+type ReviewState = {
+  phase: "idle" | "loading" | "analyzing" | "complete" | "error";
+  progress: ReviewProgress | null;
+  result: GameReview | null;
+  error: string | null;
+};
+
 function emptySlot(): ModelSlot {
   return { reference: "", phase: "idle", progress: null, model: null, error: null };
+}
+
+function emptyReview(): ReviewState {
+  return { phase: "idle", progress: null, result: null, error: null };
 }
 
 export default function ArenaClient() {
   const gameRef = useRef(new Chess());
   const moveRecordRef = useRef<HTMLOListElement>(null);
   const gameEpoch = useRef(0);
+  const reviewAbort = useRef<AbortController | null>(null);
   const loadEpoch = useRef({ a: 0, b: 0 });
   const loadedModels = useRef<{ a: BrowserChessModel | null; b: BrowserChessModel | null }>({
     a: null,
@@ -97,6 +117,8 @@ export default function ArenaClient() {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<PromotionChoice | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
+  const [review, setReview] = useState<ReviewState>(emptyReview);
+  const [reviewAttempt, setReviewAttempt] = useState(0);
 
   useEffect(() => {
     const shared = readSharedModelReferences(window.location.href);
@@ -175,6 +197,7 @@ export default function ArenaClient() {
   useEffect(() => () => {
     loadEpoch.current.a += 1;
     loadEpoch.current.b += 1;
+    reviewAbort.current?.abort();
     void loadedModels.current.a?.dispose();
     void loadedModels.current.b?.dispose();
   }, []);
@@ -197,6 +220,35 @@ export default function ArenaClient() {
     : describeHistoryPosition(displayPly, displayedMove);
   const gameEnded = game.isGameOver() || finishedStatus !== null;
   const moveRows = pairMoves(moves);
+  const reviewByPly = new Map(review.result?.moves.map((move) => [move.ply, move]) ?? []);
+
+  useEffect(() => {
+    if (!gameStarted || !gameEnded || moves.length === 0) return;
+    reviewAbort.current?.abort();
+    const controller = new AbortController();
+    reviewAbort.current = controller;
+    setReview({ phase: "loading", progress: null, result: null, error: null });
+    void analyzeGameWithStockfish(
+      moves.map((move) => move.san),
+      (progress) => {
+        if (controller.signal.aborted) return;
+        setReview((current) => ({ ...current, phase: "analyzing", progress }));
+      },
+      controller.signal,
+    ).then((result) => {
+      if (controller.signal.aborted) return;
+      setReview({ phase: "complete", progress: null, result, error: null });
+    }).catch((error) => {
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return;
+      setReview({
+        phase: "error",
+        progress: null,
+        result: null,
+        error: error instanceof Error ? error.message : "The game could not be analysed.",
+      });
+    });
+    return () => controller.abort();
+  }, [gameEnded, gameStarted, moves, reviewAttempt]);
 
   const loadModel = useCallback(
     async (slot: "a" | "b") => {
@@ -280,6 +332,7 @@ export default function ArenaClient() {
       return;
     }
     gameEpoch.current += 1;
+    reviewAbort.current?.abort();
     gameRef.current = new Chess();
     setMode(nextMode);
     setPlayer1Color(resolvedPlayer1Color);
@@ -297,6 +350,7 @@ export default function ArenaClient() {
     setFinishedStatus(null);
     setShareOpen(false);
     setShareMessage("");
+    setReview(emptyReview());
     setGameStarted(true);
     setRunning(true);
     setStarting(false);
@@ -445,6 +499,7 @@ export default function ArenaClient() {
 
   function returnToSetup() {
     gameEpoch.current += 1;
+    reviewAbort.current?.abort();
     gameRef.current = new Chess();
     window.history.replaceState(
       window.history.state,
@@ -465,6 +520,7 @@ export default function ArenaClient() {
     setFinishedStatus(null);
     setShareOpen(false);
     setShareMessage("");
+    setReview(emptyReview());
     setPlayers({ w: "White", b: "Black" });
     setGameStarted(false);
     setGameVersion((value) => value + 1);
@@ -636,7 +692,9 @@ export default function ArenaClient() {
               <header>
                 <div>
                   <span>
-                    {mode === "human" ? "Human match" : "Model match"}
+                    {gameEnded && review.phase === "complete"
+                      ? `Game review · ${review.result?.engine}`
+                      : mode === "human" ? "Human match" : "Model match"}
                     {!isLiveView && moves.length > 0 ? ` · live at move ${Math.ceil(moves.length / 2)}` : ""}
                   </span>
                   <strong aria-live="polite">{displayedStatus}</strong>
@@ -674,7 +732,7 @@ export default function ArenaClient() {
                   aria-pressed={isLiveView}
                   onClick={() => showPosition(null)}
                 >
-                  Live
+                  {gameEnded ? "Final" : "Live"}
                 </button>
                 <button
                   type="button"
@@ -693,6 +751,12 @@ export default function ArenaClient() {
                   <span aria-hidden="true">›|</span>
                 </button>
               </nav>
+              {gameEnded && review.phase !== "idle" ? (
+                <GameReviewSummary
+                  review={review}
+                  onRetry={() => setReviewAttempt((attempt) => attempt + 1)}
+                />
+              ) : null}
               {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
               {moves.length === 0 ? (
                 <div className="empty-record">
@@ -708,8 +772,8 @@ export default function ArenaClient() {
                     {moveRows.map((row) => (
                       <li key={row.number}>
                         <span>{row.number}.</span>
-                        <MoveCell move={row.white} currentPly={displayPly} onSelect={showPosition} />
-                        <MoveCell move={row.black} currentPly={displayPly} onSelect={showPosition} />
+                        <MoveCell move={row.white} review={row.white ? reviewByPly.get(row.white.ply) : undefined} currentPly={displayPly} onSelect={showPosition} />
+                        <MoveCell move={row.black} review={row.black ? reviewByPly.get(row.black.ply) : undefined} currentPly={displayPly} onSelect={showPosition} />
                       </li>
                     ))}
                   </ol>
@@ -769,19 +833,24 @@ export default function ArenaClient() {
 
 function MoveCell({
   move,
+  review,
   currentPly,
   onSelect,
 }: {
   move?: MoveRecord;
+  review?: MoveReview;
   currentPly: number;
   onSelect: (ply: number) => void;
 }) {
   if (!move) return <span className="score-move empty" aria-hidden="true">—</span>;
-  const detail = `${move.actor} · ${move.source}${move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}`;
+  const reviewDetail = review?.judgement
+    ? ` · ${judgementName(review.judgement)} · ${Math.round(review.winningChanceLoss)}% winning chance lost${review.bestMoveSan ? ` · best was ${review.bestMoveSan}` : ""}`
+    : "";
+  const detail = `${move.actor} · ${move.source}${move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}${reviewDetail}`;
   return (
     <button
       type="button"
-      className={`score-move${move.ply === currentPly ? " current" : ""}`}
+      className={`score-move${review?.judgement ? ` ${review.judgement}` : ""}${move.ply === currentPly ? " current" : ""}`}
       aria-label={`${move.color === "w" ? "White" : "Black"} played ${move.san}. ${detail}`}
       aria-pressed={move.ply === currentPly}
       data-ply={move.ply}
@@ -789,8 +858,79 @@ function MoveCell({
       title={detail}
     >
       <strong>{move.san}</strong>
+      {review?.judgement ? (
+        <>
+          <ReviewPill judgement={review.judgement} count={null} />
+          <small className="review-loss">−{Math.round(review.winningChanceLoss)}%</small>
+        </>
+      ) : null}
     </button>
   );
+}
+
+function GameReviewSummary({ review, onRetry }: { review: ReviewState; onRetry: () => void }) {
+  if (review.phase === "loading" || review.phase === "analyzing") {
+    const completed = review.progress?.completed ?? 0;
+    const total = review.progress?.total;
+    return (
+      <section className="review-progress" aria-live="polite">
+        <div><i style={{ width: total ? `${(completed / total) * 100}%` : "8%" }} /></div>
+        <span>{review.phase === "loading" ? "Loading Stockfish…" : `Analysing ${completed} of ${total} positions…`}</span>
+      </section>
+    );
+  }
+  if (review.phase === "error") {
+    return (
+      <section className="review-error" role="status">
+        <span>{review.error ?? "The game could not be analysed."}</span>
+        <button type="button" onClick={onRetry}>Retry</button>
+      </section>
+    );
+  }
+  if (!review.result) return null;
+  return (
+    <section
+      className="review-summary"
+      aria-label={`Post-game review by ${review.result.engine}`}
+      title={`${review.result.engine} · ${review.result.nodesPerPosition.toLocaleString()} nodes per position`}
+    >
+      <PlayerReviewSummary color="White" review={review.result.players.w} />
+      <PlayerReviewSummary color="Black" review={review.result.players.b} />
+    </section>
+  );
+}
+
+function PlayerReviewSummary({ color, review }: { color: string; review: PlayerReview }) {
+  return (
+    <div className="review-player">
+      <span>{color}</span>
+      <strong><b>{Math.round(review.accuracy)}%</b> accuracy</strong>
+      <div className="review-pills">
+        {(["inaccuracy", "mistake", "blunder"] as const).map((judgement) => (
+          <ReviewPill judgement={judgement} count={review.counts[judgement]} key={judgement} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReviewPill({ judgement, count }: { judgement: ReviewJudgement; count: number | null }) {
+  const glyph = judgement === "inaccuracy" ? "?!" : judgement === "mistake" ? "?" : "??";
+  const active = count === null || count > 0;
+  const label = count === null
+    ? judgementName(judgement)
+    : `${count} ${count === 1
+      ? judgementName(judgement)
+      : judgement === "inaccuracy" ? "Inaccuracies" : `${judgementName(judgement)}s`}`;
+  return (
+    <span className={`review-pill ${judgement}${active ? " active" : " inactive"}`} aria-label={label} title={label}>
+      {glyph}{count === null ? "" : ` ${count}`}
+    </span>
+  );
+}
+
+function judgementName(judgement: ReviewJudgement): string {
+  return judgement[0].toUpperCase() + judgement.slice(1);
 }
 
 function PlayerStrip({ color, name, captured, lead }: PlayerStripProps) {
