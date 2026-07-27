@@ -162,6 +162,21 @@ test("arena consolidates match status in the move pane", async () => {
   assert.match(arena, /\{history\.length\} plies/);
 });
 
+test("arena uses a compact score sheet and shares completed games as PGN", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(arena, /className="move-score-heading"/);
+  assert.match(arena, /<span>Move<\/span><b>White<\/b><b>Black<\/b>/);
+  assert.match(arena, /moveRows\.map/);
+  assert.match(arena, /record\.scrollTop = record\.scrollHeight/);
+  assert.match(arena, /<summary>Share<\/summary>/);
+  assert.match(arena, /Models \+ PGN/);
+  assert.match(arena, /readSharedPgn/);
+  assert.match(arena, /restored\.loadPgn\(sharedPgn\)/);
+  assert.match(styles, /grid-template-columns:\s*2\.5rem minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+});
+
 test("arena enforces a narrow, revision-aware model contract", async () => {
   const modelLoader = await readFile(new URL("../app/arena/model.ts", import.meta.url), "utf8");
   const modelWorker = await readFile(new URL("../app/arena/model-worker.ts", import.meta.url), "utf8");

@@ -1,4 +1,5 @@
 const MODEL_PARAMETERS = { a: "modelA", b: "modelB" };
+const PGN_PARAMETER = "pgn";
 
 /**
  * Return the model defaults explicitly carried by a shared arena URL.
@@ -29,5 +30,36 @@ export function readSharedModelReferences(input) {
 export function withSharedModelReference(input, slot, reference) {
   const url = new URL(input);
   url.searchParams.set(MODEL_PARAMETERS[slot], reference.trim());
+  return url.toString();
+}
+
+/**
+ * Return the PGN carried by a shared arena URL, if present.
+ *
+ * @param {string | URL} input
+ * @returns {string | null}
+ */
+export function readSharedPgn(input) {
+  const pgn = new URL(input).searchParams.get(PGN_PARAMETER);
+  return pgn?.trim() ? pgn : null;
+}
+
+/**
+ * Build a stable share URL from the current arena location.
+ * Empty model slots are removed and PGN is included only for a full-game share.
+ *
+ * @param {string | URL} input
+ * @param {{ a: string, b: string, pgn?: string | null }} state
+ * @returns {string}
+ */
+export function buildArenaShareUrl(input, state) {
+  const url = new URL(input);
+  for (const slot of ["a", "b"]) {
+    const reference = state[slot].trim();
+    if (reference) url.searchParams.set(MODEL_PARAMETERS[slot], reference);
+    else url.searchParams.delete(MODEL_PARAMETERS[slot]);
+  }
+  if (state.pgn?.trim()) url.searchParams.set(PGN_PARAMETER, state.pgn);
+  else url.searchParams.delete(PGN_PARAMETER);
   return url.toString();
 }

@@ -9,7 +9,9 @@ import {
   type LoadProgress,
 } from "./model";
 import {
+  buildArenaShareUrl,
   readSharedModelReferences,
+  readSharedPgn,
   withSharedModelReference,
 } from "./share-url.mjs";
 
@@ -60,12 +62,16 @@ type PlayerStripProps = {
   lead: number;
 };
 
+type Players = Record<Color, string>;
+
 function emptySlot(): ModelSlot {
   return { reference: "", phase: "idle", progress: null, model: null, error: null };
 }
 
 export default function ArenaClient() {
   const gameRef = useRef(new Chess());
+  const shareMenuRef = useRef<HTMLDetailsElement>(null);
+  const moveRecordRef = useRef<HTMLOListElement>(null);
   const gameEpoch = useRef(0);
   const loadEpoch = useRef({ a: 0, b: 0 });
   const loadedModels = useRef<{ a: BrowserChessModel | null; b: BrowserChessModel | null }>({
@@ -82,6 +88,9 @@ export default function ArenaClient() {
   const [starting, setStarting] = useState(false);
   const [thinking, setThinking] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
+  const [players, setPlayers] = useState<Players>({ w: "White", b: "Black" });
+  const [finishedStatus, setFinishedStatus] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState("");
   const [, setGameVersion] = useState(0);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
@@ -93,16 +102,39 @@ export default function ArenaClient() {
     if (shared) {
       setModelA((current) => ({ ...current, reference: shared.a }));
       setModelB((current) => ({ ...current, reference: shared.b }));
-      return;
     }
-    const saved = window.localStorage.getItem(MODEL_URLS_KEY);
-    if (!saved) return;
-    try {
-      const urls = JSON.parse(saved) as { a?: string; b?: string };
-      setModelA((current) => ({ ...current, reference: urls.a ?? "" }));
-      setModelB((current) => ({ ...current, reference: urls.b ?? "" }));
-    } catch {
-      window.localStorage.removeItem(MODEL_URLS_KEY);
+    if (!shared) {
+      const saved = window.localStorage.getItem(MODEL_URLS_KEY);
+      if (saved) {
+        try {
+          const urls = JSON.parse(saved) as { a?: string; b?: string };
+          setModelA((current) => ({ ...current, reference: urls.a ?? "" }));
+          setModelB((current) => ({ ...current, reference: urls.b ?? "" }));
+        } catch {
+          window.localStorage.removeItem(MODEL_URLS_KEY);
+        }
+      }
+    }
+
+    const sharedPgn = readSharedPgn(window.location.href);
+    if (sharedPgn) {
+      try {
+        const restored = new Chess();
+        restored.loadPgn(sharedPgn);
+        const headers = restored.getHeaders();
+        gameRef.current = restored;
+        setMoves(recordsFromGame(restored, headers.White ?? "White", headers.Black ?? "Black"));
+        setPlayers({ w: headers.White ?? "White", b: headers.Black ?? "Black" });
+        setMode(headers.Mode === "models" ? "models" : "human");
+        setPlayer1Color(headers.Player1Color === "Black" ? "b" : "w");
+        setHumanColor(headers.HumanColor === "Black" ? "b" : "w");
+        setFinishedStatus(describePgnResult(restored));
+        setGameStarted(true);
+        setRunning(false);
+        setGameVersion((value) => value + 1);
+      } catch {
+        setGameError("This shared PGN could not be loaded.");
+      }
     }
   }, []);
 
@@ -116,6 +148,11 @@ export default function ArenaClient() {
   useEffect(() => {
     loadedModels.current = { a: modelA.model, b: modelB.model };
   }, [modelA.model, modelB.model]);
+
+  useEffect(() => {
+    const record = moveRecordRef.current;
+    if (record) record.scrollTop = record.scrollHeight;
+  }, [moves.length]);
 
   useEffect(() => () => {
     loadEpoch.current.a += 1;
@@ -133,7 +170,9 @@ export default function ArenaClient() {
   const orientation: Color = gameStarted && mode === "human" ? humanColor : "w";
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
-  const status = describeGame(game, running, thinking);
+  const status = finishedStatus ?? describeGame(game, running, thinking);
+  const gameEnded = game.isGameOver() || finishedStatus !== null;
+  const moveRows = pairMoves(moves);
 
   const loadModel = useCallback(
     async (slot: "a" | "b") => {
@@ -196,6 +235,8 @@ export default function ArenaClient() {
     }
     const nextMode: PlayMode = modelA.model && modelB.model ? "models" : "human";
     const resolvedPlayer1Color = sidePreference === "random" ? randomColor() : sidePreference;
+    const nextPlayer1Name = modelA.model?.info.name ?? "Human";
+    const nextPlayer2Name = modelB.model?.info.name ?? "Human";
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];
     setStarting(true);
     setGameError(null);
@@ -219,11 +260,17 @@ export default function ArenaClient() {
     setMode(nextMode);
     setPlayer1Color(resolvedPlayer1Color);
     setHumanColor(modelA.model ? oppositeColor(resolvedPlayer1Color) : resolvedPlayer1Color);
+    setPlayers({
+      [resolvedPlayer1Color]: nextPlayer1Name,
+      [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Name,
+    } as Players);
     setMoves([]);
     setSelectedSquare(null);
     setPromotion(null);
     setThinking(null);
     setGameError(null);
+    setFinishedStatus(null);
+    setShareMessage("");
     setGameStarted(true);
     setRunning(true);
     setStarting(false);
@@ -263,6 +310,7 @@ export default function ArenaClient() {
         if (gameEpoch.current !== epoch) return;
         setRunning(false);
         const detail = error instanceof Error ? error.message : "failed to return a legal move";
+        setFinishedStatus(`${activeGame.turn() === "w" ? "Black" : "White"} wins by forfeit`);
         setGameError(`${actor} loses: ${detail}`);
       } finally {
         if (gameEpoch.current === epoch) setThinking(null);
@@ -366,20 +414,28 @@ export default function ArenaClient() {
   function returnToSetup() {
     gameEpoch.current += 1;
     gameRef.current = new Chess();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      buildArenaShareUrl(window.location.href, {
+        a: modelA.reference,
+        b: modelB.reference,
+        pgn: null,
+      }),
+    );
     setRunning(false);
     setThinking(null);
     setMoves([]);
     setSelectedSquare(null);
     setPromotion(null);
     setGameError(null);
+    setFinishedStatus(null);
+    setShareMessage("");
+    setPlayers({ w: "White", b: "Black" });
     setGameStarted(false);
     setGameVersion((value) => value + 1);
   }
 
-  const player1Name = modelA.model?.info.name ?? "Human";
-  const player2Name = modelB.model?.info.name ?? "Human";
-  const whitePlayer = player1Color === "w" ? player1Name : player2Name;
-  const blackPlayer = player1Color === "b" ? player1Name : player2Name;
   const whiteCapturedPieces = capturedPieces(moves, "w");
   const blackCapturedPieces = capturedPieces(moves, "b");
   const whiteCapturePoints = capturePoints(whiteCapturedPieces);
@@ -387,18 +443,44 @@ export default function ArenaClient() {
   const materialLead = whiteCapturePoints - blackCapturePoints;
   const whitePlayerSummary: PlayerStripProps = {
     color: "w",
-    name: whitePlayer,
+    name: players.w,
     captured: whiteCapturedPieces,
     lead: Math.max(0, materialLead),
   };
   const blackPlayerSummary: PlayerStripProps = {
     color: "b",
-    name: blackPlayer,
+    name: players.b,
     captured: blackCapturedPieces,
     lead: Math.max(0, -materialLead),
   };
   const topPlayerSummary = orientation === "w" ? blackPlayerSummary : whitePlayerSummary;
   const bottomPlayerSummary = orientation === "w" ? whitePlayerSummary : blackPlayerSummary;
+
+  async function shareGame(includePgn: boolean) {
+    const url = buildArenaShareUrl(window.location.href, {
+      a: modelA.reference,
+      b: modelB.reference,
+      pgn: includePgn
+        ? createSharePgn(game, players, mode, player1Color, humanColor, gameError)
+        : null,
+    });
+    shareMenuRef.current?.removeAttribute("open");
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: includePgn ? "ChessGPT arena game" : "ChessGPT arena models",
+          url,
+        });
+        setShareMessage("Shared.");
+      } else {
+        await navigator.clipboard.writeText(url);
+        setShareMessage(includePgn ? "Game link copied." : "Model link copied.");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareMessage("Could not share this link.");
+    }
+  }
 
   return (
     <main className="arena-page arena-page-v2">
@@ -533,38 +615,76 @@ export default function ArenaClient() {
                   <p>The game is ready. The first SAN move will appear here.</p>
                 </div>
               ) : (
-                <ol className="move-record">
-                  {moves.map((move) => (
-                    <li className={move.ply === moves.length ? "current" : ""} key={`${move.ply}-${move.san}`}>
-                      <span>{move.ply}</span>
-                      <strong>{move.san}</strong>
-                      <div><b>{move.actor}</b><small>{move.source}{move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}</small></div>
-                    </li>
-                  ))}
-                </ol>
+                <div className="move-score">
+                  <div className="move-score-heading" aria-hidden="true">
+                    <span>Move</span><b>White</b><b>Black</b>
+                  </div>
+                  <ol className="move-record" aria-label="Move history" ref={moveRecordRef}>
+                    {moveRows.map((row) => (
+                      <li key={row.number}>
+                        <span>{row.number}.</span>
+                        <MoveCell move={row.white} currentPly={moves.length} />
+                        <MoveCell move={row.black} currentPly={moves.length} />
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               )}
-              <div className="game-controls">
-                <button
-                  type="button"
-                  onClick={() => setRunning((value) => !value)}
-                  disabled={game.isGameOver()}
-                >
-                  {running ? "Pause" : "Resume"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void stepOnce()}
-                  disabled={running || Boolean(thinking) || game.isGameOver() || (mode === "human" && game.turn() === humanColor)}
-                >
-                  Next move
-                </button>
-                <button type="button" onClick={returnToSetup}>New game</button>
+              {gameEnded && shareMessage ? <p className="share-feedback" role="status">{shareMessage}</p> : null}
+              <div className={`game-controls${gameEnded ? " game-ended" : ""}`}>
+                {gameEnded ? (
+                  <details className="share-menu" ref={shareMenuRef}>
+                    <summary>Share</summary>
+                    <div role="menu" aria-label="Share game">
+                      <button type="button" role="menuitem" onClick={() => void shareGame(false)}>
+                        <strong>Models only</strong>
+                        <span>Start a fresh game with these model references.</span>
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => void shareGame(true)}>
+                        <strong>Models + PGN</strong>
+                        <span>Open this completed game and its move history.</span>
+                      </button>
+                    </div>
+                  </details>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setRunning((value) => !value)}
+                      disabled={game.isGameOver()}
+                    >
+                      {running ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void stepOnce()}
+                      disabled={running || Boolean(thinking) || game.isGameOver() || (mode === "human" && game.turn() === humanColor)}
+                    >
+                      Next move
+                    </button>
+                  </>
+                )}
+                <button className="new-game-button" type="button" onClick={returnToSetup}>New game</button>
               </div>
             </section>
           )}
         </aside>
       </section>
     </main>
+  );
+}
+
+function MoveCell({ move, currentPly }: { move?: MoveRecord; currentPly: number }) {
+  if (!move) return <span className="score-move empty" aria-hidden="true">—</span>;
+  const detail = `${move.actor} · ${move.source}${move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}`;
+  return (
+    <span
+      className={`score-move${move.ply === currentPly ? " current" : ""}`}
+      aria-label={`${move.color === "w" ? "White" : "Black"} played ${move.san}. ${detail}`}
+      title={detail}
+    >
+      <strong>{move.san}</strong>
+    </span>
   );
 }
 
@@ -654,6 +774,87 @@ function describeGame(game: Chess, running: boolean, thinking: string | null): s
   const side = game.turn() === "w" ? "White" : "Black";
   if (thinking) return `${side} to move · calculating`;
   return `${side} to move${game.isCheck() ? " · check" : ""}${running ? "" : " · paused"}`;
+}
+
+function pairMoves(moves: MoveRecord[]) {
+  const rows: Array<{ number: number; white?: MoveRecord; black?: MoveRecord }> = [];
+  for (const move of moves) {
+    const index = Math.floor((move.ply - 1) / 2);
+    const row = rows[index] ?? { number: index + 1 };
+    if (move.color === "w") row.white = move;
+    else row.black = move;
+    rows[index] = row;
+  }
+  return rows;
+}
+
+function recordsFromGame(game: Chess, white: string, black: string): MoveRecord[] {
+  return game.history({ verbose: true }).map((move, index) => ({
+    ply: index + 1,
+    san: move.san,
+    actor: move.color === "w" ? white : black,
+    source: "Shared PGN",
+    elapsedMs: null,
+    from: move.from,
+    to: move.to,
+    color: move.color,
+    captured: move.captured,
+  }));
+}
+
+function describePgnResult(game: Chess): string | null {
+  if (game.isGameOver()) return null;
+  const result = game.getHeaders().Result;
+  if (result === "1-0") return "White wins";
+  if (result === "0-1") return "Black wins";
+  if (result === "1/2-1/2") return "Draw";
+  return null;
+}
+
+function createSharePgn(
+  game: Chess,
+  players: Players,
+  mode: PlayMode,
+  player1Color: Color,
+  humanColor: Color,
+  gameError: string | null,
+): string {
+  const shared = new Chess();
+  for (const san of game.history()) shared.move(san);
+  const priorHeaders = game.getHeaders();
+  const result = resultForShare(game, gameError);
+  shared.setHeader("Event", "ChessGPT Arena");
+  shared.setHeader("Site", window.location.origin);
+  shared.setHeader("White", sanitizePgnHeader(players.w));
+  shared.setHeader("Black", sanitizePgnHeader(players.b));
+  shared.setHeader("Result", result);
+  shared.setHeader("Mode", mode);
+  shared.setHeader("Player1Color", player1Color === "w" ? "White" : "Black");
+  shared.setHeader("HumanColor", humanColor === "w" ? "White" : "Black");
+  shared.setHeader(
+    "Termination",
+    sanitizePgnHeader(gameError ?? priorHeaders.Termination ?? terminationForGame(game)),
+  );
+  return shared.pgn({ maxWidth: 0 });
+}
+
+function resultForShare(game: Chess, gameError: string | null): string {
+  if (game.isCheckmate() || gameError) return game.turn() === "w" ? "0-1" : "1-0";
+  if (game.isDraw()) return "1/2-1/2";
+  return game.getHeaders().Result ?? "*";
+}
+
+function terminationForGame(game: Chess): string {
+  if (game.isCheckmate()) return "checkmate";
+  if (game.isStalemate()) return "stalemate";
+  if (game.isThreefoldRepetition()) return "threefold repetition";
+  if (game.isInsufficientMaterial()) return "insufficient material";
+  if (game.isDrawByFiftyMoves()) return "fifty-move rule";
+  return "draw";
+}
+
+function sanitizePgnHeader(value: string): string {
+  return value.replace(/[\\\r\n]+/g, " ").replaceAll('"', "'").trim().slice(0, 160);
 }
 
 function oppositeColor(color: Color): Color {
