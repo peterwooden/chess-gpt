@@ -770,7 +770,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         <div className="arena-nav-links"><Link href="/history">History</Link></div>
       </nav>
 
-      <section className="arena-workspace" aria-label="Chess arena">
+      <section className={`arena-workspace ${gameStarted ? "game-mode" : "setup-mode"}`} aria-label="Chess arena">
         <div className="board-stage">
           <div className={`board-frame${gameStarted ? " with-players" : ""}`}>
             {gameStarted ? <PlayerStrip {...topPlayerSummary} /> : null}

@@ -944,6 +944,21 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
     min-height: 0;
     padding: 0.35rem 0;
   }
+  .arena-workspace.setup-mode {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .arena-workspace.setup-mode .arena-sidebar {
+    flex: none;
+    overflow: visible;
+    min-height: auto;
+  }
+  .arena-workspace.setup-mode .setup-pane {
+    overflow: visible;
+    min-height: 0;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
   .arena-page-v2 .board-stage { flex: none; }
   .arena-page-v2 .player-strip {
     grid-template-columns: minmax(0, 1fr) auto;

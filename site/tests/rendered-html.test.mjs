@@ -304,3 +304,15 @@ test("arena has a single-viewport laptop workspace", async () => {
   assert.match(playerBoardRule, /width:\s*min\(100%,\s*calc\(100svh - 11\.75rem\)\)/);
   assert.match(boardRule, /height:\s*auto/);
 });
+
+test("mobile setup uses the page-sized workspace as its scroll container", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const mobileStyles = styles.match(/@media \(max-width:\s*959px\)\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
+
+  assert.match(arena, /gameStarted \? "game-mode" : "setup-mode"/);
+  assert.match(mobileStyles, /\.arena-workspace\.setup-mode\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.match(mobileStyles, /\.arena-workspace\.setup-mode \.arena-sidebar\s*\{[^}]*flex:\s*none/s);
+  assert.match(mobileStyles, /-webkit-overflow-scrolling:\s*touch/);
+  assert.match(mobileStyles, /env\(safe-area-inset-bottom\)/);
+});
