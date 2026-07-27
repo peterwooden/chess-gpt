@@ -191,7 +191,10 @@ test("arena can review every played position without leaving the live game", asy
   assert.match(arena, /const displayedGame = isLiveView \? game : gameAtPly\(moves, displayPly\)/);
   assert.match(arena, /aria-label="Move history navigation"/);
   assert.match(arena, /aria-label="Go to starting position"/);
-  assert.match(arena, /aria-label=\{isLiveView \? "Viewing live position" : "Return to live position"\}/);
+  assert.match(arena, /aria-label=\{historyPlaying \? "Pause move history" : "Play move history"\}/);
+  assert.match(arena, /historyPlaying \? "Ⅱ" : "▶"/);
+  assert.match(arena, /window\.setTimeout/);
+  assert.doesNotMatch(arena, /\{gameEnded \? "Final" : "Live"\}/);
   assert.match(arena, /data-ply=\{move\.ply\}/);
   assert.match(arena, /onClick=\{\(\) => onSelect\(move\.ply\)\}/);
   assert.match(arena, /record\.querySelector<HTMLElement>/);

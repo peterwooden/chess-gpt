@@ -739,8 +739,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 }
 .history-navigation button:last-child { border-right: 0; }
 .history-navigation button:hover:not(:disabled) { background: var(--green-soft); }
-.history-navigation .history-live { color: var(--white); background: var(--amber); font-size: 0.52rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.history-navigation .history-live:hover { background: #9f4f2a; }
+.history-navigation .history-playback { font-size: 0.85rem; }
+.history-navigation .history-playback[aria-pressed="true"] { background: var(--green-soft); }
 .history-navigation button:disabled { color: var(--line); cursor: default; }
 .review-progress { display: grid; flex: none; gap: 0.35rem; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--green); }
 .review-progress > div { overflow: hidden; height: 0.24rem; background: var(--green-soft); }

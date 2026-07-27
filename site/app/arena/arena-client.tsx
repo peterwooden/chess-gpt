@@ -123,6 +123,7 @@ export default function ArenaClient() {
   const [, setGameVersion] = useState(0);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
   const [viewedPly, setViewedPly] = useState<number | null>(null);
+  const [historyPlaying, setHistoryPlaying] = useState(false);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<PromotionChoice | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
@@ -202,6 +203,23 @@ export default function ArenaClient() {
       record.scrollTop = rowBottom - record.clientHeight;
     }
   }, [moves.length, viewedPly]);
+
+  useEffect(() => {
+    if (!historyPlaying) return;
+    if (moves.length === 0) {
+      setHistoryPlaying(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (viewedPly === null || viewedPly >= moves.length - 1) {
+        setViewedPly(null);
+        setHistoryPlaying(false);
+      } else {
+        setViewedPly(viewedPly + 1);
+      }
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [historyPlaying, moves.length, viewedPly]);
 
   useEffect(() => () => {
     loadEpoch.current.a += 1;
@@ -352,6 +370,7 @@ export default function ArenaClient() {
     } as Players);
     setMoves([]);
     setViewedPly(null);
+    setHistoryPlaying(false);
     setSelectedSquare(null);
     setPromotion(null);
     setThinking(null);
@@ -501,9 +520,22 @@ export default function ArenaClient() {
   }
 
   function showPosition(ply: number | null) {
+    setHistoryPlaying(false);
     setSelectedSquare(null);
     setPromotion(null);
     setViewedPly(ply === null || ply >= moves.length ? null : Math.max(0, ply));
+  }
+
+  function toggleHistoryPlayback() {
+    if (historyPlaying) {
+      setHistoryPlaying(false);
+      return;
+    }
+    if (moves.length === 0) return;
+    setSelectedSquare(null);
+    setPromotion(null);
+    setViewedPly((current) => current === null ? 0 : current);
+    setHistoryPlaying(true);
   }
 
   function returnToSetup() {
@@ -523,6 +555,7 @@ export default function ArenaClient() {
     setThinking(null);
     setMoves([]);
     setViewedPly(null);
+    setHistoryPlaying(false);
     setSelectedSquare(null);
     setPromotion(null);
     setGameError(null);
@@ -735,13 +768,14 @@ export default function ArenaClient() {
                   <span aria-hidden="true">‹</span>
                 </button>
                 <button
-                  className="history-live"
+                  className="history-playback"
                   type="button"
-                  aria-label={isLiveView ? "Viewing live position" : "Return to live position"}
-                  aria-pressed={isLiveView}
-                  onClick={() => showPosition(null)}
+                  aria-label={historyPlaying ? "Pause move history" : "Play move history"}
+                  aria-pressed={historyPlaying}
+                  onClick={toggleHistoryPlayback}
+                  disabled={moves.length === 0}
                 >
-                  {gameEnded ? "Final" : "Live"}
+                  <span aria-hidden="true">{historyPlaying ? "Ⅱ" : "▶"}</span>
                 </button>
                 <button
                   type="button"
