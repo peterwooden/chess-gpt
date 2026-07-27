@@ -562,7 +562,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   letter-spacing: -0.035em;
   text-decoration: none;
 }
-.arena-page-v2 .arena-nav > span { font-size: 0.58rem; }
 .arena-workspace {
   display: grid;
   grid-column: 1;

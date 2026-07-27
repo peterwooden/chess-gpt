@@ -488,7 +488,6 @@ export default function ArenaClient() {
     <main className="arena-page arena-page-v2">
       <nav className="arena-nav" aria-label="Arena navigation">
         <Link href="/" className="arena-title">ChessGPT arena</Link>
-        <span>Runs locally in your browser</span>
       </nav>
 
       <section className="arena-workspace" aria-label="Chess arena">
