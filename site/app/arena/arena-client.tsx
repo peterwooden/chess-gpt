@@ -33,6 +33,16 @@ const PIECES: Record<Color, Record<PieceSymbol, string>> = {
 };
 const CAPTURE_VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const CAPTURE_ORDER: PieceSymbol[] = ["q", "r", "b", "n", "p"];
+const POSITIVE_JUDGEMENTS = ["brilliant", "good", "interesting"] as const;
+const NEGATIVE_JUDGEMENTS = ["inaccuracy", "mistake", "blunder"] as const;
+const JUDGEMENT_META: Record<ReviewJudgement, { glyph: string; label: string; plural: string }> = {
+  brilliant: { glyph: "!!", label: "Brilliant", plural: "brilliant moves" },
+  good: { glyph: "!", label: "Good", plural: "good moves" },
+  interesting: { glyph: "!?", label: "Interesting", plural: "interesting moves" },
+  inaccuracy: { glyph: "?!", label: "Inaccuracy", plural: "inaccuracies" },
+  mistake: { glyph: "?", label: "Mistake", plural: "mistakes" },
+  blunder: { glyph: "??", label: "Blunder", plural: "blunders" },
+};
 
 type ModelSlot = {
   reference: string;
@@ -860,8 +870,10 @@ function MoveCell({
       <strong>{move.san}</strong>
       {review?.judgement ? (
         <>
-          <ReviewPill judgement={review.judgement} count={null} />
-          <small className="review-loss">−{Math.round(review.winningChanceLoss)}%</small>
+          <ReviewPill judgement={review.judgement} />
+          {review.winningChanceLoss >= 0.5 ? (
+            <small className="review-loss">−{Math.round(review.winningChanceLoss)}%</small>
+          ) : null}
         </>
       ) : null}
     </button>
@@ -905,32 +917,56 @@ function PlayerReviewSummary({ color, review }: { color: string; review: PlayerR
     <div className="review-player">
       <span>{color}</span>
       <strong><b>{Math.round(review.accuracy)}%</b> accuracy</strong>
-      <div className="review-pills">
-        {(["inaccuracy", "mistake", "blunder"] as const).map((judgement) => (
-          <ReviewPill judgement={judgement} count={review.counts[judgement]} key={judgement} />
-        ))}
+      <div className="review-categories">
+        <ReviewGroup label="Good" judgements={POSITIVE_JUDGEMENTS} review={review} />
+        <ReviewGroup label="Errors" judgements={NEGATIVE_JUDGEMENTS} review={review} />
       </div>
     </div>
   );
 }
 
-function ReviewPill({ judgement, count }: { judgement: ReviewJudgement; count: number | null }) {
-  const glyph = judgement === "inaccuracy" ? "?!" : judgement === "mistake" ? "?" : "??";
-  const active = count === null || count > 0;
-  const label = count === null
-    ? judgementName(judgement)
-    : `${count} ${count === 1
-      ? judgementName(judgement)
-      : judgement === "inaccuracy" ? "Inaccuracies" : `${judgementName(judgement)}s`}`;
+function ReviewGroup({
+  label,
+  judgements,
+  review,
+}: {
+  label: string;
+  judgements: readonly ReviewJudgement[];
+  review: PlayerReview;
+}) {
   return (
-    <span className={`review-pill ${judgement}${active ? " active" : " inactive"}`} aria-label={label} title={label}>
-      {glyph}{count === null ? "" : ` ${count}`}
+    <div className="review-group">
+      <small>{label}</small>
+      {judgements.map((judgement) => {
+        const count = review.counts[judgement];
+        const meta = JUDGEMENT_META[judgement];
+        const countLabel = `${count} ${count === 1 ? meta.label.toLowerCase() : meta.plural}`;
+        return (
+          <div className={`review-stat${count > 0 ? "" : " inactive"}`} aria-label={countLabel} title={countLabel} key={judgement}>
+            <ReviewPill judgement={judgement} inactive={count === 0} />
+            <span>{meta.label}</span>
+            <b>{count}</b>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReviewPill({ judgement, inactive = false }: { judgement: ReviewJudgement; inactive?: boolean }) {
+  const meta = JUDGEMENT_META[judgement];
+  return (
+    <span
+      className={`review-pill ${judgement} ${inactive ? "inactive" : "active"}`}
+      aria-hidden="true"
+    >
+      {meta.glyph}
     </span>
   );
 }
 
 function judgementName(judgement: ReviewJudgement): string {
-  return judgement[0].toUpperCase() + judgement.slice(1);
+  return JUDGEMENT_META[judgement].label;
 }
 
 function PlayerStrip({ color, name, captured, lead }: PlayerStripProps) {

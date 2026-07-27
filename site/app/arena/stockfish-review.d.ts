@@ -1,4 +1,10 @@
-export type ReviewJudgement = "inaccuracy" | "mistake" | "blunder";
+export type ReviewJudgement =
+  | "brilliant"
+  | "good"
+  | "interesting"
+  | "inaccuracy"
+  | "mistake"
+  | "blunder";
 
 export type MoveReview = {
   ply: number;
@@ -31,8 +37,18 @@ export function analyzeGameWithStockfish(
   signal?: AbortSignal,
 ): Promise<GameReview>;
 export function buildGameReview(
-  evaluations: Array<{ whiteScore: number; bestMoveSan?: string | null }>,
+  evaluations: Array<{
+    whiteScore: number;
+    bestMoveSan?: string | null;
+    bestMoveGap?: number;
+  }>,
+  sanHistory?: readonly string[],
 ): GameReview;
 export function winPercentFromCentiPawns(centiPawns: number): number;
 export function moveAccuracy(before: number, after: number): number;
 export function classifyWinningChanceLoss(loss: number): ReviewJudgement | null;
+export function classifyPgnJudgement(
+  loss: number,
+  isBestMove: boolean,
+  bestMoveGap?: number,
+): ReviewJudgement;

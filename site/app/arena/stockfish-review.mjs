@@ -27,6 +27,11 @@ export async function analyzeGameWithStockfish(sanHistory, onProgress = () => {}
         bestMoveSan: evaluation.bestMoveUci
           ? uciToSan(position.fen, evaluation.bestMoveUci)
           : null,
+        bestMoveGap: bestMoveGapForSideToMove(
+          evaluation.whiteScore,
+          evaluation.secondBestWhiteScore,
+          position.game.turn(),
+        ),
       });
       onProgress({ completed: index + 1, total: positions.length });
     }
@@ -34,10 +39,10 @@ export async function analyzeGameWithStockfish(sanHistory, onProgress = () => {}
     engine.dispose();
   }
 
-  return buildGameReview(evaluations);
+  return buildGameReview(evaluations, sanHistory);
 }
 
-export function buildGameReview(evaluations) {
+export function buildGameReview(evaluations, sanHistory = []) {
   if (evaluations.length < 2) throw new Error("A game review needs at least one move.");
   const winPercents = evaluations.map(({ whiteScore }) => winPercentFromCentiPawns(whiteScore));
   const moves = [];
@@ -47,13 +52,15 @@ export function buildGameReview(evaluations) {
     const before = color === "w" ? winPercents[index] : 100 - winPercents[index];
     const after = color === "w" ? winPercents[index + 1] : 100 - winPercents[index + 1];
     const loss = Math.max(0, before - after);
+    const bestMoveSan = evaluations[index].bestMoveSan ?? null;
+    const isBestMove = bestMoveSan !== null && sanHistory[index] === bestMoveSan;
     moves.push({
       ply: index + 1,
       color,
       accuracy: moveAccuracy(before, after),
       winningChanceLoss: loss,
-      judgement: classifyWinningChanceLoss(loss),
-      bestMoveSan: evaluations[index].bestMoveSan ?? null,
+      judgement: classifyPgnJudgement(loss, isBestMove, evaluations[index].bestMoveGap ?? 0),
+      bestMoveSan,
     });
   }
 
@@ -90,9 +97,24 @@ export function classifyWinningChanceLoss(loss) {
   return null;
 }
 
+export function classifyPgnJudgement(loss, isBestMove, bestMoveGap = 0) {
+  const error = classifyWinningChanceLoss(loss);
+  if (error) return error;
+  if (isBestMove && bestMoveGap >= 10) return "brilliant";
+  if (isBestMove) return "good";
+  return "interesting";
+}
+
 function summarizePlayer(color, moves, winPercents) {
   const playerMoves = moves.filter((move) => move.color === color);
-  const counts = { inaccuracy: 0, mistake: 0, blunder: 0 };
+  const counts = {
+    brilliant: 0,
+    good: 0,
+    interesting: 0,
+    inaccuracy: 0,
+    mistake: 0,
+    blunder: 0,
+  };
   for (const move of playerMoves) {
     if (move.judgement) counts[move.judgement] += 1;
   }
@@ -167,7 +189,19 @@ function parseSearchInfo(line, sideToMove) {
   const rawScore = score[1] === "mate"
     ? Math.sign(Number(score[2])) * 100_000
     : Number(score[2]);
-  return sideToMove === "w" ? rawScore : -rawScore;
+  return {
+    multipv: Number(line.match(/\bmultipv (\d+)/)?.[1] ?? 1),
+    whiteScore: sideToMove === "w" ? rawScore : -rawScore,
+  };
+}
+
+function bestMoveGapForSideToMove(bestWhiteScore, secondBestWhiteScore, sideToMove) {
+  if (secondBestWhiteScore === null || secondBestWhiteScore === undefined) return 0;
+  const bestWhiteChance = winPercentFromCentiPawns(bestWhiteScore);
+  const secondWhiteChance = winPercentFromCentiPawns(secondBestWhiteScore);
+  return sideToMove === "w"
+    ? Math.max(0, bestWhiteChance - secondWhiteChance)
+    : Math.max(0, secondWhiteChance - bestWhiteChance);
 }
 
 function sideToMoveFromFen(fen) {
@@ -178,7 +212,7 @@ class UciEngine {
   constructor(url, signal) {
     this.worker = new Worker(url);
     this.waiter = null;
-    this.latestWhiteScore = null;
+    this.latestWhiteScores = new Map();
     this.sideToMove = "w";
     this.disposed = false;
     this.worker.onmessage = (event) => this.onLine(String(event.data));
@@ -191,11 +225,12 @@ class UciEngine {
   async initialize() {
     await this.commandAndWait("uci", (line) => line === "uciok", ENGINE_READY_TIMEOUT_MS);
     this.worker.postMessage("setoption name Hash value 16");
+    this.worker.postMessage("setoption name MultiPV value 2");
     await this.commandAndWait("isready", (line) => line === "readyok", ENGINE_READY_TIMEOUT_MS);
   }
 
   async analyze(fen, nodes) {
-    this.latestWhiteScore = null;
+    this.latestWhiteScores = new Map();
     this.sideToMove = sideToMoveFromFen(fen);
     this.worker.postMessage(`position fen ${fen}`);
     const bestMoveLine = await this.commandAndWait(
@@ -203,10 +238,12 @@ class UciEngine {
       (line) => line.startsWith("bestmove "),
       ENGINE_SEARCH_TIMEOUT_MS,
     );
-    if (this.latestWhiteScore === null) throw new Error("Stockfish returned no evaluation.");
+    const whiteScore = this.latestWhiteScores.get(1);
+    if (whiteScore === undefined) throw new Error("Stockfish returned no evaluation.");
     const bestMoveUci = bestMoveLine.split(/\s+/)[1];
     return {
-      whiteScore: this.latestWhiteScore,
+      whiteScore,
+      secondBestWhiteScore: this.latestWhiteScores.get(2) ?? null,
       bestMoveUci: bestMoveUci && bestMoveUci !== "(none)" ? bestMoveUci : null,
     };
   }
@@ -226,7 +263,7 @@ class UciEngine {
 
   onLine(line) {
     const score = parseSearchInfo(line, this.sideToMove);
-    if (score !== null) this.latestWhiteScore = score;
+    if (score !== null) this.latestWhiteScores.set(score.multipv, score.whiteScore);
     if (!this.waiter || !this.waiter.matches(line)) return;
     const waiter = this.waiter;
     this.waiter = null;

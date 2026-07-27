@@ -207,14 +207,18 @@ test("completed games receive a compact Stockfish accuracy review", async () => 
 
   assert.match(arena, /analyzeGameWithStockfish/);
   assert.match(arena, /<b>\{Math\.round\(review\.accuracy\)\}%<\/b> accuracy/);
+  assert.match(arena, /\["brilliant", "good", "interesting"\]/);
   assert.match(arena, /\["inaccuracy", "mistake", "blunder"\]/);
-  assert.match(arena, /count === null \|\| count > 0/);
+  assert.match(arena, /<ReviewGroup label="Good"/);
+  assert.match(arena, /<ReviewGroup label="Errors"/);
   assert.match(arena, /review\.counts\[judgement\]/);
   assert.match(review, /STOCKFISH_NODES_PER_POSITION = 30_000/);
   assert.match(review, /loss >= 30/);
   assert.match(review, /loss >= 20/);
   assert.match(review, /loss >= 10/);
   assert.match(styles, /\.review-pill\.blunder\.active\s*\{[^}]*background:/s);
+  assert.match(styles, /\.review-categories\s*\{[^}]*grid-template-columns:\s*1fr 1fr/s);
+  assert.match(styles, /\.review-stat\s*\{[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\) auto/s);
   assert.match(styles, /\.review-pill\.inactive\s*\{[^}]*background:/s);
 });
 
