@@ -207,7 +207,8 @@ test("completed games receive a compact Stockfish accuracy review", async () => 
 
   assert.match(arena, /analyzeGameWithStockfish/);
   assert.match(arena, /<b>\{Math\.round\(review\.accuracy\)\}%<\/b> accuracy/);
-  assert.match(arena, /\["brilliant", "good", "interesting"\]/);
+  assert.match(arena, /\["brilliant", "good"\]/);
+  assert.doesNotMatch(arena, /interesting/i);
   assert.match(arena, /\["inaccuracy", "mistake", "blunder"\]/);
   assert.match(arena, /<ReviewGroup label="Good"/);
   assert.match(arena, /<ReviewGroup label="Errors"/);

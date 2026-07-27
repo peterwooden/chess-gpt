@@ -102,7 +102,7 @@ export function classifyPgnJudgement(loss, isBestMove, bestMoveGap = 0) {
   if (error) return error;
   if (isBestMove && bestMoveGap >= 10) return "brilliant";
   if (isBestMove) return "good";
-  return "interesting";
+  return null;
 }
 
 function summarizePlayer(color, moves, winPercents) {
@@ -110,7 +110,6 @@ function summarizePlayer(color, moves, winPercents) {
   const counts = {
     brilliant: 0,
     good: 0,
-    interesting: 0,
     inaccuracy: 0,
     mistake: 0,
     blunder: 0,

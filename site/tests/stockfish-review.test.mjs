@@ -24,10 +24,10 @@ test("error annotations use the agreed winning-chance loss thresholds", () => {
   assert.equal(classifyWinningChanceLoss(30), "blunder");
 });
 
-test("PGN-style positive annotations distinguish critical, best, and sound moves", () => {
+test("PGN-style positive annotations distinguish critical and best moves", () => {
   assert.equal(classifyPgnJudgement(0, true, 10), "brilliant");
   assert.equal(classifyPgnJudgement(0, true, 9.99), "good");
-  assert.equal(classifyPgnJudgement(9.99, false), "interesting");
+  assert.equal(classifyPgnJudgement(9.99, false), null);
   assert.equal(classifyPgnJudgement(10, true, 50), "inaccuracy");
 });
 

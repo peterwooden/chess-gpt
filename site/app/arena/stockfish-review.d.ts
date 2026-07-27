@@ -1,7 +1,6 @@
 export type ReviewJudgement =
   | "brilliant"
   | "good"
-  | "interesting"
   | "inaccuracy"
   | "mistake"
   | "blunder";
@@ -51,4 +50,4 @@ export function classifyPgnJudgement(
   loss: number,
   isBestMove: boolean,
   bestMoveGap?: number,
-): ReviewJudgement;
+): ReviewJudgement | null;

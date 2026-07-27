@@ -33,12 +33,11 @@ const PIECES: Record<Color, Record<PieceSymbol, string>> = {
 };
 const CAPTURE_VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
 const CAPTURE_ORDER: PieceSymbol[] = ["q", "r", "b", "n", "p"];
-const POSITIVE_JUDGEMENTS = ["brilliant", "good", "interesting"] as const;
+const POSITIVE_JUDGEMENTS = ["brilliant", "good"] as const;
 const NEGATIVE_JUDGEMENTS = ["inaccuracy", "mistake", "blunder"] as const;
 const JUDGEMENT_META: Record<ReviewJudgement, { glyph: string; label: string; plural: string }> = {
   brilliant: { glyph: "!!", label: "Brilliant", plural: "brilliant moves" },
   good: { glyph: "!", label: "Good", plural: "good moves" },
-  interesting: { glyph: "!?", label: "Interesting", plural: "interesting moves" },
   inaccuracy: { glyph: "?!", label: "Inaccuracy", plural: "inaccuracies" },
   mistake: { glyph: "?", label: "Mistake", plural: "mistakes" },
   blunder: { glyph: "??", label: "Blunder", plural: "blunders" },
