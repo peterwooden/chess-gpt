@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ensureHumanPlayer } from "../../lib/history";
 import { getChatGPTUser } from "../chatgpt-auth";
 import ArenaClient from "./arena-client";
 
@@ -11,5 +12,6 @@ export const metadata: Metadata = {
 
 export default async function ArenaPage() {
   const user = await getChatGPTUser();
-  return <ArenaClient viewer={{ signedIn: Boolean(user), name: user?.fullName ?? null }} />;
+  const profile = user ? await ensureHumanPlayer(user) : null;
+  return <ArenaClient viewer={{ signedIn: Boolean(user), name: profile?.name ?? null, profileId: profile?.id ?? null }} />;
 }

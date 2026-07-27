@@ -48,6 +48,7 @@ type ModelSlot = {
   phase: "idle" | "loading" | "ready" | "error";
   progress: LoadProgress | null;
   model: BrowserChessModel | null;
+  profileId: string | null;
   error: string | null;
 };
 
@@ -108,14 +109,14 @@ type ReviewState = {
 };
 
 function emptySlot(): ModelSlot {
-  return { reference: "", phase: "idle", progress: null, model: null, error: null };
+  return { reference: "", phase: "idle", progress: null, model: null, profileId: null, error: null };
 }
 
 function emptyReview(): ReviewState {
   return { phase: "idle", progress: null, result: null, error: null };
 }
 
-export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; name: string | null } }) {
+export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; name: string | null; profileId: string | null } }) {
   const gameRef = useRef(new Chess());
   const moveRecordRef = useRef<HTMLOListElement>(null);
   const gameEpoch = useRef(0);
@@ -404,12 +405,18 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       gameEpoch.current += 1;
       const requestId = ++loadEpoch.current[slot];
       await current.model?.dispose();
-      setSlot((value) => ({ ...value, phase: "loading", progress: null, model: null, error: null }));
+      setSlot((value) => ({ ...value, phase: "loading", progress: null, model: null, profileId: null, error: null }));
+      let loaded: BrowserChessModel | null = null;
       try {
-        const loaded = await loadBrowserModel(current.reference, (progress) => {
+        loaded = await loadBrowserModel(current.reference, (progress) => {
           if (loadEpoch.current[slot] !== requestId) return;
           setSlot((value) => ({ ...value, progress }));
         });
+        if (loadEpoch.current[slot] !== requestId) {
+          await loaded.dispose();
+          return;
+        }
+        const profile = await resolveModelProfile(loaded.info.reference);
         if (loadEpoch.current[slot] !== requestId) {
           await loaded.dispose();
           return;
@@ -426,15 +433,18 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
           phase: "ready",
           progress: null,
           model: loaded,
+          profileId: profile.id,
           error: null,
         }));
       } catch (error) {
+        await loaded?.dispose();
         if (loadEpoch.current[slot] !== requestId) return;
         setSlot((value) => ({
           ...value,
           phase: "error",
           progress: null,
           model: null,
+          profileId: null,
           error: error instanceof Error ? error.message : "The model could not be loaded.",
         }));
       }
@@ -487,7 +497,12 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       [resolvedPlayer1Color]: nextPlayer1Name,
       [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Name,
     } as Players);
-    setPlayerProfiles({ w: null, b: null });
+    const nextPlayer1Profile = modelA.model ? modelA.profileId : viewer.profileId;
+    const nextPlayer2Profile = modelB.model ? modelB.profileId : viewer.profileId;
+    setPlayerProfiles({
+      [resolvedPlayer1Color]: nextPlayer1Profile,
+      [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Profile,
+    } as PlayerProfiles);
     setRecordingEnabled(true);
     setSaveState({ phase: "idle", gameId: null, message: "" });
     setMoves([]);
@@ -1242,7 +1257,9 @@ function ModelLoader({
       ) : null}
       {slot.model ? (
         <div className="model-summary">
-          <strong>{slot.model.info.name}</strong>
+          {slot.profileId
+            ? <Link href={`/players/${slot.profileId}`}><strong>{slot.model.info.name}</strong></Link>
+            : <strong>{slot.model.info.name}</strong>}
           <span>{slot.model.info.runtime} · {formatBytes(slot.model.info.artifactBytes)} · {slot.model.info.pinned ? "Pinned" : "Mutable"}</span>
           <code title={`SHA-256 ${slot.model.info.digest}`}>SHA {slot.model.info.digest.slice(0, 12)}…</code>
         </div>
@@ -1250,6 +1267,19 @@ function ModelLoader({
       {slot.error ? <p className="model-error" role="alert">{slot.error}</p> : null}
     </article>
   );
+}
+
+async function resolveModelProfile(reference: string): Promise<{ id: string; name: string }> {
+  const response = await fetch("/api/players/resolve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reference }),
+  });
+  const payload = await response.json() as { id?: unknown; name?: unknown; error?: unknown };
+  if (!response.ok || typeof payload.id !== "string" || typeof payload.name !== "string") {
+    throw new Error(typeof payload.error === "string" ? payload.error : "The model history profile could not be resolved.");
+  }
+  return { id: payload.id, name: payload.name };
 }
 
 function gameAtPly(moves: MoveRecord[], ply: number): Chess {

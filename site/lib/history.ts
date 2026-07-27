@@ -55,6 +55,11 @@ type StoredParticipant = {
   name: string;
 };
 
+export type ParticipantProfile = {
+  id: string;
+  name: string;
+};
+
 type DirectoryRow = PublicPlayer & {
   games: number;
   wins: number;
@@ -229,7 +234,15 @@ async function resolveParticipant(input: ParticipantInput, user: ChatGPTUser | n
   return getOrCreateModel(input.reference);
 }
 
-async function getOrCreateHuman(user: ChatGPTUser): Promise<StoredParticipant> {
+export async function ensureHumanPlayer(user: ChatGPTUser): Promise<ParticipantProfile> {
+  return getOrCreateHuman(user);
+}
+
+export async function ensureModelPlayer(reference: string): Promise<ParticipantProfile> {
+  return getOrCreateModel(reference);
+}
+
+async function getOrCreateHuman(user: ChatGPTUser): Promise<ParticipantProfile> {
   const secret = (await getRuntimeEnvironment()).PLAYER_ID_HMAC_SECRET
     ?? process.env.PLAYER_ID_HMAC_SECRET;
   if (!secret) throw new HistoryError(500, "Player identity is not configured.");
@@ -248,7 +261,7 @@ async function getOrCreateHuman(user: ChatGPTUser): Promise<StoredParticipant> {
   return (await findPlayer(identityKey)) ?? { id, name };
 }
 
-async function getOrCreateModel(reference: string): Promise<StoredParticipant> {
+async function getOrCreateModel(reference: string): Promise<ParticipantProfile> {
   if (typeof reference !== "string" || reference.length > 300) throw new HistoryError(400, "Invalid model reference.");
   const resolved = await resolveHuggingFaceReference(reference);
   const identityKey = `model:${resolved.reference}`;
