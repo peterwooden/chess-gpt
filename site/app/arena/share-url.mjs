@@ -41,7 +41,10 @@ export function withSharedModelReference(input, slot, reference) {
  */
 export function readSharedPgn(input) {
   const pgn = new URL(input).searchParams.get(PGN_PARAMETER);
-  return pgn?.trim() ? pgn : null;
+  if (!pgn?.trim()) return null;
+  // chess.js 1.4 rejects digits in custom PGN tag names. Preserve links
+  // generated before the arena renamed this tag.
+  return pgn.replace(/^\[Player1Color\s/m, "[PlayerOneColor ");
 }
 
 /**

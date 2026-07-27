@@ -174,6 +174,8 @@ test("arena uses a compact score sheet and shares completed games as PGN", async
   assert.match(arena, /Models \+ PGN/);
   assert.match(arena, /readSharedPgn/);
   assert.match(arena, /restored\.loadPgn\(sharedPgn\)/);
+  assert.match(arena, /PlayerOneColor/);
+  assert.doesNotMatch(arena, /setHeader\("Player1Color"/);
   assert.match(styles, /grid-template-columns:\s*2\.5rem minmax\(0, 1fr\) minmax\(0, 1fr\)/);
   assert.match(arena, /aria-expanded=\{shareOpen\}/);
   assert.match(styles, /\.share-options\s*\{[^}]*position:\s*static/s);

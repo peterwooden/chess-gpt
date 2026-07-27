@@ -126,7 +126,7 @@ export default function ArenaClient() {
         setMoves(recordsFromGame(restored, headers.White ?? "White", headers.Black ?? "Black"));
         setPlayers({ w: headers.White ?? "White", b: headers.Black ?? "Black" });
         setMode(headers.Mode === "models" ? "models" : "human");
-        setPlayer1Color(headers.Player1Color === "Black" ? "b" : "w");
+        setPlayer1Color(headers.PlayerOneColor === "Black" ? "b" : "w");
         setHumanColor(headers.HumanColor === "Black" ? "b" : "w");
         setFinishedStatus(describePgnResult(restored));
         setGameStarted(true);
@@ -839,7 +839,7 @@ function createSharePgn(
   shared.setHeader("Black", sanitizePgnHeader(players.b));
   shared.setHeader("Result", result);
   shared.setHeader("Mode", mode);
-  shared.setHeader("Player1Color", player1Color === "w" ? "White" : "Black");
+  shared.setHeader("PlayerOneColor", player1Color === "w" ? "White" : "Black");
   shared.setHeader("HumanColor", humanColor === "w" ? "White" : "Black");
   shared.setHeader(
     "Termination",

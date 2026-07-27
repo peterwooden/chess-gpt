@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Chess } from "chess.js";
 
 import {
   buildArenaShareUrl,
@@ -62,4 +63,16 @@ test("a models-only share removes stale PGN and empty model slots", () => {
     "https://example.test/arena?modelA=alice%2Fmodel%40abc123",
   );
   assert.equal(readSharedPgn(shared), null);
+});
+
+test("legacy shared PGN with Player1Color remains loadable", () => {
+  const legacyPgn = `[Event "ChessGPT Arena"]\n[White "Model"]\n[Black "Human"]\n[Result "0-1"]\n[Player1Color "White"]\n[HumanColor "Black"]\n\n1. f3 e5 2. g4 Qh4# 0-1`;
+  const url = new URL("https://example.test/arena");
+  url.searchParams.set("pgn", legacyPgn);
+  const restoredPgn = readSharedPgn(url);
+  const game = new Chess();
+
+  assert.doesNotThrow(() => game.loadPgn(restoredPgn));
+  assert.equal(game.getHeaders().PlayerOneColor, "White");
+  assert.equal(game.isCheckmate(), true);
 });
