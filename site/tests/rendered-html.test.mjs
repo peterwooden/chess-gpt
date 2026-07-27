@@ -156,8 +156,9 @@ test("arena consolidates match status in the move pane", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
 
   assert.doesNotMatch(arena, /className="game-status"/);
-  assert.match(arena, /<span>\{mode === "human" \? "Human match" : "Model match"\}<\/span>/);
-  assert.match(arena, /<strong aria-live="polite">\{status\}<\/strong>/);
+  assert.match(arena, /\{mode === "human" \? "Human match" : "Model match"\}/);
+  assert.match(arena, /live at move \$\{Math\.ceil\(moves\.length \/ 2\)\}/);
+  assert.match(arena, /<strong aria-live="polite">\{displayedStatus\}<\/strong>/);
   assert.match(arena, /className="move-header-meta"/);
   assert.match(arena, /\{history\.length\} plies/);
 });
@@ -180,6 +181,23 @@ test("arena uses a compact score sheet and shares completed games as PGN", async
   assert.match(arena, /aria-expanded=\{shareOpen\}/);
   assert.match(styles, /\.share-options\s*\{[^}]*position:\s*static/s);
   assert.doesNotMatch(styles, /\.share-menu > div\s*\{[^}]*position:\s*absolute/s);
+});
+
+test("arena can review every played position without leaving the live game", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(arena, /const \[viewedPly, setViewedPly\] = useState<number \| null>\(null\)/);
+  assert.match(arena, /const displayedGame = isLiveView \? game : gameAtPly\(moves, displayPly\)/);
+  assert.match(arena, /aria-label="Move history navigation"/);
+  assert.match(arena, /aria-label="Go to starting position"/);
+  assert.match(arena, /aria-label=\{isLiveView \? "Viewing live position" : "Return to live position"\}/);
+  assert.match(arena, /data-ply=\{move\.ply\}/);
+  assert.match(arena, /onClick=\{\(\) => onSelect\(move\.ply\)\}/);
+  assert.match(arena, /record\.querySelector<HTMLElement>/);
+  assert.match(styles, /\.history-navigation\s*\{[^}]*border-bottom:\s*1px solid var\(--green\)/s);
+  assert.match(styles, /\.move-record\s*\{[^}]*position:\s*relative/s);
+  assert.match(styles, /@media \(max-width:\s*959px\)[\s\S]*\.arena-sidebar\s*\{[^}]*flex:\s*1/s);
 });
 
 test("arena enforces a narrow, revision-aware model contract", async () => {

@@ -271,10 +271,13 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .move-score-heading, .move-record li { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) minmax(0, 1fr); }
 .move-score-heading { flex: none; align-items: center; min-height: 2rem; padding: 0 0.75rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.56rem; font-weight: 850; letter-spacing: 0.06em; text-transform: uppercase; }
 .move-score-heading b { font-size: inherit; }
-.move-record { overflow-y: auto; max-height: min(65svh, 38rem); margin: 0; padding: 0; list-style: none; }
+.move-record { position: relative; overflow-y: auto; max-height: min(65svh, 38rem); margin: 0; padding: 0; list-style: none; }
 .move-record li { align-items: stretch; min-height: 2.15rem; border-bottom: 1px solid var(--line); }
 .move-record li > span:first-child { align-self: center; padding-left: 0.75rem; color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.62rem; }
-.score-move { display: flex; overflow: hidden; align-items: center; min-width: 0; padding: 0.3rem 0.55rem; border-left: 1px solid var(--line); font-family: ui-monospace, monospace; }
+.score-move { display: flex; overflow: hidden; align-items: center; min-width: 0; padding: 0.3rem 0.55rem; border: 0; border-left: 1px solid var(--line); color: inherit; background: transparent; font-family: ui-monospace, monospace; text-align: left; }
+.score-move:not(.empty) { cursor: pointer; }
+.score-move:not(.empty):hover { background: var(--green-soft); }
+.score-move:focus-visible { position: relative; z-index: 1; outline-offset: -3px; }
 .score-move strong { overflow: hidden; font-size: 0.78rem; white-space: nowrap; text-overflow: ellipsis; }
 .score-move.current { background: var(--green-soft); box-shadow: inset 0 -0.16rem var(--amber); }
 .score-move.empty { color: var(--line); }
@@ -710,6 +713,28 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .arena-page-v2 .move-console > header { min-height: 3.6rem; padding: 0.55rem 0.75rem; }
 .arena-page-v2 .move-header-meta { display: flex; gap: 0.55rem; align-items: center; justify-content: flex-end; }
 .move-header-meta small { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.58rem; white-space: nowrap; }
+.move-header-meta .history-view-label { padding: 0.22rem 0.35rem; border: 1px solid var(--amber); color: var(--amber); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.history-navigation {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  flex: none;
+  border-bottom: 1px solid var(--green);
+}
+.history-navigation button {
+  min-height: 2.75rem;
+  border: 0;
+  border-right: 1px solid var(--line);
+  color: var(--green);
+  background: transparent;
+  font-size: 1.15rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.history-navigation button:last-child { border-right: 0; }
+.history-navigation button:hover:not(:disabled) { background: var(--green-soft); }
+.history-navigation .history-live { color: var(--white); background: var(--amber); font-size: 0.52rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.history-navigation .history-live:hover { background: #9f4f2a; }
+.history-navigation button:disabled { color: var(--line); cursor: default; }
 .arena-page-v2 .arena-error { margin: 0.65rem; font-size: 0.68rem; }
 .arena-page-v2 .empty-record { flex: 1; min-height: 9rem; padding: 1rem; }
 .arena-page-v2 .empty-record span { color: var(--line); font-family: ui-monospace, monospace; font-size: 1.5rem; font-weight: 900; }
@@ -745,6 +770,49 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .share-options button:hover { background: var(--green-soft); }
 .share-options strong { font-size: 0.7rem; }
 .share-options span { color: var(--muted); font-size: 0.59rem; font-weight: 600; line-height: 1.35; }
+
+@media (max-width: 959px) {
+  .arena-page-v2 {
+    grid-template-rows: 2.6rem minmax(0, 1fr);
+    overflow: hidden;
+    height: 100svh;
+    min-height: 0;
+  }
+  .arena-page-v2 .arena-nav { position: static; min-height: 2.6rem; padding-inline: 0.6rem; }
+  .arena-page-v2 .arena-title { font-size: 1.05rem; }
+  .arena-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    overflow: hidden;
+    width: calc(100% - 0.75rem);
+    height: 100%;
+    min-height: 0;
+    padding: 0.35rem 0;
+  }
+  .arena-page-v2 .board-stage { flex: none; }
+  .arena-page-v2 .player-strip {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.2rem 0.45rem;
+  }
+  .arena-page-v2 .captured-pieces { justify-content: flex-end; min-height: 1rem; }
+  .arena-page-v2 .captured-piece { font-size: 1rem; }
+  .arena-sidebar { flex: 1; overflow: hidden; min-height: 0; }
+  .setup-pane { overflow-y: auto; min-height: 0; }
+  .arena-page-v2 .move-console { min-height: 0; height: 100%; }
+  .arena-page-v2 .move-console > header { min-height: 2.75rem; padding: 0.35rem 0.55rem; }
+  .arena-page-v2 .move-console > header strong { font-size: 0.9rem; }
+  .arena-page-v2 .move-console > header span { font-size: 0.48rem; }
+  .arena-page-v2 .move-header-meta { gap: 0.3rem; }
+  .history-navigation button { min-height: 2.25rem; }
+  .arena-page-v2 .move-score-heading { min-height: 1.6rem; }
+  .arena-page-v2 .move-record li { min-height: 1.8rem; }
+  .game-controls { padding: 0.45rem; }
+  .game-controls button { min-height: 2.25rem; }
+}
 
 @media (min-width: 960px) and (min-height: 640px) {
   .arena-page-v2 {

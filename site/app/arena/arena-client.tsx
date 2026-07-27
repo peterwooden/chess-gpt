@@ -93,6 +93,7 @@ export default function ArenaClient() {
   const [shareMessage, setShareMessage] = useState("");
   const [, setGameVersion] = useState(0);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
+  const [viewedPly, setViewedPly] = useState<number | null>(null);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<PromotionChoice | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
@@ -151,8 +152,25 @@ export default function ArenaClient() {
 
   useEffect(() => {
     const record = moveRecordRef.current;
-    if (record) record.scrollTop = record.scrollHeight;
-  }, [moves.length]);
+    if (!record) return;
+    if (viewedPly === null) {
+      record.scrollTop = record.scrollHeight;
+      return;
+    }
+    if (viewedPly === 0) {
+      record.scrollTop = 0;
+      return;
+    }
+    const selectedMove = record.querySelector<HTMLElement>(`[data-ply="${viewedPly}"]`);
+    const selectedRow = selectedMove?.closest("li");
+    if (!selectedRow) return;
+    const rowTop = selectedRow.offsetTop;
+    const rowBottom = rowTop + selectedRow.offsetHeight;
+    if (rowTop < record.scrollTop) record.scrollTop = rowTop;
+    else if (rowBottom > record.scrollTop + record.clientHeight) {
+      record.scrollTop = rowBottom - record.clientHeight;
+    }
+  }, [moves.length, viewedPly]);
 
   useEffect(() => () => {
     loadEpoch.current.a += 1;
@@ -163,14 +181,20 @@ export default function ArenaClient() {
 
   const game = gameRef.current;
   const history = game.history();
-  const targetSquares = selectedSquare
+  const isLiveView = viewedPly === null;
+  const displayPly = viewedPly ?? moves.length;
+  const displayedGame = isLiveView ? game : gameAtPly(moves, displayPly);
+  const targetSquares = isLiveView && selectedSquare
     ? new Set(game.moves({ square: selectedSquare, verbose: true }).map((move) => move.to))
     : new Set<Square>();
-  const latestMove = moves.at(-1);
+  const displayedMove = displayPly > 0 ? moves[displayPly - 1] : undefined;
   const orientation: Color = gameStarted && mode === "human" ? humanColor : "w";
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
   const status = finishedStatus ?? describeGame(game, running, thinking);
+  const displayedStatus = isLiveView
+    ? status
+    : describeHistoryPosition(displayPly, displayedMove);
   const gameEnded = game.isGameOver() || finishedStatus !== null;
   const moveRows = pairMoves(moves);
 
@@ -265,6 +289,7 @@ export default function ArenaClient() {
       [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Name,
     } as Players);
     setMoves([]);
+    setViewedPly(null);
     setSelectedSquare(null);
     setPromotion(null);
     setThinking(null);
@@ -342,7 +367,7 @@ export default function ArenaClient() {
   }, [activeModel, mode, playModelMove, thinking]);
 
   function chooseSquare(square: Square) {
-    if (mode !== "human" || !running || thinking || game.turn() !== humanColor) return;
+    if (!isLiveView || mode !== "human" || !running || thinking || game.turn() !== humanColor) return;
     const piece = game.get(square);
     if (!selectedSquare) {
       if (piece?.color === humanColor) setSelectedSquare(square);
@@ -412,6 +437,12 @@ export default function ArenaClient() {
     if (candidate) await playModelMove(candidate.model, candidate.actor);
   }
 
+  function showPosition(ply: number | null) {
+    setSelectedSquare(null);
+    setPromotion(null);
+    setViewedPly(ply === null || ply >= moves.length ? null : Math.max(0, ply));
+  }
+
   function returnToSetup() {
     gameEpoch.current += 1;
     gameRef.current = new Chess();
@@ -427,6 +458,7 @@ export default function ArenaClient() {
     setRunning(false);
     setThinking(null);
     setMoves([]);
+    setViewedPly(null);
     setSelectedSquare(null);
     setPromotion(null);
     setGameError(null);
@@ -438,8 +470,9 @@ export default function ArenaClient() {
     setGameVersion((value) => value + 1);
   }
 
-  const whiteCapturedPieces = capturedPieces(moves, "w");
-  const blackCapturedPieces = capturedPieces(moves, "b");
+  const displayedMoves = moves.slice(0, displayPly);
+  const whiteCapturedPieces = capturedPieces(displayedMoves, "w");
+  const blackCapturedPieces = capturedPieces(displayedMoves, "b");
   const whiteCapturePoints = capturePoints(whiteCapturedPieces);
   const blackCapturePoints = capturePoints(blackCapturedPieces);
   const materialLead = whiteCapturePoints - blackCapturePoints;
@@ -498,11 +531,11 @@ export default function ArenaClient() {
               {boardRanks.flatMap((rank) =>
                 boardFiles.map((file) => {
                   const square = `${file}${rank}` as Square;
-                  const piece = game.get(square);
+                  const piece = displayedGame.get(square);
                   const light = (FILES.indexOf(file) + rank) % 2 === 1;
                   const selected = square === selectedSquare;
                   const target = targetSquares.has(square);
-                  const last = square === latestMove?.from || square === latestMove?.to;
+                  const last = square === displayedMove?.from || square === displayedMove?.to;
                   return (
                     <button
                       type="button"
@@ -510,6 +543,7 @@ export default function ArenaClient() {
                       aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${pieceName(piece.type)}` : " empty"}`}
                       className={`board-square ${light ? "light" : "dark"}${selected ? " selected" : ""}${target ? " target" : ""}${last ? " last" : ""}`}
                       onClick={() => chooseSquare(square)}
+                      aria-disabled={!isLiveView}
                       key={square}
                     >
                       {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
@@ -601,14 +635,64 @@ export default function ArenaClient() {
             <section className="move-console" aria-label="Game progress">
               <header>
                 <div>
-                  <span>{mode === "human" ? "Human match" : "Model match"}</span>
-                  <strong aria-live="polite">{status}</strong>
+                  <span>
+                    {mode === "human" ? "Human match" : "Model match"}
+                    {!isLiveView && moves.length > 0 ? ` · live at move ${Math.ceil(moves.length / 2)}` : ""}
+                  </span>
+                  <strong aria-live="polite">{displayedStatus}</strong>
                 </div>
                 <div className="move-header-meta">
-                  <small>{history.length} plies · {Math.ceil(history.length / 2)} moves</small>
+                  {isLiveView ? (
+                    <small>{history.length} plies · {Math.ceil(history.length / 2)} moves</small>
+                  ) : (
+                    <small className="history-view-label">History</small>
+                  )}
                   <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
                 </div>
               </header>
+              <nav className="history-navigation" aria-label="Move history navigation">
+                <button
+                  type="button"
+                  aria-label="Go to starting position"
+                  onClick={() => showPosition(0)}
+                  disabled={moves.length === 0 || displayPly === 0}
+                >
+                  <span aria-hidden="true">|‹</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Go to previous position"
+                  onClick={() => showPosition(displayPly - 1)}
+                  disabled={moves.length === 0 || displayPly === 0}
+                >
+                  <span aria-hidden="true">‹</span>
+                </button>
+                <button
+                  className="history-live"
+                  type="button"
+                  aria-label={isLiveView ? "Viewing live position" : "Return to live position"}
+                  aria-pressed={isLiveView}
+                  onClick={() => showPosition(null)}
+                >
+                  Live
+                </button>
+                <button
+                  type="button"
+                  aria-label="Go to next position"
+                  onClick={() => showPosition(displayPly + 1)}
+                  disabled={isLiveView || moves.length === 0}
+                >
+                  <span aria-hidden="true">›</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Go to live position"
+                  onClick={() => showPosition(null)}
+                  disabled={isLiveView || moves.length === 0}
+                >
+                  <span aria-hidden="true">›|</span>
+                </button>
+              </nav>
               {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
               {moves.length === 0 ? (
                 <div className="empty-record">
@@ -624,8 +708,8 @@ export default function ArenaClient() {
                     {moveRows.map((row) => (
                       <li key={row.number}>
                         <span>{row.number}.</span>
-                        <MoveCell move={row.white} currentPly={moves.length} />
-                        <MoveCell move={row.black} currentPly={moves.length} />
+                        <MoveCell move={row.white} currentPly={displayPly} onSelect={showPosition} />
+                        <MoveCell move={row.black} currentPly={displayPly} onSelect={showPosition} />
                       </li>
                     ))}
                   </ol>
@@ -683,17 +767,29 @@ export default function ArenaClient() {
   );
 }
 
-function MoveCell({ move, currentPly }: { move?: MoveRecord; currentPly: number }) {
+function MoveCell({
+  move,
+  currentPly,
+  onSelect,
+}: {
+  move?: MoveRecord;
+  currentPly: number;
+  onSelect: (ply: number) => void;
+}) {
   if (!move) return <span className="score-move empty" aria-hidden="true">—</span>;
   const detail = `${move.actor} · ${move.source}${move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}`;
   return (
-    <span
+    <button
+      type="button"
       className={`score-move${move.ply === currentPly ? " current" : ""}`}
       aria-label={`${move.color === "w" ? "White" : "Black"} played ${move.san}. ${detail}`}
+      aria-pressed={move.ply === currentPly}
+      data-ply={move.ply}
+      onClick={() => onSelect(move.ply)}
       title={detail}
     >
       <strong>{move.san}</strong>
-    </span>
+    </button>
   );
 }
 
@@ -774,6 +870,18 @@ function ModelLoader({
       {slot.error ? <p className="model-error" role="alert">{slot.error}</p> : null}
     </article>
   );
+}
+
+function gameAtPly(moves: MoveRecord[], ply: number): Chess {
+  const game = new Chess();
+  for (const move of moves.slice(0, ply)) game.move(move.san);
+  return game;
+}
+
+function describeHistoryPosition(ply: number, move?: MoveRecord): string {
+  if (ply === 0 || !move) return "Reviewing starting position";
+  const moveNumber = Math.ceil(ply / 2);
+  return `Reviewing move ${moveNumber}${move.color === "w" ? "." : "…"} ${move.san}`;
 }
 
 function describeGame(game: Chess, running: boolean, thinking: string | null): string {
