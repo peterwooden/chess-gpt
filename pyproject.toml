@@ -29,6 +29,7 @@ chess-gpt-package = "chess_gpt.browser_package:main"
 chess-gpt-snapshot-data = "chess_gpt.snapshot_data:main"
 chess-gpt-snapshot-train = "chess_gpt.snapshot_training:main"
 chess-gpt-snapshot-package = "chess_gpt.snapshot_package:main"
+chess-gpt-snapshot-monitor = "chess_gpt.snapshot_monitor:main"
 
 [build-system]
 requires = ["hatchling"]

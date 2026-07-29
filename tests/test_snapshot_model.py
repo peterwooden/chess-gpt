@@ -17,8 +17,9 @@ from chess_gpt.snapshot_model import (
     encode_board,
     move_index,
 )
+from chess_gpt.snapshot_monitor import request_stop
 from chess_gpt.snapshot_package import export_snapshot_package
-from chess_gpt.snapshot_training import TrainConfig, train_policy
+from chess_gpt.snapshot_training import TrainConfig, profiled_training_flops, train_policy
 
 
 def test_initial_position_has_a_stable_snapshot_and_move_target() -> None:
@@ -110,6 +111,20 @@ def test_both_policy_variants_score_the_same_stable_move_vocabulary() -> None:
 
         assert logits.shape == (2, MOVE_VOCAB_SIZE)
         assert torch.isfinite(logits).all()
+
+
+def test_laptop_moe_matches_the_recorded_size_and_flop_profile() -> None:
+    config = ModelConfig(
+        architecture="phase_moe",
+        d_model=336,
+        layers=6,
+        heads=8,
+        ff_multiplier=4,
+        dropout=0.1,
+    )
+
+    assert sum(parameter.numel() for parameter in SnapshotPolicy(config).parameters()) == 12_397_296
+    assert profiled_training_flops(config, positions=1, epochs=1) == 3_297_200_256
 
 
 def test_plain_snapshot_policy_does_not_consume_history_derived_phase() -> None:
@@ -241,3 +256,95 @@ def test_training_rejects_unverified_or_wrong_split_shards_by_default(tmp_path) 
         assert "frozen dataset" in str(error)
     else:
         raise AssertionError("unverified training data was accepted")
+
+
+def test_training_stops_cleanly_and_logs_each_observed_loss(tmp_path) -> None:
+    source = tmp_path / "tiny.pgn"
+    source.write_text('[Site "game-1"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *\n')
+    train_data = tmp_path / "train.parquet"
+    validation_data = tmp_path / "validation.parquet"
+    prepare_pgn(source, train_data, split="train", max_games=1)
+    prepare_pgn(source, validation_data, split="validation", max_games=1)
+
+    metrics = train_policy(
+        [train_data],
+        [validation_data],
+        tmp_path / "run",
+        TrainConfig(
+            experiment_id="interruptible-smoke",
+            model=ModelConfig(
+                architecture="phase_moe",
+                d_model=16,
+                layers=1,
+                heads=4,
+                ff_multiplier=2,
+                dropout=0.0,
+            ),
+            epochs=2,
+            batch_size=2,
+            max_updates=1,
+            log_every_updates=1,
+            seed=9,
+            device="cpu",
+            enforce_frozen_data=False,
+        ),
+    )
+
+    events = [json.loads(line) for line in (tmp_path / "run/losses.jsonl").read_text().splitlines()]
+    assert metrics["stop_reason"] == "update_limit"
+    assert metrics["updates"] == 1
+    assert metrics["training_positions"] == 2
+    assert metrics["actual_training_flops"] < metrics["planned_training_flops"]
+    assert len(events) == 1
+    assert events[0]["update"] == 1
+    assert events[0]["loss"] > 0
+
+    stopped_run = tmp_path / "stopped-run"
+    request_stop(stopped_run)
+    stopped_metrics = train_policy(
+        [train_data],
+        [validation_data],
+        stopped_run,
+        TrainConfig(
+            experiment_id="button-stop-smoke",
+            model=ModelConfig(d_model=16, layers=1, heads=4, ff_multiplier=2),
+            epochs=2,
+            batch_size=2,
+            log_every_updates=1,
+            device="cpu",
+            enforce_frozen_data=False,
+        ),
+    )
+    assert stopped_metrics["stop_reason"] == "stop_requested"
+    assert stopped_metrics["updates"] == 1
+    assert not (stopped_run / "STOP").exists()
+
+
+def test_training_time_limit_still_produces_a_loadable_checkpoint(tmp_path) -> None:
+    source = tmp_path / "tiny.pgn"
+    source.write_text('[Site "game-1"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *\n')
+    train_data = tmp_path / "train.parquet"
+    validation_data = tmp_path / "validation.parquet"
+    prepare_pgn(source, train_data, split="train", max_games=1)
+    prepare_pgn(source, validation_data, split="validation", max_games=1)
+
+    metrics = train_policy(
+        [train_data],
+        [validation_data],
+        tmp_path / "run",
+        TrainConfig(
+            experiment_id="timed-smoke",
+            model=ModelConfig(d_model=16, layers=1, heads=4, ff_multiplier=2),
+            epochs=20,
+            batch_size=2,
+            max_seconds=0,
+            log_every_updates=1,
+            device="cpu",
+            enforce_frozen_data=False,
+        ),
+    )
+
+    checkpoint = torch.load(tmp_path / "run/checkpoint.pt", weights_only=False)
+    assert metrics["stop_reason"] == "time_limit"
+    assert metrics["updates"] == 1
+    assert checkpoint["model_type"] == "board_snapshot_policy"

@@ -8,46 +8,64 @@ intentional_change = "Replace model 0002's one post-encoder expert with three de
 
 [prediction]
 direction = "Improve over model 0002 by specializing parameters for opening, middlegame, and endgame positions."
-magnitude = "pending learner prediction before material training"
-assumptions = "pending learner prediction before material training"
-confidence = "pending learner prediction before material training"
-failure_modes = "pending learner prediction before material training"
+magnitude = "Model 0003 wins 70% of head-to-head games against model 0002."
+assumptions = "The shared encoder represents board state information efficiently enough for phase-specific experts to act on it."
+confidence = "70%"
+failure_modes = "The deterministic opening/middlegame/endgame router behaves incorrectly or inconsistently at tournament inference time."
 
 [dataset]
 manifest = "data/dataset.toml"
 prepared_format = "board-snapshot-v1"
-train_months = ["2026-01", "2026-02", "2026-03"]
+train_months = ["2026-01"]
 validation_months = ["2026-04"]
-max_games_per_train_month = 750000
-max_validation_games = 100000
+max_games_per_train_month = 100000
+max_validation_games = 2000
 split_unit = "calendar-month"
 
 [model]
 architecture = "phase_moe"
 router = "deterministic visible-board phase"
 experts = ["opening", "middlegame", "endgame"]
-d_model = 384
-layers = 8
+d_model = 336
+layers = 6
 heads = 8
 ff_multiplier = 4
 dropout = 0.1
 move_classes = 4272
 legal_move_mask_at_inference = true
-parameter_count = 19486128
+parameter_count = 12397296
+decoder = "4,272 move logits from a linear policy head; the adapter masks illegal moves, applies argmax, and converts the selected move to exact SAN; softmax probabilities are available but unnecessary for deterministic argmax"
+target_canonical_package_bytes = 50000000
+measured_untrained_size_probe_bytes = 49841097
 
 [training]
 epochs = 1
-batch_size = 2048
+batch_size = 128
 learning_rate = 0.0003
 weight_decay = 0.01
 seed = 20260729
 training_flop_limit = 1000000000000000000
-profiled_flops_per_position = 5707579392
-compute_accounting = "provisional chess-gpt-dense-training-v1; tournament ratification pending"
+profiled_flops_per_position = 3297200256
+compute_accounting = "ratified by all tournament competitors: chess-gpt-dense-training-v1"
 prior_lineage_flops = 0
+max_training_hours = 3.0
+loss_log = "runs/0003-phase-moe-policy/losses.jsonl"
+live_chart_command = "uv run chess-gpt-snapshot-monitor --run runs/0003-phase-moe-policy"
+
+[calibration]
+status = "discarded; excluded from submission lineage"
+device = "Apple MPS"
+method = "Two warm-up updates followed by five timed synthetic updates per batch size."
+batch_128_positions_per_second = 316.03
+batch_128_driver_memory_mb = 4423.73
+batch_256_positions_per_second = 306.95
+batch_256_driver_memory_mb = 6581.70
+batch_512_positions_per_second = 296.01
+batch_512_driver_memory_mb = 8782.66
+decision = "Use batch 128 because it had the highest measured throughput and the most laptop memory headroom."
 
 [reproducibility]
-command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-02.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-03.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0003-phase-moe-policy --experiment-id 0003-phase-moe-policy --architecture phase_moe --d-model 384 --layers 8 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 2048 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729"
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0003-phase-moe-policy --experiment-id 0003-phase-moe-policy --architecture phase_moe --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --log-every-updates 1"
 
 [acceptance]
 requires_tiny_smoke_run = true

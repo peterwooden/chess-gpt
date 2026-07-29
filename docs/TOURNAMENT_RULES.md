@@ -6,7 +6,21 @@
 - **Inference interface:** Every submission must implement the public Hugging Face package and SAN-move interface specified in the technical appendix below.
 - **Tournament winner:** Each pair of models plays 100 games from 50 openings with colors reversed on the same runner; wins score 1 point, draws score ½ point, and losses score 0, so the model with the highest total score wins, while a first-place tie is settled by additional color-reversed opening pairs until one model leads after a complete pair, with all checkpoints, code, data, and configurations frozen before any openings are revealed.
 
-## Technical appendix: model package v1
+## Technical appendix
+
+### Agreed training FLOP profiler v1
+
+Ratified by all competitors on 2026-07-29, the shared profiler counts dense training operations independently of hardware:
+
+- one multiply-add is two FLOPs;
+- profile all dense matrix multiplications executed by one forward pass, including every evaluated mixture-of-experts branch;
+- count training as three times those forward FLOPs: one forward pass plus twice the forward cost for backward computation;
+- multiply by the actual number of examples processed, not the planned dataset size; and
+- add the recorded FLOPs of every parent checkpoint in the submitted checkpoint's lineage.
+
+For the repository's 65-token board Transformer, [`profiled_training_flops`](../src/chess_gpt/snapshot_training.py) is the executable reference formula. Embedding lookup, normalization, activation, optimizer, and other non-matrix operations are excluded consistently for every competitor. A run record MUST include the profiler version, actual processed examples, actual run FLOPs, prior-lineage FLOPs, and the parent artifact digest whenever prior-lineage FLOPs are nonzero.
+
+### Model package v1
 
 This appendix is normative: `MUST`, `MUST NOT`, and `MAY` describe the tournament interface.
 

@@ -41,6 +41,22 @@ Experiments [`0002`](experiments/0002-board-snapshot-policy.toml) and [`0003`](e
 
 The reusable, resumable tournament-data workflow is documented in [`data/README.md`](data/README.md). Generated archives, prepared Parquet, checkpoints, ONNX models, and packages remain outside Git under `data/downloads/` and `runs/`.
 
+For the three-hour laptop MoE run, start the live logarithmic loss chart in one terminal and training in another:
+
+```bash
+uv run chess-gpt-snapshot-monitor --run runs/0003-phase-moe-policy
+uv run chess-gpt-snapshot-train \
+  --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet \
+  --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet \
+  --output runs/0003-phase-moe-policy \
+  --experiment-id 0003-phase-moe-policy \
+  --architecture phase_moe --d-model 336 --layers 6 --heads 8 \
+  --ff-multiplier 4 --batch-size 128 --device mps \
+  --max-hours 3 --log-every-updates 1
+```
+
+The chart refreshes every two seconds. Its **End training** button finishes the current optimizer update, evaluates the saved model, and writes a valid checkpoint and metrics rather than abandoning the run.
+
 ## Repository map
 
 ```text

@@ -42,6 +42,17 @@ class TrainConfig:
     prior_lineage_flops: int = 0
     parent_lineage_artifact_sha256: str | None = None
     enforce_frozen_data: bool = True
+    max_updates: int | None = None
+    max_seconds: float | None = None
+    log_every_updates: int = 10
+
+    def __post_init__(self) -> None:
+        if self.epochs < 1 or self.batch_size < 1 or self.log_every_updates < 1:
+            raise ValueError("epochs, batch size, and log interval must be positive")
+        if self.max_updates is not None and self.max_updates < 1:
+            raise ValueError("max_updates must be positive when supplied")
+        if self.max_seconds is not None and self.max_seconds < 0:
+            raise ValueError("max_seconds cannot be negative")
 
 
 def _sha256(path: Path) -> str:
@@ -197,10 +208,11 @@ def _evaluate(
             logits = model(squares.to(device), state.to(device), phase.to(device))
             target_device = target.to(device)
             total_loss += float(loss_function(logits, target_device).item())
-            correct += int((logits.argmax(dim=1) == target_device).sum().item())
+            logits_cpu = logits.detach().cpu()
+            correct += int((logits_cpu.argmax(dim=1) == target).sum().item())
             for index in range(len(target)):
                 prediction = _legal_prediction(
-                    logits[index], squares[index].tolist(), state[index].tolist()
+                    logits_cpu[index], squares[index].tolist(), state[index].tolist()
                 )
                 legal_correct += int(prediction == int(target[index]))
             positions += len(target)
@@ -240,35 +252,83 @@ def train_policy(
     )
     loss_function = nn.CrossEntropyLoss()
     training_positions = _position_count(train_paths)
-    flops = profiled_training_flops(config.model, training_positions, config.epochs)
-    lineage_flops = config.prior_lineage_flops + flops
-    if lineage_flops > TRAINING_FLOP_LIMIT:
-        raise ValueError(f"planned training lineage uses {lineage_flops:,} FLOPs, over the limit")
+    planned_flops = profiled_training_flops(config.model, training_positions, config.epochs)
+    planned_lineage_flops = config.prior_lineage_flops + planned_flops
+    if planned_lineage_flops > TRAINING_FLOP_LIMIT:
+        raise ValueError(
+            f"planned training lineage uses {planned_lineage_flops:,} FLOPs, over the limit"
+        )
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    loss_log_path = output_dir / "losses.jsonl"
+    loss_log_path.write_text("")
+    stop_path = output_dir / "STOP"
     started = time.perf_counter()
     model.train()
     updates = 0
+    positions_seen = 0
     final_training_loss = 0.0
-    for epoch in range(config.epochs):
-        for squares, state, phase, target in _batches(
-            train_paths,
-            config.batch_size,
-            shuffle=True,
-            seed=config.seed + epoch,
-        ):
-            optimizer.zero_grad(set_to_none=True)
-            with torch.autocast(
-                device_type=device.type, dtype=torch.bfloat16, enabled=use_bfloat16
+    smoothed_loss: float | None = None
+    stop_reason = "completed"
+    stopped = False
+    try:
+        for epoch in range(config.epochs):
+            for squares, state, phase, target in _batches(
+                train_paths,
+                config.batch_size,
+                shuffle=True,
+                seed=config.seed + epoch,
             ):
-                logits = model(squares.to(device), state.to(device), phase.to(device))
-                loss = loss_function(logits, target.to(device))
-            loss.backward()
-            optimizer.step()
-            final_training_loss = float(loss.item())
-            updates += 1
+                optimizer.zero_grad(set_to_none=True)
+                with torch.autocast(
+                    device_type=device.type, dtype=torch.bfloat16, enabled=use_bfloat16
+                ):
+                    logits = model(squares.to(device), state.to(device), phase.to(device))
+                    loss = loss_function(logits, target.to(device))
+                loss.backward()
+                optimizer.step()
+                final_training_loss = float(loss.item())
+                updates += 1
+                positions_seen += len(target)
+                smoothed_loss = (
+                    final_training_loss
+                    if smoothed_loss is None
+                    else 0.95 * smoothed_loss + 0.05 * final_training_loss
+                )
+                if updates % config.log_every_updates == 0:
+                    event = {
+                        "elapsed_seconds": time.perf_counter() - started,
+                        "epoch": epoch,
+                        "loss": final_training_loss,
+                        "positions": positions_seen,
+                        "smoothed_loss": smoothed_loss,
+                        "update": updates,
+                    }
+                    with loss_log_path.open("a") as stream:
+                        stream.write(json.dumps(event, sort_keys=True) + "\n")
+                if stop_path.is_file():
+                    stop_path.unlink()
+                    stop_reason = "stop_requested"
+                    stopped = True
+                    break
+                if (
+                    config.max_seconds is not None
+                    and time.perf_counter() - started >= config.max_seconds
+                ):
+                    stop_reason = "time_limit"
+                    stopped = True
+                    break
+                if config.max_updates is not None and updates >= config.max_updates:
+                    stop_reason = "update_limit"
+                    stopped = True
+                    break
+            if stopped:
+                break
+    except KeyboardInterrupt:
+        stop_reason = "keyboard_interrupt"
 
-    validation = _evaluate(model, validation_paths, config.batch_size, device)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    actual_flops = profiled_training_flops(config.model, positions_seen, 1)
+    lineage_flops = config.prior_lineage_flops + actual_flops
     checkpoint_path = output_dir / "checkpoint.pt"
     checkpoint = {
         "format_version": 1,
@@ -278,6 +338,7 @@ def train_policy(
         "state_dict": {key: value.detach().cpu() for key, value in model.state_dict().items()},
     }
     torch.save(checkpoint, checkpoint_path)
+    validation = _evaluate(model, validation_paths, config.batch_size, device)
     metrics: dict[str, Any] = {
         "experiment_id": config.experiment_id,
         "completed_at": datetime.now(UTC).isoformat(),
@@ -288,18 +349,22 @@ def train_policy(
         "training_precision": "bfloat16" if use_bfloat16 else "float32",
         "model_config": asdict(config.model),
         "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
-        "training_positions": training_positions,
-        "training_tokens": training_positions * TOKENS_PER_POSITION * config.epochs,
+        "dataset_positions": training_positions,
+        "training_positions": positions_seen,
+        "training_tokens": positions_seen * TOKENS_PER_POSITION,
         "epochs": config.epochs,
         "updates": updates,
+        "stop_reason": stop_reason,
         "final_training_loss": final_training_loss,
-        "profiled_training_flops": flops,
+        "profiled_training_flops": actual_flops,
+        "actual_training_flops": actual_flops,
+        "planned_training_flops": planned_flops,
         "prior_lineage_flops": config.prior_lineage_flops,
         "parent_lineage_artifact_sha256": config.parent_lineage_artifact_sha256,
         "total_lineage_flops": lineage_flops,
         "compute_accounting_method": (
-            "provisional chess-gpt-dense-training-v1; must be ratified as the shared "
-            "tournament profiler before submission"
+            "chess-gpt-dense-training-v1; ratified by all tournament competitors "
+            "on 2026-07-29"
         ),
         "training_flop_limit": TRAINING_FLOP_LIMIT,
         "hardware": {
@@ -342,6 +407,9 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--seed", type=int, default=20260729)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--max-hours", type=float)
+    parser.add_argument("--max-updates", type=int)
+    parser.add_argument("--log-every-updates", type=int, default=10)
     args = parser.parse_args()
     config = TrainConfig(
         experiment_id=args.experiment_id,
@@ -359,6 +427,9 @@ def main() -> None:
         weight_decay=args.weight_decay,
         seed=args.seed,
         device=args.device,
+        max_seconds=args.max_hours * 3600 if args.max_hours is not None else None,
+        max_updates=args.max_updates,
+        log_every_updates=args.log_every_updates,
     )
     metrics = train_policy(args.train, args.validation, args.output, config)
     print(json.dumps(metrics, indent=2, sort_keys=True))
