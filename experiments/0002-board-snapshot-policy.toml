@@ -1,51 +1,59 @@
 [experiment]
 id = "0002-board-snapshot-policy"
-status = "planned"
-eligibility = "tournament candidate; publication requires all acceptance checks"
-question = "Does replacing SAN history with the current rule-complete board snapshot improve next-move strength, especially late in games?"
+status = "completed_and_published"
+eligibility = "tournament-rule eligible package; Model 1's qualitative learner prediction did not include a separate numeric confidence or failure mode"
+question = "Can a laptop-trained board-snapshot policy produce an eligible tournament package within a three-hour safety limit?"
 hypothesis = "The learner predicts that a board snapshot removes the network's need to replay a long history internally, simplifying next-move computation most in later positions."
-intentional_change = "Encode the current board and rule state, then predict a stable UCI move class; SAN exists only at the arena adapter seam."
+intentional_change = "Create the first laptop-scale board-snapshot tournament candidate; the matched phase-MoE run adds only phase embeddings and three routed experts."
 
 [prediction]
 direction = "Improve next-move strength relative to a history-input model, with the largest benefit at later plies."
-magnitude = "pending learner prediction before material training"
-assumptions = "pending learner prediction before material training"
-confidence = "pending learner prediction before material training"
-failure_modes = "pending learner prediction before material training"
+magnitude = "The learner did not assign a numeric Model 1 versus history-input effect; the stated prediction is qualitatively largest late in games."
+assumptions = "The board snapshot is a more information-efficient representation for choosing the next move than replaying the SAN history inside the network."
+confidence = "Not separately quantified by the learner; the 70% confidence prediction applies specifically to Model 2 beating Model 1."
+failure_modes = "Not separately predicted by the learner for Model 1 before material training."
 
 [dataset]
 manifest = "data/dataset.toml"
 prepared_format = "board-snapshot-v1"
-train_months = ["2026-01", "2026-02", "2026-03"]
+train_months = ["2026-01"]
 validation_months = ["2026-04"]
-max_games_per_train_month = 750000
-max_validation_games = 100000
+max_games_per_train_month = 100000
+max_validation_games = 2000
 split_unit = "calendar-month"
 
 [model]
 architecture = "snapshot"
-d_model = 384
-layers = 8
+d_model = 336
+layers = 6
 heads = 8
 ff_multiplier = 4
 dropout = 0.1
 move_classes = 4272
 legal_move_mask_at_inference = true
-parameter_count = 17121456
+parameter_count = 10586256
+decoder = "4,272 move logits from a linear policy head; the adapter masks illegal moves, applies argmax, and converts the selected move to exact SAN"
+target_canonical_package_bytes = 50000000
+measured_untrained_checkpoint_probe_bytes = 42377909
 
 [training]
 epochs = 1
-batch_size = 2048
+batch_size = 128
 learning_rate = 0.0003
 weight_decay = 0.01
 seed = 20260729
 training_flop_limit = 1000000000000000000
-profiled_flops_per_position = 5693423616
-compute_accounting = "provisional chess-gpt-dense-training-v1; tournament ratification pending"
+profiled_flops_per_position = 3286362240
+compute_accounting = "ratified by all tournament competitors: chess-gpt-dense-training-v1"
 prior_lineage_flops = 0
+max_training_hours = 3.0
+max_updates = 26650
+max_training_positions = 3411200
+loss_log = "runs/0002-board-snapshot-policy/losses.jsonl"
+live_chart_command = "uv run chess-gpt-snapshot-monitor --run runs/0002-board-snapshot-policy"
 
 [reproducibility]
-command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-02.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-03.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0002-board-snapshot-policy --experiment-id 0002-board-snapshot-policy --architecture snapshot --d-model 384 --layers 8 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 2048 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729"
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0002-board-snapshot-policy --experiment-id 0002-board-snapshot-policy --architecture snapshot --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --max-updates 26650 --log-every-updates 1"
 
 [acceptance]
 requires_tiny_smoke_run = true
@@ -57,3 +65,77 @@ requires_public_hugging_face_package = true
 requires_shared_profiler_ratification = true
 requires_complete_learner_prediction = true
 requires_linked_lineage_evidence = true
+
+[result]
+completed_at_utc = "2026-07-29T17:19:16.365249+00:00"
+stop_reason = "time_limit"
+updates = 26255
+training_positions = 3356140
+training_tokens = 218149100
+final_training_loss = 2.8742516040802
+loss_log_entries = 26255
+loss_log_bytes = 4026172
+loss_log_sha256 = "a6bc7d03d6fb7fc51a23ed8159ba859858aa08379d702967ee611f8dd8981fc8"
+actual_training_flops = 11029491768153600
+total_lineage_flops = 11029491768153600
+training_flop_limit_fraction = 0.0110294917681536
+elapsed_seconds_including_validation = 10923.773888834286
+training_cost_usd = 0.0
+validation_positions = 131491
+validation_loss = 2.8348997285673194
+validation_raw_top1_accuracy = 0.26858111962035425
+validation_legal_top1_accuracy = 0.29386802138549406
+validation_legal_move_rate = 1.0
+checkpoint_bytes = 42374453
+checkpoint_sha256 = "a06aeb7626559cc5b653d3d40b4b9122b1972ff3fece47fdc465d10145674190"
+code_revision = "5299212e465675efbf750880e76b0f50026ab90d"
+environment_lock_sha256 = "9a3b2f8cc72313233ce014e54133e89b3b28353837f32d5b97dd8db0c5f3be67"
+hardware = "Apple M4 Mac mini, 16 GB, MPS float32, macOS 26.5.1, arm64, PyTorch 2.13.0"
+
+[package]
+schema = "chess-gpt-package-v1"
+canonical_bytes = 42585883
+manifest_sha256 = "6eef4055c8ee7647f2871a877c549af3aba0d4c92c5aaf4385fe359c3706981b"
+entrypoint_bytes = 38737
+entrypoint_sha256 = "98c73c772e6301660a0a1db9e0d60deb9a05f41d94e684b79b87821fcd1115d7"
+model_bytes = 42545092
+model_sha256 = "0fa1b2cb99b3e9f94dcac9ba2e18198f56252ab2e0a9bc8ae2f2e489339119f6"
+vocabulary_bytes = 1434
+vocabulary_sha256 = "55a7e3be3981a60ae332c041953bb79cbd3cb56ffa4f2b1dcd12c47dbdc6dca6"
+
+[publication]
+hugging_face_repository = "peterwooden/chess-gpt-board-snapshot-0002"
+public_url = "https://huggingface.co/peterwooden/chess-gpt-board-snapshot-0002"
+immutable_artifact_revision = "ecdf3c42046c01abdd351d1327b77d18388c4306"
+complete_evidence_revision = "c625220345702176aff2dbaa930924a80c86e29b"
+remote_repository_private = false
+remote_byte_comparison_passed = true
+remote_manifest_validation_passed = true
+remote_onnx_runtime_web_1_27_load_passed = true
+remote_legal_san_self_play_plies = 40
+
+[paired_match]
+artifact = "runs/0002-vs-0003-paired-match.json"
+artifact_bytes = 24704
+artifact_sha256 = "bf3fb705b49f458a0b483cd1500b16bb16b7c9e28e874ded236187afe3d27fab"
+evaluator_source_sha256 = "e166624f4c9fdb1fce1a0b46f3abc00b75e3dbdd9ec62b43e9a393becaff4174"
+opening_source = "first 50 distinct valid ply-12 positions in the frozen April validation shard; not the unrevealed official tournament openings"
+games = 100
+model_0002_wins = 6
+model_0003_wins = 6
+draws = 88
+model_0002_score = 50.0
+model_0003_score = 50.0
+
+[acceptance_result]
+tiny_smoke_run_passed = true
+training_flops_within_limit = true
+canonical_package_within_limit = true
+validation_legal_move_rate_passed = true
+paired_match_completed = true
+public_hugging_face_package_passed = true
+shared_profiler_ratified = true
+complete_learner_prediction_passed = false
+linked_lineage_evidence_passed = true
+tournament_rules_passed = true
+note = "The learner supplied a qualitative Model 1 direction and assumption but no separate Model 1 numeric confidence or failure mode; this is a teaching-protocol gap, not a tournament-rule failure."

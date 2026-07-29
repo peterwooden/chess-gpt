@@ -1,7 +1,7 @@
 [experiment]
 id = "0003-phase-moe-policy"
-status = "planned"
-eligibility = "tournament candidate; publication requires all acceptance checks"
+status = "completed_and_published"
+eligibility = "tournament-rule eligible package; local paired validation match tied 50-50"
 question = "Can a laptop-trained, approximately 50 MB phase-specialized policy produce an eligible tournament package within a three-hour safety limit?"
 hypothesis = "The learner predicts that opening, middlegame, and endgame positions benefit from separate modes of thinking, making this phase-routed model a strong tournament candidate."
 intentional_change = "Create the first laptop-scale phase-routed tournament candidate; this feasibility run is not a causal comparison with model 0002."
@@ -81,3 +81,79 @@ requires_public_hugging_face_package = true
 requires_shared_profiler_ratification = true
 requires_complete_learner_prediction = true
 requires_linked_lineage_evidence = true
+
+[result]
+completed_at_utc = "2026-07-29T20:23:04.969024+00:00"
+stop_reason = "time_limit"
+updates = 26276
+training_positions = 3358828
+training_tokens = 218323820
+final_training_loss = 2.5717251300811768
+loss_log_entries = 26276
+loss_log_bytes = 4029560
+loss_log_sha256 = "24e0ae8fbd075cfaa5bf7e983c0d6b456ec65b476d271bc6fafb465c5ff373dd"
+actual_training_flops = 11074728541459968
+total_lineage_flops = 11074728541459968
+training_flop_limit_fraction = 0.011074728541459968
+elapsed_seconds_including_validation = 10922.325541500002
+training_cost_usd = 0.0
+validation_positions = 131491
+validation_loss = 2.854254382781062
+validation_raw_top1_accuracy = 0.2674935927173723
+validation_legal_top1_accuracy = 0.2925295267356701
+validation_legal_move_rate = 1.0
+checkpoint_bytes = 49622200
+checkpoint_sha256 = "54ea6c3991798ff6c0d51f07203bf0a70257e8ec13afd411abed0068834889ab"
+metrics_sha256 = "47a35095ae4bd945ef7d28ea81b1ff64a27cf71f4de213035e827c1cc38a93fb"
+code_revision = "5299212e465675efbf750880e76b0f50026ab90d"
+environment_lock_sha256 = "9a3b2f8cc72313233ce014e54133e89b3b28353837f32d5b97dd8db0c5f3be67"
+hardware = "Apple M4 Mac mini, 16 GB, MPS float32, macOS 26.5.1, arm64, PyTorch 2.13.0"
+
+[package]
+schema = "chess-gpt-package-v1"
+canonical_bytes = 49841108
+manifest_sha256 = "6297b3060af1dd9f8fddcb2387eb14e3f75446edd48f9dfadf6af121fceaf875"
+entrypoint_bytes = 38737
+entrypoint_sha256 = "98c73c772e6301660a0a1db9e0d60deb9a05f41d94e684b79b87821fcd1115d7"
+model_bytes = 49800321
+model_sha256 = "bfb00545e23878021412121154be98f818edbaa33e93e91414b45050612f6d37"
+vocabulary_bytes = 1434
+vocabulary_sha256 = "55a7e3be3981a60ae332c041953bb79cbd3cb56ffa4f2b1dcd12c47dbdc6dca6"
+
+[publication]
+hugging_face_repository = "peterwooden/chess-gpt-phase-moe-0003"
+public_url = "https://huggingface.co/peterwooden/chess-gpt-phase-moe-0003"
+immutable_artifact_revision = "a49f3ee42bc747258b5191f1dd7fca11a6b4bb25"
+complete_evidence_revision = "757864da4a7e0bb5736af6cbf2cfff13a54c4a09"
+remote_repository_private = false
+remote_byte_comparison_passed = true
+remote_manifest_validation_passed = true
+remote_onnx_runtime_web_1_27_load_passed = true
+remote_legal_san_self_play_plies = 40
+
+[paired_match]
+artifact = "runs/0002-vs-0003-paired-match.json"
+artifact_bytes = 24704
+artifact_sha256 = "bf3fb705b49f458a0b483cd1500b16bb16b7c9e28e874ded236187afe3d27fab"
+evaluator_source_sha256 = "e166624f4c9fdb1fce1a0b46f3abc00b75e3dbdd9ec62b43e9a393becaff4174"
+opening_source = "first 50 distinct valid ply-12 positions in the frozen April validation shard; not the unrevealed official tournament openings"
+games = 100
+model_0002_wins = 6
+model_0003_wins = 6
+draws = 88
+model_0002_score = 50.0
+model_0003_score = 50.0
+model_0003_score_rate = 0.5
+result_against_prediction = "The published candidates tied; this does not support the predicted 70% Model 2 win rate. The wall-clock-capped runs did not match processed positions and FLOPs, so this is not the prediction's specified causal comparison."
+
+[acceptance_result]
+tiny_smoke_run_passed = true
+training_flops_within_limit = true
+canonical_package_within_limit = true
+validation_legal_move_rate_passed = true
+paired_match_completed = true
+public_hugging_face_package_passed = true
+shared_profiler_ratified = true
+complete_learner_prediction_passed = true
+linked_lineage_evidence_passed = true
+tournament_rules_passed = true

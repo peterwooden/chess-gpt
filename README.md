@@ -39,11 +39,31 @@ uv run chess-gpt-baseline move --checkpoint runs/0001-basic-san-ngram/model.json
 
 Experiments [`0002`](experiments/0002-board-snapshot-policy.toml) and [`0003`](experiments/0003-phase-moe-policy.toml) replace SAN-history input with the complete current board position. The second candidate adds deterministic opening, middlegame, and endgame experts. Both predict move identities internally and return exact legal SAN through a self-contained browser adapter.
 
+Both trained candidates are public and verified at immutable Hugging Face package
+revisions: [Model 1 · board snapshot](https://huggingface.co/peterwooden/chess-gpt-board-snapshot-0002/tree/ecdf3c42046c01abdd351d1327b77d18388c4306)
+and [Model 2 · phase MoE](https://huggingface.co/peterwooden/chess-gpt-phase-moe-0003/tree/a49f3ee42bc747258b5191f1dd7fca11a6b4bb25).
+The measured runs, validation, exact 50-50 paired result, package integrity, and
+interpretation limits are documented in
+[`docs/TOURNAMENT_CANDIDATES_0002_0003.md`](docs/TOURNAMENT_CANDIDATES_0002_0003.md).
+
 The reusable, resumable tournament-data workflow is documented in [`data/README.md`](data/README.md). Generated archives, prepared Parquet, checkpoints, ONNX models, and packages remain outside Git under `data/downloads/` and `runs/`.
 
-For the three-hour laptop MoE run, start the live logarithmic loss chart in one terminal and training in another:
+Both laptop runs use the same data, model width, encoder depth, optimizer, batch size,
+seed, and 26,650-update ceiling. Model 2 differs by adding a visible-board phase
+embedding and three deterministic phase experts. Start either live logarithmic loss
+chart in one terminal and its training command in another:
 
 ```bash
+uv run chess-gpt-snapshot-monitor --run runs/0002-board-snapshot-policy
+uv run chess-gpt-snapshot-train \
+  --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet \
+  --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet \
+  --output runs/0002-board-snapshot-policy \
+  --experiment-id 0002-board-snapshot-policy \
+  --architecture snapshot --d-model 336 --layers 6 --heads 8 \
+  --ff-multiplier 4 --batch-size 128 --device mps \
+  --max-hours 3 --max-updates 26650 --log-every-updates 1
+
 uv run chess-gpt-snapshot-monitor --run runs/0003-phase-moe-policy
 uv run chess-gpt-snapshot-train \
   --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet \
@@ -56,6 +76,31 @@ uv run chess-gpt-snapshot-train \
 ```
 
 The chart refreshes every two seconds. Its **End training** button finishes the current optimizer update, evaluates the saved model, and writes a valid checkpoint and metrics rather than abandoning the run.
+
+Export and run the same byte, hash, size, ONNX Runtime Web, SAN replay, and legal-move
+checks used before publication:
+
+```bash
+uv run chess-gpt-snapshot-package \
+  --checkpoint runs/0002-board-snapshot-policy/checkpoint.pt \
+  --output runs/0002-board-snapshot-policy/browser
+node site/scripts/validate-snapshot-package.mjs \
+  runs/0002-board-snapshot-policy/browser
+```
+
+After both checkpoints exist, run the tournament-shaped color-reversed evaluation
+from 50 frozen April validation openings (100 games total). This records checkpoint and
+validation-shard hashes, environment and code revisions, every game result, and
+confirms that no final test split was used:
+
+```bash
+uv run chess-gpt-snapshot-match \
+  --checkpoint-a runs/0002-board-snapshot-policy/checkpoint.pt \
+  --checkpoint-b runs/0003-phase-moe-policy/checkpoint.pt \
+  --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet \
+  --output runs/0002-vs-0003-paired-match.json \
+  --opening-ply 12 --opening-count 50 --max-game-plies 200 --device mps
+```
 
 ## Repository map
 

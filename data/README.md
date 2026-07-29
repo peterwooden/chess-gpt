@@ -6,13 +6,21 @@ A download command must verify every required filename and digest before exposin
 
 ## Reusable tournament cache
 
-The board-snapshot pipeline stores verified source archives and compressed prepared shards under the Git-ignored `data/downloads/tournament-2026/`. The four source archives total about 116.3 GB, while this machine currently cannot hold all of them at once. The three-hour laptop profile for experiment 0003 uses 100,000 January training games and 2,000 April validation games:
+The board-snapshot pipeline stores verified source archives and compressed prepared
+shards under the Git-ignored `data/downloads/tournament-2026/`. The four source
+archives total about 116.3 GB. The two matched three-hour laptop profiles use the
+same 100,000 January training games and 2,000 April validation games:
 
 ```bash
 uv run chess-gpt-snapshot-data fetch-prepare \
-  --month 2026-01 --max-games 100000 --discard-raw
+  --month 2026-01 --max-games 100000
 uv run chess-gpt-snapshot-data fetch-prepare \
-  --month 2026-04 --max-games 2000 --discard-raw
+  --month 2026-04 --max-games 2000
 ```
 
 Downloads resume into `.part` files. A completed archive is exposed only after its SHA-256 matches [`dataset.toml`](dataset.toml). Prepared Parquet rows contain the 64-square position, rule state, deterministic phase, and next-move class; model training never receives SAN history. Do not use April shards for training.
+
+Keep the verified archives in `raw/` when disk permits so later experiments can
+prepare different game counts without downloading the source again. Pass
+`--discard-raw` only on a machine where reclaiming disk is more important than that
+reusable cache.

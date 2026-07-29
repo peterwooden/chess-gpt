@@ -127,6 +127,23 @@ def test_laptop_moe_matches_the_recorded_size_and_flop_profile() -> None:
     assert profiled_training_flops(config, positions=1, epochs=1) == 3_297_200_256
 
 
+def test_laptop_snapshot_matches_the_recorded_size_and_flop_profile() -> None:
+    config = ModelConfig(
+        architecture="snapshot",
+        d_model=336,
+        layers=6,
+        heads=8,
+        ff_multiplier=4,
+        dropout=0.1,
+    )
+
+    parameter_count = sum(
+        parameter.numel() for parameter in SnapshotPolicy(config).parameters()
+    )
+    assert parameter_count == 10_586_256
+    assert profiled_training_flops(config, positions=1, epochs=1) == 3_286_362_240
+
+
 def test_plain_snapshot_policy_does_not_consume_history_derived_phase() -> None:
     model = SnapshotPolicy(
         ModelConfig(
