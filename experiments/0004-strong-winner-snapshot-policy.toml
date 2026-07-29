@@ -46,17 +46,17 @@ batch_size = 128
 learning_rate = 0.0003
 weight_decay = 0.01
 seed = 20260729
-max_training_hours = 3.0
+max_training_hours = 3.25
 max_training_positions = 3356140
 profiled_flops_per_position = 3286362240
 planned_training_flops = 11029491768153600
 prior_lineage_flops = 0
 training_flop_limit = 1000000000000000000
 compute_accounting = "ratified chess-gpt-dense-training-v1"
-budget_match = "Exact processed-position and profiled-FLOP match to model 0002; same architecture, optimizer, seed, and three-hour safety cap."
+budget_match = "Exact processed-position and profiled-FLOP match to model 0002; same architecture, optimizer, and seed. A 3.25-hour emergency ceiling allows minor throughput variance."
 
 [reproducibility]
-command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-04.parquet --output runs/0004-strong-winner-snapshot-policy --experiment-id 0004-strong-winner-snapshot-policy --architecture snapshot --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --max-positions 3356140 --log-every-updates 1"
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-04.parquet --output runs/0004-strong-winner-snapshot-policy --experiment-id 0004-strong-winner-snapshot-policy --architecture snapshot --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3.25 --max-positions 3356140 --log-every-updates 1"
 loss_log = "runs/0004-strong-winner-snapshot-policy/losses.jsonl"
 live_chart_command = "uv run chess-gpt-snapshot-monitor --run runs/0004-strong-winner-snapshot-policy"
 
