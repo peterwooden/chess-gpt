@@ -2,13 +2,13 @@
 id = "0003-phase-moe-policy"
 status = "planned"
 eligibility = "tournament candidate; publication requires all acceptance checks"
-question = "At matched data and optimizer budget, does explicit phase specialization beat the shared board-snapshot policy?"
-hypothesis = "The learner predicts that opening, middlegame, and endgame positions benefit from separate modes of thinking, so hard-routed phase experts should improve chess-level metrics over model 0002."
-intentional_change = "Replace model 0002's one post-encoder expert with three deterministic opening, middlegame, and endgame experts; keep every other data and training setting fixed."
+question = "Can a laptop-trained, approximately 50 MB phase-specialized policy produce an eligible tournament package within a three-hour safety limit?"
+hypothesis = "The learner predicts that opening, middlegame, and endgame positions benefit from separate modes of thinking, making this phase-routed model a strong tournament candidate."
+intentional_change = "Create the first laptop-scale phase-routed tournament candidate; this feasibility run is not a causal comparison with model 0002."
 
 [prediction]
 direction = "Improve over model 0002 by specializing parameters for opening, middlegame, and endgame positions."
-magnitude = "Model 0003 wins 70% of head-to-head games against model 0002."
+magnitude = "In a future comparison trained on matched data, optimizer settings, processed positions, and FLOPs, Model 0003 wins 70% of head-to-head games against a size-matched Model 1."
 assumptions = "The shared encoder represents board state information efficiently enough for phase-specific experts to act on it."
 confidence = "70%"
 failure_modes = "The deterministic opening/middlegame/endgame router behaves incorrectly or inconsistently at tournament inference time."
@@ -49,6 +49,8 @@ profiled_flops_per_position = 3297200256
 compute_accounting = "ratified by all tournament competitors: chess-gpt-dense-training-v1"
 prior_lineage_flops = 0
 max_training_hours = 3.0
+max_updates = 26650
+max_training_positions = 3411200
 loss_log = "runs/0003-phase-moe-policy/losses.jsonl"
 live_chart_command = "uv run chess-gpt-snapshot-monitor --run runs/0003-phase-moe-policy"
 
@@ -63,9 +65,11 @@ batch_256_driver_memory_mb = 6581.70
 batch_512_positions_per_second = 296.01
 batch_512_driver_memory_mb = 8782.66
 decision = "Use batch 128 because it had the highest measured throughput and the most laptop memory headroom."
+estimated_updates_in_three_hours = 26665
+fixed_update_ceiling = 26650
 
 [reproducibility]
-command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0003-phase-moe-policy --experiment-id 0003-phase-moe-policy --architecture phase_moe --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --log-every-updates 1"
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0003-phase-moe-policy --experiment-id 0003-phase-moe-policy --architecture phase_moe --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --max-updates 26650 --log-every-updates 1"
 
 [acceptance]
 requires_tiny_smoke_run = true

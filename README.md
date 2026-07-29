@@ -52,7 +52,7 @@ uv run chess-gpt-snapshot-train \
   --experiment-id 0003-phase-moe-policy \
   --architecture phase_moe --d-model 336 --layers 6 --heads 8 \
   --ff-multiplier 4 --batch-size 128 --device mps \
-  --max-hours 3 --log-every-updates 1
+  --max-hours 3 --max-updates 26650 --log-every-updates 1
 ```
 
 The chart refreshes every two seconds. Its **End training** button finishes the current optimizer update, evaluates the saved model, and writes a valid checkpoint and metrics rather than abandoning the run.
