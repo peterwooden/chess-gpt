@@ -43,6 +43,7 @@ class TrainConfig:
     parent_lineage_artifact_sha256: str | None = None
     enforce_frozen_data: bool = True
     max_updates: int | None = None
+    max_positions: int | None = None
     max_seconds: float | None = None
     log_every_updates: int = 10
 
@@ -51,6 +52,8 @@ class TrainConfig:
             raise ValueError("epochs, batch size, and log interval must be positive")
         if self.max_updates is not None and self.max_updates < 1:
             raise ValueError("max_updates must be positive when supplied")
+        if self.max_positions is not None and self.max_positions < 1:
+            raise ValueError("max_positions must be positive when supplied")
         if self.max_seconds is not None and self.max_seconds < 0:
             raise ValueError("max_seconds cannot be negative")
 
@@ -124,8 +127,14 @@ def _validate_frozen_shards(
             metadata = {key.decode(): value.decode() for key, value in raw.items()}
             source_file = metadata.get("source_file", "")
             item = expected.get(source_file)
+            prepared_format = metadata.get("prepared_format")
+            valid_preparation = prepared_format == "board-snapshot-v1" or (
+                prepared_format == "board-snapshot-winner-v1"
+                and metadata.get("target_side") == "winner"
+                and metadata.get("min_winner_elo", "").isdigit()
+            )
             if (
-                metadata.get("prepared_format") != "board-snapshot-v1"
+                not valid_preparation
                 or item is None
                 or metadata.get("source_sha256") != item.sha256
                 or metadata.get("split") != role
@@ -252,7 +261,10 @@ def train_policy(
     )
     loss_function = nn.CrossEntropyLoss()
     training_positions = _position_count(train_paths)
-    planned_flops = profiled_training_flops(config.model, training_positions, config.epochs)
+    planned_positions = training_positions * config.epochs
+    if config.max_positions is not None:
+        planned_positions = min(planned_positions, config.max_positions)
+    planned_flops = profiled_training_flops(config.model, planned_positions, 1)
     planned_lineage_flops = config.prior_lineage_flops + planned_flops
     if planned_lineage_flops > TRAINING_FLOP_LIMIT:
         raise ValueError(
@@ -279,6 +291,13 @@ def train_policy(
                 shuffle=True,
                 seed=config.seed + epoch,
             ):
+                if config.max_positions is not None:
+                    remaining = config.max_positions - positions_seen
+                    if remaining < len(target):
+                        squares = squares[:remaining]
+                        state = state[:remaining]
+                        phase = phase[:remaining]
+                        target = target[:remaining]
                 optimizer.zero_grad(set_to_none=True)
                 with torch.autocast(
                     device_type=device.type, dtype=torch.bfloat16, enabled=use_bfloat16
@@ -320,6 +339,10 @@ def train_policy(
                     break
                 if config.max_updates is not None and updates >= config.max_updates:
                     stop_reason = "update_limit"
+                    stopped = True
+                    break
+                if config.max_positions is not None and positions_seen >= config.max_positions:
+                    stop_reason = "position_limit"
                     stopped = True
                     break
             if stopped:
@@ -409,6 +432,7 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--max-hours", type=float)
     parser.add_argument("--max-updates", type=int)
+    parser.add_argument("--max-positions", type=int)
     parser.add_argument("--log-every-updates", type=int, default=10)
     args = parser.parse_args()
     config = TrainConfig(
@@ -429,6 +453,7 @@ def main() -> None:
         device=args.device,
         max_seconds=args.max_hours * 3600 if args.max_hours is not None else None,
         max_updates=args.max_updates,
+        max_positions=args.max_positions,
         log_every_updates=args.log_every_updates,
     )
     metrics = train_policy(args.train, args.validation, args.output, config)

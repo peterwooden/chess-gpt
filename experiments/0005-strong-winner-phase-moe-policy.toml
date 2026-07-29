@@ -1,0 +1,72 @@
+[experiment]
+id = "0005-strong-winner-phase-moe-policy"
+status = "planned"
+question = "Does training only on moves made by decisive-game winners rated at least 1600 make the phase-MoE policy stronger than model 0003?"
+hypothesis = "Removing moves by losing players and winners rated below 1600 concentrates the fixed compute budget on stronger move choices."
+intentional_change = "Relative to model 0003, change only training-data selection: require a decisive result and winner ELO >= 1600, then retain only positions where the winner is to move. The losing player's ELO is unrestricted."
+
+[prediction]
+direction = "Model 0005 will be stronger than model 0003 in paired play."
+magnitude = "Model 0005 wins 80 of 100 paired-match games against model 0003."
+assumptions = "Players below ELO 1600 would not generate useful data for modelling chess at the lower end."
+confidence = "40%"
+failure_modes = "The filtered model plays very poorly against poor players."
+
+[dataset]
+manifest = "data/dataset.toml"
+prepared_format = "board-snapshot-winner-v1"
+train_months = ["2026-01"]
+validation_months = ["2026-04"]
+split_unit = "calendar-month"
+game_result_filter = "1-0 or 0-1"
+minimum_winner_elo = 1600
+loser_elo_filter = "none"
+target_side = "winner only"
+max_selected_train_games = 120000
+max_selected_validation_games = 5000
+train_path = "data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-01.parquet"
+validation_path = "data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-04.parquet"
+
+[model]
+architecture = "phase_moe"
+router = "deterministic visible-board phase"
+experts = ["opening", "middlegame", "endgame"]
+d_model = 336
+layers = 6
+heads = 8
+ff_multiplier = 4
+dropout = 0.1
+move_classes = 4272
+legal_move_mask_at_inference = true
+parameter_count = 12397296
+
+[training]
+epochs = 1
+batch_size = 128
+learning_rate = 0.0003
+weight_decay = 0.01
+seed = 20260729
+max_training_hours = 3.0
+max_training_positions = 3358828
+profiled_flops_per_position = 3297200256
+planned_training_flops = 11074728541459968
+prior_lineage_flops = 0
+training_flop_limit = 1000000000000000000
+compute_accounting = "ratified chess-gpt-dense-training-v1"
+budget_match = "Exact processed-position and profiled-FLOP match to model 0003; same architecture, optimizer, seed, and three-hour safety cap."
+
+[reproducibility]
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-04.parquet --output runs/0005-strong-winner-phase-moe-policy --experiment-id 0005-strong-winner-phase-moe-policy --architecture phase_moe --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --max-positions 3358828 --log-every-updates 1"
+loss_log = "runs/0005-strong-winner-phase-moe-policy/losses.jsonl"
+live_chart_command = "uv run chess-gpt-snapshot-monitor --run runs/0005-strong-winner-phase-moe-policy"
+
+[evaluation]
+imitation_validation = "Filtered April winner-side positions; never used for training."
+paired_match = "100 games against model 0003 from 50 color-reversed openings selected by the already-frozen April opening procedure."
+prediction_measure = "Fraction of all 100 games won by model 0005."
+test_split_used = false
+
+[publication]
+hugging_face_repository = "peterwooden/chess-gpt-phase-moe-strong-winner-0005"
+public = true
+github_release = "strong-winner-candidates-0004-0005"

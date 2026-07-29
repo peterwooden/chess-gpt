@@ -35,7 +35,9 @@ POSITION_SCHEMA = pa.schema(
 @dataclass(frozen=True)
 class PreparationResult:
     games: int
+    selected_games: int
     positions: int
+    filtered_games: int
     invalid_games: int
 
 
@@ -112,7 +114,29 @@ def _open_pgn(path: Path) -> Iterator[TextIO]:
             raise RuntimeError(f"zstd failed with exit code {return_code}: {stderr.strip()}")
 
 
-def _game_rows(game: chess.pgn.Game, game_number: int) -> list[dict[str, object]]:
+def _winner(game: chess.pgn.Game) -> chess.Color | None:
+    result = game.headers.get("Result")
+    if result == "1-0":
+        return chess.WHITE
+    if result == "0-1":
+        return chess.BLACK
+    return None
+
+
+def _winner_elo(game: chess.pgn.Game, winner: chess.Color) -> int | None:
+    header = "WhiteElo" if winner == chess.WHITE else "BlackElo"
+    try:
+        return int(game.headers[header])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _game_rows(
+    game: chess.pgn.Game,
+    game_number: int,
+    *,
+    target_color: chess.Color | None = None,
+) -> list[dict[str, object]]:
     if game.errors:
         raise ValueError(f"PGN parser reported {len(game.errors)} error(s)")
     board = game.board()
@@ -121,17 +145,18 @@ def _game_rows(game: chess.pgn.Game, game_number: int) -> list[dict[str, object]
     for ply, move in enumerate(game.mainline_moves()):
         if move not in board.legal_moves:
             raise ValueError(f"illegal move at ply {ply + 1}")
-        snapshot = encode_board(board)
-        rows.append(
-            {
-                "game_id": game_id,
-                "ply": ply,
-                "squares": snapshot.squares,
-                "state": snapshot.state,
-                "phase": snapshot.phase,
-                "target": move_index(move),
-            }
-        )
+        if target_color is None or board.turn == target_color:
+            snapshot = encode_board(board)
+            rows.append(
+                {
+                    "game_id": game_id,
+                    "ply": ply,
+                    "squares": snapshot.squares,
+                    "state": snapshot.state,
+                    "phase": snapshot.phase,
+                    "target": move_index(move),
+                }
+            )
         board.push(move)
     return rows
 
@@ -142,6 +167,9 @@ def prepare_pgn(
     *,
     split: str,
     max_games: int | None = None,
+    max_selected_games: int | None = None,
+    winner_only: bool = False,
+    min_winner_elo: int | None = None,
     row_group_positions: int = 65_536,
     source_sha256: str | None = None,
 ) -> PreparationResult:
@@ -150,16 +178,26 @@ def prepare_pgn(
         raise ValueError("split must be train or validation")
     if max_games is not None and max_games < 1:
         raise ValueError("max_games must be positive")
+    if max_selected_games is not None and max_selected_games < 1:
+        raise ValueError("max_selected_games must be positive")
+    if min_winner_elo is not None and min_winner_elo < 0:
+        raise ValueError("min_winner_elo cannot be negative")
+    if min_winner_elo is not None and not winner_only:
+        raise ValueError("min_winner_elo requires winner_only")
     output.parent.mkdir(parents=True, exist_ok=True)
+    prepared_format = "board-snapshot-winner-v1" if winner_only else "board-snapshot-v1"
     metadata = {
-        b"prepared_format": b"board-snapshot-v1",
+        b"prepared_format": prepared_format.encode(),
         b"split": split.encode(),
         b"source_file": source.name.encode(),
+        b"target_side": b"winner" if winner_only else b"both",
     }
+    if min_winner_elo is not None:
+        metadata[b"min_winner_elo"] = str(min_winner_elo).encode()
     if source_sha256 is not None:
         metadata[b"source_sha256"] = source_sha256.encode()
     schema = POSITION_SCHEMA.with_metadata(metadata)
-    games = positions = invalid_games = 0
+    games = selected_games = positions = filtered_games = invalid_games = 0
     buffered: list[dict[str, object]] = []
 
     with _open_pgn(source) as stream, pq.ParquetWriter(
@@ -168,16 +206,33 @@ def prepare_pgn(
         compression="zstd",
         use_dictionary=True,
     ) as writer:
-        while max_games is None or games < max_games:
+        while (max_games is None or games < max_games) and (
+            max_selected_games is None or selected_games < max_selected_games
+        ):
             game = chess.pgn.read_game(stream)
             if game is None:
                 break
             games += 1
+            winner = _winner(game)
+            if winner_only and (
+                winner is None
+                or (
+                    min_winner_elo is not None
+                    and (_winner_elo(game, winner) or -1) < min_winner_elo
+                )
+            ):
+                filtered_games += 1
+                continue
             try:
-                rows = _game_rows(game, games)
+                rows = _game_rows(
+                    game,
+                    games,
+                    target_color=winner if winner_only else None,
+                )
             except ValueError:
                 invalid_games += 1
                 continue
+            selected_games += 1
             buffered.extend(rows)
             positions += len(rows)
             if len(buffered) >= row_group_positions:
@@ -186,7 +241,13 @@ def prepare_pgn(
         if buffered:
             writer.write_table(pa.Table.from_pylist(buffered, schema=schema))
 
-    return PreparationResult(games=games, positions=positions, invalid_games=invalid_games)
+    return PreparationResult(
+        games=games,
+        selected_games=selected_games,
+        positions=positions,
+        filtered_games=filtered_games,
+        invalid_games=invalid_games,
+    )
 
 
 def _select_months(files: list[FrozenFile], requested: Sequence[str]) -> list[FrozenFile]:
@@ -208,6 +269,9 @@ def main() -> None:
         "--cache-root", type=Path, default=Path("data/downloads/tournament-2026")
     )
     parser.add_argument("--max-games", type=int)
+    parser.add_argument("--max-selected-games", type=int)
+    parser.add_argument("--winner-only", action="store_true")
+    parser.add_argument("--min-winner-elo", type=int)
     parser.add_argument(
         "--discard-raw",
         action="store_true",
@@ -237,14 +301,24 @@ def main() -> None:
                     raise ValueError(
                         f"cached {raw_path} has SHA-256 {actual}, expected {item.sha256}"
                     )
-            prepared_path = (
-                args.cache_root / "prepared" / "board-snapshot-v1" / f"{item.month}.parquet"
+            prepared_directory = (
+                f"board-snapshot-winner-elo{args.min_winner_elo}-v1"
+                if args.winner_only and args.min_winner_elo is not None
+                else "board-snapshot-winner-v1"
+                if args.winner_only
+                else "board-snapshot-v1"
+            )
+            prepared_path = args.cache_root / "prepared" / prepared_directory / (
+                f"{item.month}.parquet"
             )
             prepared = prepare_pgn(
                 raw_path,
                 prepared_path,
                 split=item.split,
                 max_games=args.max_games,
+                max_selected_games=args.max_selected_games,
+                winner_only=args.winner_only,
+                min_winner_elo=args.min_winner_elo,
                 source_sha256=item.sha256,
             )
             result.update(
@@ -252,7 +326,9 @@ def main() -> None:
                     "prepared_path": prepared_path.as_posix(),
                     "prepared_sha256": _sha256(prepared_path),
                     "games": prepared.games,
+                    "selected_games": prepared.selected_games,
                     "positions": prepared.positions,
+                    "filtered_games": prepared.filtered_games,
                     "invalid_games": prepared.invalid_games,
                 }
             )

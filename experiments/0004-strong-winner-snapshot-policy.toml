@@ -1,0 +1,72 @@
+[experiment]
+id = "0004-strong-winner-snapshot-policy"
+status = "planned"
+question = "Does training only on moves made by decisive-game winners rated at least 1600 make the snapshot policy stronger than model 0002?"
+hypothesis = "Removing moves by losing players and winners rated below 1600 concentrates the fixed compute budget on stronger move choices."
+intentional_change = "Relative to model 0002, change only training-data selection: require a decisive result and winner ELO >= 1600, then retain only positions where the winner is to move. The losing player's ELO is unrestricted."
+
+[prediction]
+direction = "Model 0004 will be stronger than model 0002 in paired play."
+magnitude = "Model 0004 wins 80 of 100 paired-match games against model 0002."
+assumptions = "Players below ELO 1600 would not generate useful data for modelling chess at the lower end."
+confidence = "40%"
+failure_modes = "The filtered model plays very poorly against poor players."
+
+[dataset]
+manifest = "data/dataset.toml"
+prepared_format = "board-snapshot-winner-v1"
+train_months = ["2026-01"]
+validation_months = ["2026-04"]
+split_unit = "calendar-month"
+game_result_filter = "1-0 or 0-1"
+minimum_winner_elo = 1600
+loser_elo_filter = "none"
+target_side = "winner only"
+max_selected_train_games = 120000
+max_selected_validation_games = 5000
+train_path = "data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-01.parquet"
+validation_path = "data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-04.parquet"
+train_prepare_command = "uv run chess-gpt-snapshot-data prepare --month 2026-01 --winner-only --min-winner-elo 1600 --max-selected-games 120000"
+validation_prepare_command = "uv run chess-gpt-snapshot-data prepare --month 2026-04 --winner-only --min-winner-elo 1600 --max-selected-games 5000"
+
+[model]
+architecture = "snapshot"
+d_model = 336
+layers = 6
+heads = 8
+ff_multiplier = 4
+dropout = 0.1
+move_classes = 4272
+legal_move_mask_at_inference = true
+parameter_count = 10586256
+
+[training]
+epochs = 1
+batch_size = 128
+learning_rate = 0.0003
+weight_decay = 0.01
+seed = 20260729
+max_training_hours = 3.0
+max_training_positions = 3356140
+profiled_flops_per_position = 3286362240
+planned_training_flops = 11029491768153600
+prior_lineage_flops = 0
+training_flop_limit = 1000000000000000000
+compute_accounting = "ratified chess-gpt-dense-training-v1"
+budget_match = "Exact processed-position and profiled-FLOP match to model 0002; same architecture, optimizer, seed, and three-hour safety cap."
+
+[reproducibility]
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-01.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-winner-elo1600-v1/2026-04.parquet --output runs/0004-strong-winner-snapshot-policy --experiment-id 0004-strong-winner-snapshot-policy --architecture snapshot --d-model 336 --layers 6 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 128 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729 --device mps --max-hours 3 --max-positions 3356140 --log-every-updates 1"
+loss_log = "runs/0004-strong-winner-snapshot-policy/losses.jsonl"
+live_chart_command = "uv run chess-gpt-snapshot-monitor --run runs/0004-strong-winner-snapshot-policy"
+
+[evaluation]
+imitation_validation = "Filtered April winner-side positions; never used for training."
+paired_match = "100 games against model 0002 from 50 color-reversed openings selected by the already-frozen April opening procedure."
+prediction_measure = "Fraction of all 100 games won by model 0004."
+test_split_used = false
+
+[publication]
+hugging_face_repository = "peterwooden/chess-gpt-board-snapshot-strong-winner-0004"
+public = true
+github_release = "strong-winner-candidates-0004-0005"

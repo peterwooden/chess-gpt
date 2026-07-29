@@ -77,7 +77,9 @@ def test_prepare_pgn_turns_each_move_into_a_reusable_board_target_pair(tmp_path)
     rows = pq.read_table(output).to_pylist()
 
     assert result.games == 1
+    assert result.selected_games == 1
     assert result.positions == 3
+    assert result.filtered_games == 0
     assert [row["target"] for row in rows] == [796, 3364, 405]
     assert rows[0]["squares"] == list(encode_board(chess.Board()).squares)
     assert rows[0]["game_id"] == "game-1"
@@ -89,6 +91,114 @@ def test_prepare_pgn_turns_each_move_into_a_reusable_board_target_pair(tmp_path)
     capped = prepare_pgn(compressed, capped_output, split="train", max_games=1)
     assert capped.games == 1
     assert capped.positions == 3
+
+
+def test_prepare_pgn_keeps_only_moves_by_winners_at_or_above_the_elo_floor(
+    tmp_path,
+) -> None:
+    source = tmp_path / "rated.pgn"
+    source.write_text(
+        """[Event "Strong winner, weak loser"]
+[Site "accepted-white"]
+[WhiteElo "1600"]
+[BlackElo "900"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 1-0
+
+[Event "Weak winner"]
+[Site "rejected-white"]
+[WhiteElo "1599"]
+[BlackElo "2200"]
+[Result "1-0"]
+
+1. d4 d5 2. c4 e6 1-0
+
+[Event "Strong black winner"]
+[Site "accepted-black"]
+[WhiteElo "1100"]
+[BlackElo "1700"]
+[Result "0-1"]
+
+1. c4 e5 2. Nc3 Nf6 0-1
+
+[Event "Draw"]
+[Site "rejected-draw"]
+[WhiteElo "2000"]
+[BlackElo "2000"]
+[Result "1/2-1/2"]
+
+1. Nf3 Nf6 1/2-1/2
+"""
+    )
+    output = tmp_path / "winner-positions.parquet"
+
+    result = prepare_pgn(
+        source,
+        output,
+        split="train",
+        winner_only=True,
+        min_winner_elo=1600,
+    )
+    parquet = pq.ParquetFile(output)
+    rows = parquet.read().to_pylist()
+    metadata = parquet.schema_arrow.metadata or {}
+
+    assert result.games == 4
+    assert result.selected_games == 2
+    assert result.filtered_games == 2
+    assert result.positions == 4
+    assert [row["game_id"] for row in rows] == [
+        "accepted-white",
+        "accepted-white",
+        "accepted-black",
+        "accepted-black",
+    ]
+    assert [row["ply"] for row in rows] == [0, 2, 1, 3]
+    assert metadata[b"prepared_format"] == b"board-snapshot-winner-v1"
+    assert metadata[b"target_side"] == b"winner"
+    assert metadata[b"min_winner_elo"] == b"1600"
+
+
+def test_prepare_pgn_can_stop_after_a_requested_number_of_selected_games(tmp_path) -> None:
+    source = tmp_path / "rated.pgn"
+    source.write_text(
+        """[Site "filtered"]
+[WhiteElo "1500"]
+[BlackElo "1500"]
+[Result "1-0"]
+
+1. e4 e5 1-0
+
+[Site "selected"]
+[WhiteElo "1700"]
+[BlackElo "1000"]
+[Result "1-0"]
+
+1. d4 d5 1-0
+
+[Site "not-scanned"]
+[WhiteElo "1800"]
+[BlackElo "1800"]
+[Result "1-0"]
+
+1. c4 c5 1-0
+"""
+    )
+
+    result = prepare_pgn(
+        source,
+        tmp_path / "positions.parquet",
+        split="train",
+        max_selected_games=1,
+        winner_only=True,
+        min_winner_elo=1600,
+    )
+
+    assert result.games == 2
+    assert result.selected_games == 1
+    assert result.filtered_games == 1
+    assert result.positions == 1
 
 
 def test_both_policy_variants_score_the_same_stable_move_vocabulary() -> None:
@@ -365,3 +475,34 @@ def test_training_time_limit_still_produces_a_loadable_checkpoint(tmp_path) -> N
     assert metrics["stop_reason"] == "time_limit"
     assert metrics["updates"] == 1
     assert checkpoint["model_type"] == "board_snapshot_policy"
+
+
+def test_training_position_limit_matches_an_exact_compute_budget(tmp_path) -> None:
+    source = tmp_path / "tiny.pgn"
+    source.write_text('[Site "game-1"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *\n')
+    train_data = tmp_path / "train.parquet"
+    validation_data = tmp_path / "validation.parquet"
+    prepare_pgn(source, train_data, split="train", max_games=1)
+    prepare_pgn(source, validation_data, split="validation", max_games=1)
+    model = ModelConfig(d_model=16, layers=1, heads=4, ff_multiplier=2)
+
+    metrics = train_policy(
+        [train_data],
+        [validation_data],
+        tmp_path / "run",
+        TrainConfig(
+            experiment_id="position-capped-smoke",
+            model=model,
+            epochs=2,
+            batch_size=4,
+            max_positions=3,
+            log_every_updates=1,
+            device="cpu",
+            enforce_frozen_data=False,
+        ),
+    )
+
+    assert metrics["stop_reason"] == "position_limit"
+    assert metrics["training_positions"] == 3
+    assert metrics["planned_training_flops"] == profiled_training_flops(model, 3, 1)
+    assert metrics["actual_training_flops"] == metrics["planned_training_flops"]
