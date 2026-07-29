@@ -35,7 +35,7 @@ parameter_count = 17121456
 
 [training]
 epochs = 1
-batch_size = 256
+batch_size = 2048
 learning_rate = 0.0003
 weight_decay = 0.01
 seed = 20260729
@@ -45,7 +45,7 @@ compute_accounting = "provisional chess-gpt-dense-training-v1; tournament ratifi
 prior_lineage_flops = 0
 
 [reproducibility]
-command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-02.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-03.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0002-board-snapshot-policy --experiment-id 0002-board-snapshot-policy --architecture snapshot --d-model 384 --layers 8 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 256 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729"
+command = "uv run chess-gpt-snapshot-train --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-01.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-02.parquet --train data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-03.parquet --validation data/downloads/tournament-2026/prepared/board-snapshot-v1/2026-04.parquet --output runs/0002-board-snapshot-policy --experiment-id 0002-board-snapshot-policy --architecture snapshot --d-model 384 --layers 8 --heads 8 --ff-multiplier 4 --dropout 0.1 --epochs 1 --batch-size 2048 --learning-rate 0.0003 --weight-decay 0.01 --seed 20260729"
 
 [acceptance]
 requires_tiny_smoke_run = true

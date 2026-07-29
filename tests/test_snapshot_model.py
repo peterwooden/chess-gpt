@@ -180,6 +180,7 @@ def test_tiny_training_run_records_checkpoint_budget_and_validation(tmp_path) ->
     assert (tmp_path / "run/metrics.json").is_file()
     assert metrics["training_positions"] == 4
     assert metrics["training_tokens"] == 4 * 65
+    assert metrics["training_precision"] == "float32"
     assert metrics["hardware"]["platform"]
     assert metrics["profiled_training_flops"] > 0
     assert metrics["profiled_training_flops"] < 1e18

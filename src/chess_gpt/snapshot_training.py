@@ -232,6 +232,9 @@ def train_policy(
     torch.manual_seed(config.seed)
     device = _device(config.device)
     model = SnapshotPolicy(config.model).to(device)
+    use_bfloat16 = device.type == "cuda"
+    if use_bfloat16:
+        torch.set_float32_matmul_precision("high")
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
@@ -254,8 +257,11 @@ def train_policy(
             seed=config.seed + epoch,
         ):
             optimizer.zero_grad(set_to_none=True)
-            logits = model(squares.to(device), state.to(device), phase.to(device))
-            loss = loss_function(logits, target.to(device))
+            with torch.autocast(
+                device_type=device.type, dtype=torch.bfloat16, enabled=use_bfloat16
+            ):
+                logits = model(squares.to(device), state.to(device), phase.to(device))
+                loss = loss_function(logits, target.to(device))
             loss.backward()
             optimizer.step()
             final_training_loss = float(loss.item())
@@ -279,6 +285,7 @@ def train_policy(
         "environment_lock_sha256": _sha256(Path("uv.lock")),
         "seed": config.seed,
         "device": str(device),
+        "training_precision": "bfloat16" if use_bfloat16 else "float32",
         "model_config": asdict(config.model),
         "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
         "training_positions": training_positions,
