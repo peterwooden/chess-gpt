@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import platform
 import random
 import subprocess
 import time
@@ -20,10 +21,12 @@ import pyarrow.parquet as pq
 import torch
 from torch import nn
 
+from chess_gpt.snapshot_data import load_frozen_files
 from chess_gpt.snapshot_model import ModelConfig, SnapshotPolicy, move_index
 
 TRAINING_FLOP_LIMIT = 10**18
 TOKENS_PER_POSITION = 65
+FROZEN_DATASET_MANIFEST = Path("data/dataset.toml")
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,8 @@ class TrainConfig:
     weight_decay: float = 0.01
     seed: int = 20260729
     device: str = "auto"
+    prior_lineage_flops: int = 0
+    enforce_frozen_data: bool = True
 
 
 def _sha256(path: Path) -> str:
@@ -95,6 +100,28 @@ def _batches(
 
 def _position_count(paths: Sequence[Path]) -> int:
     return sum(pq.ParquetFile(path).metadata.num_rows for path in paths)
+
+
+def _validate_frozen_shards(
+    train_paths: Sequence[Path], validation_paths: Sequence[Path]
+) -> None:
+    expected = {Path(item.url).name: item for item in load_frozen_files(FROZEN_DATASET_MANIFEST)}
+    for role, paths in (("train", train_paths), ("validation", validation_paths)):
+        for path in paths:
+            raw = pq.ParquetFile(path).schema_arrow.metadata or {}
+            metadata = {key.decode(): value.decode() for key, value in raw.items()}
+            source_file = metadata.get("source_file", "")
+            item = expected.get(source_file)
+            if (
+                metadata.get("prepared_format") != "board-snapshot-v1"
+                or item is None
+                or metadata.get("source_sha256") != item.sha256
+                or metadata.get("split") != role
+                or item.split != role
+            ):
+                raise ValueError(
+                    f"{path} is not a verified {role} shard from the frozen dataset"
+                )
 
 
 def _shard_record(path: Path) -> dict[str, Any]:
@@ -195,6 +222,8 @@ def train_policy(
     """Train one specified policy and persist its full reproducibility record."""
     if not train_paths or not validation_paths:
         raise ValueError("training and validation shards are both required")
+    if config.enforce_frozen_data:
+        _validate_frozen_shards(train_paths, validation_paths)
     random.seed(config.seed)
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
@@ -206,8 +235,9 @@ def train_policy(
     loss_function = nn.CrossEntropyLoss()
     training_positions = _position_count(train_paths)
     flops = profiled_training_flops(config.model, training_positions, config.epochs)
-    if flops > TRAINING_FLOP_LIMIT:
-        raise ValueError(f"planned training lineage uses {flops:,} FLOPs, over the limit")
+    lineage_flops = config.prior_lineage_flops + flops
+    if lineage_flops > TRAINING_FLOP_LIMIT:
+        raise ValueError(f"planned training lineage uses {lineage_flops:,} FLOPs, over the limit")
 
     started = time.perf_counter()
     model.train()
@@ -249,11 +279,27 @@ def train_policy(
         "model_config": asdict(config.model),
         "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
         "training_positions": training_positions,
+        "training_tokens": training_positions * TOKENS_PER_POSITION * config.epochs,
         "epochs": config.epochs,
         "updates": updates,
         "final_training_loss": final_training_loss,
         "profiled_training_flops": flops,
+        "prior_lineage_flops": config.prior_lineage_flops,
+        "total_lineage_flops": lineage_flops,
+        "compute_accounting_method": (
+            "provisional chess-gpt-dense-training-v1; must be ratified as the shared "
+            "tournament profiler before submission"
+        ),
         "training_flop_limit": TRAINING_FLOP_LIMIT,
+        "hardware": {
+            "platform": platform.platform(),
+            "machine": platform.machine(),
+            "torch": torch.__version__,
+            "device": str(device),
+            "cuda_device": (
+                torch.cuda.get_device_name(device) if device.type == "cuda" else None
+            ),
+        },
         "train_shards": [_shard_record(path) for path in train_paths],
         "validation_shards": [_shard_record(path) for path in validation_paths],
         "checkpoint_bytes": checkpoint_path.stat().st_size,

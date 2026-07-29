@@ -87,11 +87,14 @@ export async function loadPackage({ artifacts, ort }) {
             if (!chess.move(san)) throw new Error(`Could not replay SAN move: ${san}`);
           }
           const { squares, state, phase } = encodePosition(chess, history.length);
-          const result = await session.run({
+          const feeds = {
             squares: new ort.Tensor("int32", squares, [1, 64]),
             state: new ort.Tensor("int32", state, [1, 7]),
-            phase: new ort.Tensor("int32", Int32Array.of(phase), [1]),
-          });
+          };
+          if (session.inputNames.includes("phase")) {
+            feeds.phase = new ort.Tensor("int32", Int32Array.of(phase), [1]);
+          }
+          const result = await session.run(feeds);
           const logits = result.logits.data;
           const verboseBySan = new Map(chess.moves({ verbose: true }).map((move) => [move.san, move]));
           let bestSan = legalMoves[0];

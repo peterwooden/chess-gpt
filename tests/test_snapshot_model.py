@@ -112,6 +112,26 @@ def test_both_policy_variants_score_the_same_stable_move_vocabulary() -> None:
         assert torch.isfinite(logits).all()
 
 
+def test_plain_snapshot_policy_does_not_consume_history_derived_phase() -> None:
+    model = SnapshotPolicy(
+        ModelConfig(
+            architecture="snapshot",
+            d_model=16,
+            layers=1,
+            heads=4,
+            ff_multiplier=2,
+            dropout=0.0,
+        )
+    ).eval()
+    squares = torch.zeros((1, 64), dtype=torch.long)
+    state = torch.zeros((1, 7), dtype=torch.long)
+
+    opening = model(squares, state, torch.tensor([0]))
+    endgame = model(squares, state, torch.tensor([2]))
+
+    assert torch.equal(opening, endgame)
+
+
 def test_tiny_training_run_records_checkpoint_budget_and_validation(tmp_path) -> None:
     source = tmp_path / "tiny.pgn"
     source.write_text(
@@ -152,12 +172,15 @@ def test_tiny_training_run_records_checkpoint_budget_and_validation(tmp_path) ->
             learning_rate=1e-3,
             seed=7,
             device="cpu",
+            enforce_frozen_data=False,
         ),
     )
 
     assert (tmp_path / "run/checkpoint.pt").is_file()
     assert (tmp_path / "run/metrics.json").is_file()
     assert metrics["training_positions"] == 4
+    assert metrics["training_tokens"] == 4 * 65
+    assert metrics["hardware"]["platform"]
     assert metrics["profiled_training_flops"] > 0
     assert metrics["profiled_training_flops"] < 1e18
     assert 0 <= metrics["validation_legal_top1_accuracy"] <= 1
@@ -194,3 +217,26 @@ await game.dispose();
 await loaded.dispose();
 """
     subprocess.run(["node", "--input-type=module", "-e", script], check=True)
+
+
+def test_training_rejects_unverified_or_wrong_split_shards_by_default(tmp_path) -> None:
+    source = tmp_path / "tiny.pgn"
+    source.write_text('[Site "game-1"]\n[Result "*"]\n\n1. e4 *\n')
+    shard = tmp_path / "unverified.parquet"
+    prepare_pgn(source, shard, split="validation", max_games=1)
+
+    try:
+        train_policy(
+            [shard],
+            [shard],
+            tmp_path / "run",
+            TrainConfig(
+                experiment_id="must-reject",
+                model=ModelConfig(d_model=16, layers=1, heads=4, ff_multiplier=2),
+                device="cpu",
+            ),
+        )
+    except ValueError as error:
+        assert "frozen dataset" in str(error)
+    else:
+        raise AssertionError("unverified training data was accepted")

@@ -130,7 +130,8 @@ class SnapshotPolicy(nn.Module):
             state_token = state_token + embedding(state[:, offset])
         state_token = state_token + self.ep_embedding(state[:, 5])
         state_token = state_token + self.halfmove_embedding(state[:, 6])
-        state_token = state_token + self.phase_embedding(phase)
+        if self.config.architecture == "phase_moe":
+            state_token = state_token + self.phase_embedding(phase)
         encoded = self.encoder(torch.cat((state_token[:, None], board_tokens), dim=1))[:, 0]
 
         if self.config.architecture == "phase_moe":

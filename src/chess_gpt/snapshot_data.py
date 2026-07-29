@@ -219,8 +219,10 @@ def main() -> None:
     results: list[dict[str, object]] = []
     for item in selected:
         raw_path = args.cache_root / "raw" / Path(item.url).name
+        raw_verified = False
         if args.command in {"fetch", "fetch-prepare"}:
             raw_path = fetch_frozen_file(item, args.cache_root)
+            raw_verified = True
         result: dict[str, object] = {
             "month": item.month,
             "split": item.split,
@@ -229,6 +231,12 @@ def main() -> None:
         if args.command in {"prepare", "fetch-prepare"}:
             if not raw_path.is_file():
                 raise FileNotFoundError(f"fetch {item.month} before preparing it: {raw_path}")
+            if not raw_verified:
+                actual = _sha256(raw_path)
+                if actual != item.sha256:
+                    raise ValueError(
+                        f"cached {raw_path} has SHA-256 {actual}, expected {item.sha256}"
+                    )
             prepared_path = (
                 args.cache_root / "prepared" / "board-snapshot-v1" / f"{item.month}.parquet"
             )
