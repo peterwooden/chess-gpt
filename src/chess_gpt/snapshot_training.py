@@ -40,6 +40,7 @@ class TrainConfig:
     seed: int = 20260729
     device: str = "auto"
     prior_lineage_flops: int = 0
+    parent_lineage_artifact_sha256: str | None = None
     enforce_frozen_data: bool = True
 
 
@@ -222,6 +223,8 @@ def train_policy(
     """Train one specified policy and persist its full reproducibility record."""
     if not train_paths or not validation_paths:
         raise ValueError("training and validation shards are both required")
+    if config.prior_lineage_flops and not config.parent_lineage_artifact_sha256:
+        raise ValueError("nonzero prior lineage FLOPs require a parent artifact SHA-256")
     if config.enforce_frozen_data:
         _validate_frozen_shards(train_paths, validation_paths)
     random.seed(config.seed)
@@ -285,6 +288,7 @@ def train_policy(
         "final_training_loss": final_training_loss,
         "profiled_training_flops": flops,
         "prior_lineage_flops": config.prior_lineage_flops,
+        "parent_lineage_artifact_sha256": config.parent_lineage_artifact_sha256,
         "total_lineage_flops": lineage_flops,
         "compute_accounting_method": (
             "provisional chess-gpt-dense-training-v1; must be ratified as the shared "

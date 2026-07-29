@@ -56,3 +56,6 @@ requires_package_bytes_at_most = 100000000
 required_validation_legal_move_rate = 1.0
 requires_paired_match_evaluation = true
 requires_public_hugging_face_package = true
+requires_shared_profiler_ratification = true
+requires_complete_learner_prediction = true
+requires_linked_lineage_evidence = true
