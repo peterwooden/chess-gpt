@@ -35,6 +35,12 @@ uv run chess-gpt-baseline train --data data/downloads/lichess-chess-tokens-cb90f
 uv run chess-gpt-baseline move --checkpoint runs/0001-basic-san-ngram/model.json.gz --moves e4 e5 Nf3
 ```
 
+## Board-snapshot tournament candidates
+
+Experiments [`0002`](experiments/0002-board-snapshot-policy.toml) and [`0003`](experiments/0003-phase-moe-policy.toml) replace SAN-history input with the complete current board position. The second candidate adds deterministic opening, middlegame, and endgame experts. Both predict move identities internally and return exact legal SAN through a self-contained browser adapter.
+
+The reusable, resumable tournament-data workflow is documented in [`data/README.md`](data/README.md). Generated archives, prepared Parquet, checkpoints, ONNX models, and packages remain outside Git under `data/downloads/` and `runs/`.
+
 ## Repository map
 
 ```text
