@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getPlayerProfile, listPlayerGames } from "../../../lib/history";
 import { formatDate, HistoryNav } from "../../history/history-components";
+import { modelPageHref } from "../../arena/hugging-face-reference.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +22,15 @@ export default async function PlayerPage({
   const { id } = await params;
   const player = await getPlayerProfile(id);
   if (!player) notFound();
+  if (player.kind === "model" && player.repository && player.commitSha) {
+    redirect(modelPageHref(`${player.repository}@${player.commitSha}`));
+  }
   const query = await searchParams;
   const history = await listPlayerGames(id, query.cursor);
 
   return (
     <main className="history-page profile-page">
-      <HistoryNav />
+      <HistoryNav active="players" />
       <header className="profile-hero">
         <Link className="profile-back" href={`/history?kind=${player.kind}`}>← All {player.kind === "model" ? "models" : "players"}</Link>
         <div className="profile-title">

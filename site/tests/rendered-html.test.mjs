@@ -233,12 +233,13 @@ test("completed games receive a compact Stockfish accuracy review", async () => 
 
 test("arena enforces a narrow, revision-aware model contract", async () => {
   const modelLoader = await readFile(new URL("../app/arena/model.ts", import.meta.url), "utf8");
+  const packageManifest = await readFile(new URL("../app/arena/package-manifest.mjs", import.meta.url), "utf8");
   const modelWorker = await readFile(new URL("../app/arena/model-worker.ts", import.meta.url), "utf8");
 
-  assert.match(modelLoader, /chess-gpt-package-v1/);
+  assert.match(packageManifest, /chess-gpt-package-v1/);
   assert.match(modelLoader, /huggingface\.co/);
   assert.match(modelLoader, /sha256/i);
-  assert.match(modelLoader, /100_000_000/);
+  assert.match(packageManifest, /100_000_000/);
   assert.match(modelLoader, /legalMoves/);
   assert.match(modelLoader, /new Worker/);
   assert.match(modelLoader, /es-module-lexer/);
@@ -315,4 +316,21 @@ test("mobile setup uses the page-sized workspace as its scroll container", async
   assert.match(mobileStyles, /\.arena-workspace\.setup-mode \.arena-sidebar\s*\{[^}]*flex:\s*none/s);
   assert.match(mobileStyles, /-webkit-overflow-scrolling:\s*touch/);
   assert.match(mobileStyles, /env\(safe-area-inset-bottom\)/);
+});
+
+test("first-class model pages expose exact version and replay actions", async () => {
+  const catalog = await readFile(new URL("../app/models/page.tsx", import.meta.url), "utf8");
+  const modelPage = await readFile(new URL("../app/models/[owner]/[repository]/page.tsx", import.meta.url), "utf8");
+  const actions = await readFile(new URL("../app/models/reference-actions.tsx", import.meta.url), "utf8");
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const playerPage = await readFile(new URL("../app/players/[id]/page.tsx", import.meta.url), "utf8");
+
+  assert.match(catalog, /Latest · \{model\.repository\}@\{model\.latestCommitSha\}/);
+  assert.match(modelPage, /First seen by ChessGPT/);
+  assert.match(modelPage, /selectModelVersion\(versions, query\.version\)/);
+  assert.match(actions, /navigator\.clipboard\.writeText\(reference\)/);
+  assert.match(actions, /modelChallengeHref\(reference\)/);
+  assert.doesNotMatch(actions, /import Link from "next\/link"/);
+  assert.match(arena, /aria-label="Challenge models from this game"/);
+  assert.match(playerPage, /redirect\(modelPageHref/);
 });

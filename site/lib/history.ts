@@ -3,7 +3,9 @@ import "server-only";
 import { Chess } from "chess.js";
 import { getD1, getRuntimeEnvironment } from "../db";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
-import { resolveHuggingFaceReference } from "../app/arena/hugging-face-reference.mjs";
+import { modelPageHref, resolveHuggingFaceReference } from "../app/arena/hugging-face-reference.mjs";
+import { parsePackageManifest } from "../app/arena/package-manifest.mjs";
+import { buildModelDirectoryQuery, buildModelProfileQuery, MODEL_VERSIONS_SQL } from "./model-catalog-query.mjs";
 
 const ARENA_VERSION = "history-v1";
 const MAX_PGN_BYTES = 64_000;
@@ -60,7 +62,42 @@ export type ParticipantProfile = {
   name: string;
 };
 
+export type ModelParticipantProfile = ParticipantProfile & {
+  reference: string;
+  repository: string;
+  commitSha: string;
+  profileHref: string;
+};
+
 type DirectoryRow = PublicPlayer & {
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+};
+
+export type PublicModel = {
+  repository: string;
+  displayName: string;
+  firstSeenAt: number;
+  lastPlayedAt: number;
+  latestCommitSha: string;
+  latestFirstSeenAt: number;
+  versions: number;
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+};
+
+export type PublicModelVersion = {
+  playerId: string;
+  displayName: string;
+  repository: string;
+  commitSha: string;
+  manifestSha256: string;
+  firstSeenAt: number;
+  lastPlayedAt: number;
   games: number;
   wins: number;
   draws: number;
@@ -197,6 +234,39 @@ export async function listPlayers(options: {
   };
 }
 
+export async function listModels(options: {
+  search?: string;
+  sort?: "recent" | "name" | "games" | "versions";
+  cursor?: string;
+}) {
+  const sort = options.sort ?? "recent";
+  const search = options.search?.trim().slice(0, 100) ?? "";
+  const cursor = decodeCursor(options.cursor);
+  const query = buildModelDirectoryQuery({ search, sort, cursor, limit: PAGE_SIZE + 1 });
+  const result = await (await getD1()).prepare(query.sql).bind(...query.bindings).all<PublicModel>();
+  const rows = result.results.slice(0, PAGE_SIZE);
+  const last = rows.at(-1);
+  const value = last
+    ? sort === "recent" ? last.lastPlayedAt
+      : sort === "name" ? last.displayName.toLocaleLowerCase()
+        : last[sort]
+    : null;
+  return {
+    models: rows,
+    nextCursor: result.results.length > PAGE_SIZE && last ? encodeCursor(value, last.repository) : null,
+  };
+}
+
+export async function getModelProfile(repository: string): Promise<PublicModel | null> {
+  const model = await (await getD1()).prepare(buildModelProfileQuery()).bind(repository).first<PublicModel>();
+  return model ?? null;
+}
+
+export async function listModelVersions(repository: string): Promise<PublicModelVersion[]> {
+  const result = await (await getD1()).prepare(MODEL_VERSIONS_SQL).bind(repository).all<PublicModelVersion>();
+  return result.results;
+}
+
 export async function getPlayerProfile(id: string) {
   const player = await (await getD1()).prepare(`${directorySelectSql()}
     WHERE p.id = ?
@@ -238,7 +308,7 @@ export async function ensureHumanPlayer(user: ChatGPTUser): Promise<ParticipantP
   return getOrCreateHuman(user);
 }
 
-export async function ensureModelPlayer(reference: string): Promise<ParticipantProfile> {
+export async function ensureModelPlayer(reference: string): Promise<ModelParticipantProfile> {
   return getOrCreateModel(reference);
 }
 
@@ -261,26 +331,23 @@ async function getOrCreateHuman(user: ChatGPTUser): Promise<ParticipantProfile> 
   return (await findPlayer(identityKey)) ?? { id, name };
 }
 
-async function getOrCreateModel(reference: string): Promise<ParticipantProfile> {
+async function getOrCreateModel(reference: string): Promise<ModelParticipantProfile> {
   if (typeof reference !== "string" || reference.length > 300) throw new HistoryError(400, "Invalid model reference.");
   const resolved = await resolveHuggingFaceReference(reference);
   const identityKey = `model:${resolved.reference}`;
   const existing = await findPlayer(identityKey);
-  if (existing) return existing;
+  if (existing) return modelParticipantProfile(existing, resolved.reference, resolved.repository, resolved.revision);
   const manifestResponse = await fetch(resolved.manifestUrl, { headers: { Accept: "application/json" } });
   if (!manifestResponse.ok) throw new HistoryError(400, "The pinned model manifest could not be loaded.");
   const bytes = new Uint8Array(await manifestResponse.arrayBuffer());
   if (bytes.byteLength > 1_000_000) throw new HistoryError(400, "The model manifest is too large.");
-  let manifest: unknown;
+  let manifestName: string;
   try {
-    manifest = JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new HistoryError(400, "The pinned model manifest is not valid JSON.");
+    manifestName = parsePackageManifest(bytes).manifest.name;
+  } catch (error) {
+    throw new HistoryError(400, error instanceof Error ? error.message : "The pinned model manifest is invalid.");
   }
-  if (!isRecord(manifest) || manifest.schema !== "chess-gpt-package-v1") {
-    throw new HistoryError(400, "The pinned model does not use the arena package schema.");
-  }
-  const name = sanitizeName(manifest.name);
+  const name = sanitizeName(manifestName);
   if (!name) throw new HistoryError(400, "The pinned model manifest has no valid name.");
   const manifestSha256 = await sha256Hex(bytes);
   const id = crypto.randomUUID();
@@ -288,20 +355,39 @@ async function getOrCreateModel(reference: string): Promise<ParticipantProfile> 
   const now = Date.now();
   const db = await getD1();
   await db.batch([
+    db.prepare(`INSERT INTO models (repository, display_name, first_seen_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(repository) DO UPDATE SET display_name = excluded.display_name`).bind(
+        resolved.repository,
+        name,
+        now,
+      ),
     db.prepare(`INSERT INTO players
       (id, kind, identity_key, display_name, player_code, created_at, last_played_at)
       VALUES (?, 'model', ?, ?, ?, ?, ?)
       ON CONFLICT(identity_key) DO NOTHING`).bind(id, identityKey, name, playerCode, now, now),
-    db.prepare(`INSERT INTO model_versions (player_id, repository, commit_sha, manifest_sha256)
-      SELECT id, ?, ?, ? FROM players WHERE identity_key = ?
+    db.prepare(`INSERT INTO model_versions (player_id, repository, commit_sha, manifest_sha256, first_seen_at)
+      SELECT id, ?, ?, ?, ? FROM players WHERE identity_key = ?
       ON CONFLICT(player_id) DO NOTHING`).bind(
         resolved.repository,
         resolved.revision,
         manifestSha256,
+        now,
         identityKey,
       ),
   ]);
-  return (await findPlayer(identityKey)) ?? { id, name };
+  const player = (await findPlayer(identityKey)) ?? { id, name };
+  return modelParticipantProfile(player, resolved.reference, resolved.repository, resolved.revision);
+}
+
+function modelParticipantProfile(
+  player: StoredParticipant,
+  reference: string,
+  repository: string,
+  commitSha: string,
+): ModelParticipantProfile {
+  if (!player.id) throw new HistoryError(500, "The model profile has no persistent identity.");
+  return { ...player, id: player.id, reference, repository, commitSha, profileHref: modelPageHref(reference) };
 }
 
 async function findPlayer(identityKey: string): Promise<StoredParticipant | null> {

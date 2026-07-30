@@ -3,11 +3,27 @@ import test from "node:test";
 import { Chess } from "chess.js";
 
 import {
+  buildModelChallengeUrl,
   buildArenaShareUrl,
+  modelChallengeHref,
   readSharedModelReferences,
   readSharedPgn,
   withSharedModelReference,
 } from "../app/arena/share-url.mjs";
+
+test("a model challenge starts a clean human game with one exact reference", () => {
+  assert.equal(
+    modelChallengeHref("alice/model@1234567890abcdef1234567890abcdef12345678"),
+    "/arena?modelA=alice%2Fmodel%401234567890abcdef1234567890abcdef12345678&modelB=",
+  );
+  assert.equal(
+    buildModelChallengeUrl(
+      "https://example.test/arena?game=old&pgn=old&modelA=old&modelB=opponent#board",
+      "alice/model@1234567890abcdef1234567890abcdef12345678",
+    ),
+    "https://example.test/arena?modelA=alice%2Fmodel%401234567890abcdef1234567890abcdef12345678&modelB=#board",
+  );
+});
 
 test("a shared arena URL defines both model fields without borrowing device defaults", () => {
   assert.deepEqual(

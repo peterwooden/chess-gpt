@@ -238,7 +238,8 @@ export default function Home() {
             <Link className="primary-link" href="/chapter-1/data-splits">Continue Chapter 1 <span>→</span></Link>
             <a className="text-link" href="#diagnostic">Review the diagnostic</a>
             <Link className="text-link" href="/arena">Open the browser arena</Link>
-            <Link className="text-link" href="/history">Browse game histories</Link>
+            <Link className="text-link" href="/models">Discover arena models</Link>
+            <Link className="text-link" href="/history">Browse player histories</Link>
             <Link className="text-link" href="/glossary">Browse the glossary</Link>
             <a className="text-link" href="#roadmap">Inspect the roadmap</a>
           </div>

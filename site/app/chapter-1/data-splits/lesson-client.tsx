@@ -163,7 +163,7 @@ export default function LessonClient() {
     <main className="lesson-page">
       <nav className="lesson-nav" aria-label="Lesson navigation">
         <Link href="/">CGPT / LAB</Link>
-        <span>Chapter 01 · Mission 01</span>
+        <div className="lesson-nav-context"><span>Chapter 01 · Mission 01</span><Link href="/models">Models</Link><Link href="/arena">Arena</Link></div>
       </nav>
 
       <header className="lesson-hero">

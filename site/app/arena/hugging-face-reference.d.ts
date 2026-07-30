@@ -5,6 +5,8 @@ export type ResolvedHuggingFaceReference = ParsedHuggingFaceReference & {
 };
 
 export function parseHuggingFaceReference(rawReference: string): ParsedHuggingFaceReference;
+export function modelPageHref(rawReference: string): string;
+export function modelRepositoryHref(repository: string): string;
 export function resolveHuggingFaceReference(
   rawReference: string,
   fetcher?: typeof fetch,

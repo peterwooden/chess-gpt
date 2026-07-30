@@ -26,6 +26,17 @@ export function parseHuggingFaceReference(rawReference) {
   throw new Error("Use a repository URL, tree URL, or direct browser/manifest.json URL.");
 }
 
+export function modelPageHref(rawReference) {
+  const { repository, revision } = parseHuggingFaceReference(rawReference);
+  return `${modelRepositoryHref(repository)}?version=${encodeURIComponent(revision)}`;
+}
+
+export function modelRepositoryHref(repository) {
+  const [owner, name] = repository.split("/");
+  if (!owner || !name) throw new Error("A model repository must use owner/repository.");
+  return `/models/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+}
+
 export async function resolveHuggingFaceReference(rawReference, fetcher = fetch) {
   const parsed = parseHuggingFaceReference(rawReference);
   const endpoint = `https://huggingface.co/api/models/${parsed.repository}/revision/${encodeURIComponent(parsed.revision)}?expand%5B%5D=sha`;

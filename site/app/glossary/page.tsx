@@ -118,7 +118,7 @@ export default function GlossaryPage() {
     <main className="lesson-page">
       <nav className="lesson-nav" aria-label="Glossary navigation">
         <Link href="/">CGPT / LAB</Link>
-        <span>Reference · Glossary</span>
+        <div className="lesson-nav-context"><span>Reference · Glossary</span><Link href="/models">Models</Link><Link href="/arena">Arena</Link></div>
       </nav>
 
       <header className="lesson-hero">

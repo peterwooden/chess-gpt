@@ -8,6 +8,13 @@
       "when": 1785144302752,
       "tag": "0000_cold_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785398809193,
+      "tag": "0001_first-class-models",
+      "breakpoints": true
     }
   ]
 }

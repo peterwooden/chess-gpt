@@ -34,6 +34,29 @@ export function withSharedModelReference(input, slot, reference) {
 }
 
 /**
+ * Build a clean arena setup that challenges one exact model as Player 1.
+ * The explicit empty Player 2 prevents device-local defaults from changing
+ * the intended human-versus-model setup.
+ *
+ * @param {string | URL} input
+ * @param {string} reference
+ * @returns {string}
+ */
+export function buildModelChallengeUrl(input, reference) {
+  const url = new URL(input);
+  url.searchParams.delete("game");
+  url.searchParams.delete(PGN_PARAMETER);
+  url.searchParams.set(MODEL_PARAMETERS.a, reference.trim());
+  url.searchParams.set(MODEL_PARAMETERS.b, "");
+  return url.toString();
+}
+
+export function modelChallengeHref(reference) {
+  const query = new URLSearchParams({ modelA: reference.trim(), modelB: "" });
+  return `/arena?${query}`;
+}
+
+/**
  * Return the PGN carried by a shared arena URL, if present.
  *
  * @param {string | URL} input

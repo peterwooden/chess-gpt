@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { listPlayers } from "../../lib/history";
 import { formatDate, HistoryNav } from "./history-components";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Game history · ChessGPT Arena",
-  description: "Browse human players, immutable chess-model checkpoints, and their recorded arena games.",
+  title: "Players · ChessGPT Arena",
+  description: "Browse signed-in chess players and their recorded arena games.",
 };
 
 type HistorySearchParams = {
@@ -23,7 +24,8 @@ export default async function HistoryPage({
   searchParams: Promise<HistorySearchParams>;
 }) {
   const params = await searchParams;
-  const kind = params.kind === "human" ? "human" : "model";
+  if (params.kind === "model") redirect("/models");
+  const kind = "human" as const;
   const sort = params.sort === "name" || params.sort === "games" ? params.sort : "recent";
   const search = params.q?.trim() ?? "";
   const directory = await listPlayers({ kind, sort, search, cursor: params.cursor });
@@ -33,27 +35,22 @@ export default async function HistoryPage({
 
   return (
     <main className="history-page">
-      <HistoryNav />
+      <HistoryNav active="players" />
       <header className="history-hero">
         <p className="eyebrow">ChessGPT arena ledger</p>
-        <h1>Game history</h1>
-        <p>Browse signed-in human players and the exact immutable model checkpoints they faced.</p>
+        <h1>Players</h1>
+        <p>Browse signed-in human players and the arena games recorded on their profiles.</p>
       </header>
 
       <section className="history-directory" aria-labelledby="directory-title">
-        <nav className="history-tabs" aria-label="History type">
-          <Link className={kind === "model" ? "active" : ""} href="/history?kind=model">Models</Link>
-          <Link className={kind === "human" ? "active" : ""} href="/history?kind=human">Players</Link>
-        </nav>
         <form className="history-filters" action="/history" method="get">
-          <input type="hidden" name="kind" value={kind} />
           <label>
             <span>Search</span>
             <input
               type="search"
               name="q"
               defaultValue={search}
-              placeholder={kind === "model" ? "Name, repository, or SHA" : "Name or player code"}
+              placeholder="Name or player code"
             />
           </label>
           <label>
@@ -68,7 +65,7 @@ export default async function HistoryPage({
         </form>
 
         <div className="history-list-heading" id="directory-title">
-          <span>{kind === "model" ? "Model checkpoint" : "Player"}</span>
+          <span>Player</span>
           <span>Record</span>
           <span>Last game</span>
         </div>
@@ -78,9 +75,7 @@ export default async function HistoryPage({
               <div>
                 <strong>{player.displayName}</strong>
                 <code>
-                  {player.kind === "model"
-                    ? `${player.repository}@${player.commitSha?.slice(0, 10)}…`
-                    : `Player ${player.playerCode}`}
+                  Player {player.playerCode}
                 </code>
               </div>
               <div className="wdl" aria-label={`${player.wins} wins, ${player.draws} draws, ${player.losses} losses`}>
@@ -95,7 +90,7 @@ export default async function HistoryPage({
           )) : (
             <div className="history-empty">
               <span>00</span>
-              <p>{search ? "No matching histories were found." : `No ${kind === "model" ? "model" : "player"} games have been recorded yet.`}</p>
+              <p>{search ? "No matching players were found." : "No player games have been recorded yet."}</p>
             </div>
           )}
         </div>

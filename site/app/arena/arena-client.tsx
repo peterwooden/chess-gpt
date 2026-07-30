@@ -8,6 +8,7 @@ import {
   type BrowserChessModel,
   type LoadProgress,
 } from "./model";
+import { modelPageHref } from "./hugging-face-reference.mjs";
 import {
   buildArenaShareUrl,
   readSharedModelReferences,
@@ -22,6 +23,7 @@ import {
   type ReviewJudgement,
   type ReviewProgress,
 } from "./stockfish-review.mjs";
+import { ReferenceActions } from "../models/reference-actions";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
 const MODEL_AUTOPLAY_DELAY_MS = 650;
@@ -77,12 +79,14 @@ type PlayerStripProps = {
   color: Color;
   name: string;
   profileId?: string | null;
+  modelReference?: string | null;
   captured: PieceSymbol[];
   lead: number;
 };
 
 type Players = Record<Color, string>;
 type PlayerProfiles = Record<Color, string | null>;
+type PlayerModelReferences = Record<Color, string | null>;
 
 type StoredGame = {
   id: string;
@@ -140,6 +144,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const [gameStarted, setGameStarted] = useState(false);
   const [players, setPlayers] = useState<Players>({ w: "White", b: "Black" });
   const [playerProfiles, setPlayerProfiles] = useState<PlayerProfiles>({ w: null, b: null });
+  const [playerModelReferences, setPlayerModelReferences] = useState<PlayerModelReferences>({ w: null, b: null });
   const [recordingEnabled, setRecordingEnabled] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>({ phase: "idle", gameId: null, message: "" });
   const [finishedStatus, setFinishedStatus] = useState<string | null>(null);
@@ -169,6 +174,10 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       setPlayerProfiles({
         w: stored?.whitePlayerId ?? null,
         b: stored?.blackPlayerId ?? null,
+      });
+      setPlayerModelReferences({
+        w: stored?.whiteModelReference ?? null,
+        b: stored?.blackModelReference ?? null,
       });
       const modelReferences = [stored?.whiteModelReference, stored?.blackModelReference].filter(
         (value): value is string => Boolean(value),
@@ -231,6 +240,14 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     if (sharedPgn) {
       try {
         restorePgn(sharedPgn);
+        if (shared) {
+          const headers = gameRef.current.getHeaders();
+          const firstColor: Color = headers.PlayerOneColor === "Black" ? "b" : "w";
+          setPlayerModelReferences({
+            [firstColor]: shared.a || null,
+            [oppositeColor(firstColor)]: shared.b || null,
+          } as PlayerModelReferences);
+        }
       } catch {
         setGameError("This shared PGN could not be loaded.");
       }
@@ -503,6 +520,10 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       [resolvedPlayer1Color]: nextPlayer1Profile,
       [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Profile,
     } as PlayerProfiles);
+    setPlayerModelReferences({
+      [resolvedPlayer1Color]: modelA.model?.info.reference ?? null,
+      [oppositeColor(resolvedPlayer1Color)]: modelB.model?.info.reference ?? null,
+    } as PlayerModelReferences);
     setRecordingEnabled(true);
     setSaveState({ phase: "idle", gameId: null, message: "" });
     setMoves([]);
@@ -704,6 +725,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     setReview(emptyReview());
     setPlayers({ w: "White", b: "Black" });
     setPlayerProfiles({ w: null, b: null });
+    setPlayerModelReferences({ w: null, b: null });
     setRecordingEnabled(false);
     setSaveState({ phase: "idle", gameId: null, message: "" });
     setGameStarted(false);
@@ -720,6 +742,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     color: "w",
     name: players.w,
     profileId: playerProfiles.w,
+    modelReference: playerModelReferences.w,
     captured: whiteCapturedPieces,
     lead: Math.max(0, materialLead),
   };
@@ -727,6 +750,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     color: "b",
     name: players.b,
     profileId: playerProfiles.b,
+    modelReference: playerModelReferences.b,
     captured: blackCapturedPieces,
     lead: Math.max(0, -materialLead),
   };
@@ -767,7 +791,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     <main className="arena-page arena-page-v2">
       <nav className="arena-nav" aria-label="Arena navigation">
         <Link href="/" className="arena-title">ChessGPT arena</Link>
-        <div className="arena-nav-links"><Link href="/history">History</Link></div>
+        <div className="arena-nav-links"><Link href="/models">Models</Link><Link href="/history">Players</Link></div>
       </nav>
 
       <section className={`arena-workspace ${gameStarted ? "game-mode" : "setup-mode"}`} aria-label="Chess arena">
@@ -953,6 +977,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                   review={review}
                   players={players}
                   profiles={playerProfiles}
+                  modelReferences={playerModelReferences}
                   onRetry={() => setReviewAttempt((attempt) => attempt + 1)}
                 />
               ) : null}
@@ -985,6 +1010,20 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                   {saveState.phase === "saved" && saveState.gameId ? <Link href={`/arena?game=${saveState.gameId}`}>Recorded game</Link> : null}
                   {saveState.phase === "error" ? <button type="button" onClick={() => setSaveState({ phase: "idle", gameId: null, message: "" })}>Retry</button> : null}
                 </p>
+              ) : null}
+              {gameEnded && (playerModelReferences.w || playerModelReferences.b) ? (
+                <section className="replay-model-actions" aria-label="Challenge models from this game">
+                  {(["w", "b"] as const).map((color) => {
+                    const reference = playerModelReferences[color];
+                    return reference ? (
+                      <div key={color}>
+                        <span>{color === "w" ? "White" : "Black"} · {players[color]}</span>
+                        <code>{reference}</code>
+                        <ReferenceActions reference={reference} compact />
+                      </div>
+                    ) : null;
+                  })}
+                </section>
               ) : null}
               {gameEnded && shareOpen ? (
                 <div className="share-options" id="arena-share-options" role="menu" aria-label="Share game">
@@ -1080,11 +1119,13 @@ function GameReviewSummary({
   review,
   players,
   profiles,
+  modelReferences,
   onRetry,
 }: {
   review: ReviewState;
   players: Players;
   profiles: PlayerProfiles;
+  modelReferences: PlayerModelReferences;
   onRetry: () => void;
 }) {
   if (review.phase === "loading" || review.phase === "analyzing") {
@@ -1112,8 +1153,8 @@ function GameReviewSummary({
       aria-label={`Post-game review by ${review.result.engine}`}
       title={`${review.result.engine} · ${review.result.nodesPerPosition.toLocaleString()} nodes per position`}
     >
-      <PlayerReviewSummary color="White" name={players.w} profileId={profiles.w} review={review.result.players.w} />
-      <PlayerReviewSummary color="Black" name={players.b} profileId={profiles.b} review={review.result.players.b} />
+      <PlayerReviewSummary color="White" name={players.w} profileId={profiles.w} modelReference={modelReferences.w} review={review.result.players.w} />
+      <PlayerReviewSummary color="Black" name={players.b} profileId={profiles.b} modelReference={modelReferences.b} review={review.result.players.b} />
     </section>
   );
 }
@@ -1122,18 +1163,22 @@ function PlayerReviewSummary({
   color,
   name,
   profileId,
+  modelReference,
   review,
 }: {
   color: string;
   name: string;
   profileId?: string | null;
+  modelReference?: string | null;
   review: PlayerReview;
 }) {
   return (
     <div className="review-player">
       <div className="review-player-heading">
         <span>{color}</span>
-        {profileId ? <Link href={`/players/${profileId}`} title={name}>{name}</Link> : <b title={name}>{name}</b>}
+        {modelReference
+          ? <Link href={modelPageHref(modelReference)} title={name}>{name}</Link>
+          : profileId ? <Link href={`/players/${profileId}`} title={name}>{name}</Link> : <b title={name}>{name}</b>}
       </div>
       <strong><b>{Math.round(review.accuracy)}%</b> accuracy</strong>
       <div className="review-categories">
@@ -1188,7 +1233,7 @@ function judgementName(judgement: ReviewJudgement): string {
   return JUDGEMENT_META[judgement].label;
 }
 
-function PlayerStrip({ color, name, profileId, captured, lead }: PlayerStripProps) {
+function PlayerStrip({ color, name, profileId, modelReference, captured, lead }: PlayerStripProps) {
   const colorName = color === "w" ? "White" : "Black";
   const capturedColor = oppositeColor(color);
 
@@ -1196,7 +1241,9 @@ function PlayerStrip({ color, name, profileId, captured, lead }: PlayerStripProp
     <section className={`player-strip ${color === "w" ? "white" : "black"}`} aria-label={`${colorName} player`}>
       <div className="player-identity">
         <span>{colorName}</span>
-        {profileId ? <Link href={`/players/${profileId}`}>{name}</Link> : <strong>{name}</strong>}
+        {modelReference
+          ? <Link href={modelPageHref(modelReference)}>{name}</Link>
+          : profileId ? <Link href={`/players/${profileId}`}>{name}</Link> : <strong>{name}</strong>}
       </div>
       <div className="captured-pieces" aria-label={`${colorName} captured pieces`}>
         {captured.length > 0 ? captured.map((piece, index) => (
@@ -1258,7 +1305,7 @@ function ModelLoader({
       {slot.model ? (
         <div className="model-summary">
           {slot.profileId
-            ? <Link href={`/players/${slot.profileId}`}><strong>{slot.model.info.name}</strong></Link>
+            ? <Link href={modelPageHref(slot.model.info.reference)}><strong>{slot.model.info.name}</strong></Link>
             : <strong>{slot.model.info.name}</strong>}
           <span>{slot.model.info.runtime} · {formatBytes(slot.model.info.artifactBytes)} · {slot.model.info.pinned ? "Pinned" : "Mutable"}</span>
           <code title={`SHA-256 ${slot.model.info.digest}`}>SHA {slot.model.info.digest.slice(0, 12)}…</code>

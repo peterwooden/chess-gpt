@@ -15,11 +15,21 @@ export const players = sqliteTable("players", {
   index("players_display_name_idx").on(table.displayName, table.id),
 ]);
 
+export const models = sqliteTable("models", {
+  repository: text("repository").primaryKey(),
+  displayName: text("display_name").notNull(),
+  firstSeenAt: integer("first_seen_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  index("models_display_name_idx").on(table.displayName, table.repository),
+  index("models_first_seen_idx").on(table.firstSeenAt, table.repository),
+]);
+
 export const modelVersions = sqliteTable("model_versions", {
   playerId: text("player_id").primaryKey().references(() => players.id),
-  repository: text("repository").notNull(),
+  repository: text("repository").notNull().references(() => models.repository),
   commitSha: text("commit_sha").notNull(),
   manifestSha256: text("manifest_sha256").notNull(),
+  firstSeenAt: integer("first_seen_at", { mode: "timestamp_ms" }).notNull(),
 }, (table) => [
   uniqueIndex("model_versions_repository_commit_unique").on(table.repository, table.commitSha),
   index("model_versions_repository_idx").on(table.repository),

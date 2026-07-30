@@ -1,9 +1,12 @@
 import { init, parse, type ImportSpecifier } from "es-module-lexer";
 import { createImmutableDownloadCache } from "./immutable-download-cache.mjs";
 import { resolveHuggingFaceReference } from "./hugging-face-reference.mjs";
+import {
+  PACKAGE_LIMIT_BYTES,
+  parsePackageManifest,
+  type ArtifactDescriptor,
+} from "./package-manifest.mjs";
 
-const PACKAGE_SCHEMA = "chess-gpt-package-v1";
-const PACKAGE_LIMIT_BYTES = 100_000_000;
 const HF_HOSTS = new Set(["huggingface.co", "www.huggingface.co"]);
 const immutableDownloadCache = createImmutableDownloadCache();
 
@@ -38,20 +41,6 @@ export type BrowserChessModel = {
   dispose(): Promise<void>;
 };
 
-type ArtifactDescriptor = {
-  path: string;
-  sha256: string;
-  bytes: number;
-};
-
-type PackageManifest = {
-  schema: typeof PACKAGE_SCHEMA;
-  name: string;
-  entrypoint: ArtifactDescriptor;
-  artifacts: Record<string, ArtifactDescriptor>;
-  config: unknown;
-};
-
 type WorkerResponse = {
   id: number;
   ok: boolean;
@@ -71,7 +60,7 @@ export async function loadBrowserModel(
     PACKAGE_LIMIT_BYTES,
     onProgress,
   );
-  const { manifest, packageBytes } = parsePackage(manifestBytes);
+  const { manifest, packageBytes } = parsePackageManifest(manifestBytes);
 
   const entrypointUrl = packageFileUrl(reference.manifestUrl, manifest.entrypoint.path);
   const entrypointBytes = await immutableDownloadCache.load({
@@ -92,7 +81,7 @@ export async function loadBrowserModel(
   });
 
   const artifacts: Array<{ name: string; bytes: Uint8Array }> = [];
-  for (const [name, descriptor] of Object.entries(manifest.artifacts)) {
+  for (const [name, descriptor] of Object.entries(manifest.artifacts) as Array<[string, ArtifactDescriptor]>) {
     const artifactUrl = packageFileUrl(reference.manifestUrl, descriptor.path);
     const bytes = await immutableDownloadCache.load({
       url: artifactUrl,
@@ -244,74 +233,6 @@ async function assertSelfContainedEntrypoint(bytes: Uint8Array): Promise<void> {
   }
 }
 
-function parseManifest(value: unknown): PackageManifest {
-  if (!isRecord(value) || value.schema !== PACKAGE_SCHEMA) {
-    throw new Error(`Unsupported package. Expected schema ${PACKAGE_SCHEMA}.`);
-  }
-  if (typeof value.name !== "string" || !value.name.trim()) {
-    throw new Error("The package manifest requires a non-empty name.");
-  }
-  const entrypoint = parseDescriptor(value.entrypoint, "entrypoint");
-  if (!isRecord(value.artifacts) || !("config" in value)) {
-    throw new Error("The package manifest requires artifacts and config fields.");
-  }
-
-  const artifacts: Record<string, ArtifactDescriptor> = {};
-  for (const [name, rawDescriptor] of Object.entries(value.artifacts)) {
-    if (!name) throw new Error("Artifact names must be non-empty.");
-    artifacts[name] = parseDescriptor(rawDescriptor, `artifact “${name}”`);
-  }
-  const paths = [entrypoint.path, ...Object.values(artifacts).map((item) => item.path)];
-  if (new Set(paths).size !== paths.length) throw new Error("Package file paths must be unique.");
-
-  return {
-    schema: PACKAGE_SCHEMA,
-    name: value.name,
-    entrypoint,
-    artifacts,
-    config: value.config,
-  };
-}
-
-function parsePackage(bytes: Uint8Array): { manifest: PackageManifest; packageBytes: number } {
-  const manifest = parseManifest(decodeJson(bytes, "package manifest"));
-  const declaredBytes = manifest.entrypoint.bytes
-    + Object.values(manifest.artifacts).reduce((total, artifact) => total + artifact.bytes, 0);
-  const packageBytes = bytes.byteLength + declaredBytes;
-  if (packageBytes > PACKAGE_LIMIT_BYTES) {
-    throw new Error(`The package is ${formatBytes(packageBytes)}, over the 100 MB limit.`);
-  }
-  return { manifest, packageBytes };
-}
-
-function parseDescriptor(value: unknown, label: string): ArtifactDescriptor {
-  if (!isRecord(value)) throw new Error(`The ${label} descriptor is missing.`);
-  if (!isSafeRelativePath(value.path)) {
-    throw new Error(`The ${label} path must stay beneath browser/ and may not contain '..'.`);
-  }
-  if (!Number.isInteger(value.bytes) || (value.bytes as number) < 0) {
-    throw new Error(`The ${label} must declare its exact byte length.`);
-  }
-  if (typeof value.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(value.sha256)) {
-    throw new Error(`The ${label} must declare a lowercase SHA-256 digest.`);
-  }
-  return { path: value.path as string, bytes: value.bytes as number, sha256: value.sha256 };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function isSafeRelativePath(value: unknown): value is string {
-  return typeof value === "string"
-    && value.length > 0
-    && !value.startsWith("/")
-    && !value.includes("\\")
-    && !value.includes("?")
-    && !value.includes("#")
-    && !value.split("/").some((part) => part === "" || part === "." || part === "..");
-}
-
 function packageFileUrl(manifestUrl: string, relativePath: string): string {
   const base = new URL(".", manifestUrl);
   const url = new URL(relativePath, base);
@@ -388,16 +309,4 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   digestInput.set(bytes);
   const digest = await crypto.subtle.digest("SHA-256", digestInput);
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-function decodeJson(bytes: Uint8Array, label: string): unknown {
-  try {
-    return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
-    throw new Error(`The ${label} is not valid JSON.`);
-  }
-}
-
-function formatBytes(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }

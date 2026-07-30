@@ -297,6 +297,7 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .lesson-nav { position: sticky; z-index: 40; top: 0; display: flex; justify-content: space-between; gap: 1rem; align-items: center; min-height: 3.75rem; padding: 0 1rem; border-bottom: 1px solid rgb(20 63 49 / 0.18); background: rgb(241 237 226 / 0.93); backdrop-filter: blur(14px); }
 .lesson-nav a { color: var(--green); font-family: ui-monospace, monospace; font-size: 0.75rem; font-weight: 900; letter-spacing: 0.08em; text-decoration: none; }
 .lesson-nav span { color: var(--muted); font-size: 0.62rem; font-weight: 850; letter-spacing: 0.07em; text-align: right; text-transform: uppercase; }
+.lesson-nav-context { display: flex; gap: 1rem; align-items: center; }
 .lesson-hero, .lesson-section, .mission-complete, .lesson-footer { width: min(100% - 2rem, 68rem); margin-inline: auto; }
 .lesson-hero { display: grid; gap: 2rem; padding: 4.5rem 0; }
 .lesson-hero h1 { max-width: 10ch; font-size: clamp(3.6rem, 15vw, 7.5rem); }
@@ -835,6 +836,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .history-nav > div { display: flex; gap: 1.2rem; }
 .history-nav > div a { color: var(--green); font-size: 0.72rem; font-weight: 850; text-decoration: none; }
 .history-nav > div a:hover { text-decoration: underline; text-underline-offset: 0.25rem; }
+.history-nav > div a.active { text-decoration: underline; text-decoration-thickness: 0.14rem; text-underline-offset: 0.3rem; }
 .history-hero, .history-directory, .profile-hero, .profile-games { width: min(100% - 2rem, 72rem); margin-inline: auto; }
 .history-hero { padding: clamp(4rem, 9vw, 7rem) 0 3rem; }
 .history-hero h1 { max-width: none; font-size: clamp(3.5rem, 10vw, 7rem); }
@@ -859,6 +861,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .history-directory-row > div:first-child { display: grid; gap: 0.35rem; min-width: 0; }
 .history-directory-row > div:first-child strong { overflow: hidden; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.25rem; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .history-directory-row code { overflow: hidden; color: var(--muted); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.latest-model-reference { overflow: hidden; color: var(--amber); font-family: ui-monospace, monospace; font-size: 0.58rem; text-overflow: ellipsis; white-space: nowrap; }
 .history-directory-row time { color: var(--muted); font-size: 0.72rem; }
 .row-arrow { color: var(--amber); font-weight: 900; }
 .wdl { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; align-items: baseline; }
@@ -902,9 +905,56 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .game-meta { display: grid; gap: 0.3rem; color: var(--muted); font-size: 0.68rem; }
 .replay-link { color: var(--green); font-size: 0.7rem; font-weight: 900; text-underline-offset: 0.25rem; }
 
+/* First-class model catalog */
+.model-filters { border-top: 1px solid var(--green); }
+.model-list-heading { grid-template-columns: minmax(0, 1.5fr) minmax(12rem, 0.8fr) 6rem 8rem; }
+.model-directory-row { grid-template-columns: minmax(0, 1.5fr) minmax(12rem, 0.8fr) 6rem 8rem 1rem; }
+.version-count { display: grid; gap: 0.15rem; }
+.version-count strong { font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.6rem; font-weight: 500; }
+.version-count span { color: var(--muted); font-size: 0.6rem; }
+.model-repository { display: block; overflow: hidden; margin-top: 0.8rem; color: var(--muted); font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+.selected-reference { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center; margin-top: 2rem; padding: 1rem; border: 1px solid var(--green); background: var(--paper-light); }
+.selected-reference > div:first-child { display: grid; gap: 0.45rem; min-width: 0; }
+.selected-reference > div:first-child span { color: var(--muted); font-size: 0.56rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.selected-reference code { overflow: hidden; font-size: 0.75rem; text-overflow: ellipsis; white-space: nowrap; }
+.reference-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; justify-content: flex-end; }
+.reference-actions button, .reference-actions a { min-height: 2.45rem; padding: 0.68rem 0.85rem; border: 1px solid var(--green); border-radius: 0.15rem; font: inherit; font-size: 0.68rem; font-weight: 900; text-decoration: none; cursor: pointer; }
+.reference-actions button { color: var(--green); background: var(--white); }
+.reference-actions a { color: var(--white); background: var(--green); }
+.reference-actions > span { flex-basis: 100%; min-height: 0.8rem; color: var(--muted); font-size: 0.58rem; text-align: right; }
+.reference-actions.compact button, .reference-actions.compact a { min-height: 2rem; padding: 0.48rem 0.65rem; font-size: 0.6rem; }
+.model-version-section { width: min(100% - 2rem, 72rem); margin: 0 auto; padding: 2.5rem 0 4rem; border-top: 1px solid var(--green); }
+.version-timeline { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.version-timeline > li { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 1.25rem; }
+.version-date { position: relative; padding-top: 1rem; color: var(--muted); font-size: 0.68rem; text-align: right; }
+.version-date::after { position: absolute; top: 1.4rem; right: -0.7rem; bottom: -1rem; width: 1px; background: var(--line); content: ""; }
+.version-timeline > li:last-child .version-date::after { display: none; }
+.version-date i { position: absolute; z-index: 1; top: 1.15rem; right: -0.93rem; width: 0.5rem; height: 0.5rem; border: 0.14rem solid var(--paper); border-radius: 50%; background: var(--amber); }
+.version-timeline article { min-width: 0; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--line); background: var(--paper-light); }
+.version-timeline li.selected article { border-color: var(--green); box-shadow: 0.25rem 0.25rem 0 var(--green-soft); }
+.version-timeline article > header { display: flex; justify-content: space-between; gap: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--line); }
+.version-timeline article > header > div { display: grid; gap: 0.3rem; min-width: 0; }
+.version-timeline article header code { overflow: hidden; color: var(--muted); font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.version-timeline article header > span { color: var(--green); font-size: 0.58rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.version-timeline dl { display: grid; grid-template-columns: minmax(0, 1.5fr) auto auto; gap: 1rem; margin: 0; padding: 0.8rem 0; }
+.version-timeline dl div { min-width: 0; }
+.version-timeline dt { margin-bottom: 0.25rem; color: var(--muted); font-size: 0.52rem; font-weight: 900; text-transform: uppercase; }
+.version-timeline dd { overflow: hidden; margin: 0; font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.version-timeline dd code { font-size: 0.62rem; }
+.version-actions { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.version-actions > a { color: var(--green); font-size: 0.68rem; font-weight: 900; }
+.replay-model-actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); background: var(--paper-light); }
+.replay-model-actions > div { display: grid; gap: 0.25rem; min-width: 0; padding: 0.55rem; }
+.replay-model-actions > div + div { border-left: 1px solid var(--line); }
+.replay-model-actions span { color: var(--muted); font-size: 0.52rem; font-weight: 850; }
+.replay-model-actions code { overflow: hidden; font-size: 0.54rem; text-overflow: ellipsis; white-space: nowrap; }
+.replay-model-actions .reference-actions { justify-content: flex-start; }
+.replay-model-actions .reference-actions > span { display: none; }
+
 @media (max-width: 700px) {
   .history-nav { min-height: 3.2rem; padding-inline: 0.75rem; }
-  .history-hero, .history-directory, .profile-hero, .profile-games { width: calc(100% - 1rem); }
+  .history-nav > div { gap: 0.7rem; }
+  .history-hero, .history-directory, .profile-hero, .profile-games, .model-version-section { width: calc(100% - 1rem); }
   .history-hero { padding-top: 3rem; }
   .history-hero h1, .profile-hero h1 { font-size: 3.25rem; }
   .history-filters { grid-template-columns: 1fr 1fr; }
@@ -912,6 +962,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .history-list-heading { display: none; }
   .history-directory-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.7rem; min-height: 0; }
   .history-directory-row .wdl { grid-column: 1 / -1; }
+  .model-directory-row .version-count { grid-column: 1; }
   .history-directory-row time { grid-column: 1; }
   .history-directory-row .row-arrow { grid-column: 2; grid-row: 1; }
   .profile-title { display: grid; }
@@ -923,6 +974,15 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .game-history-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.65rem; }
   .game-meta { grid-column: 2; }
   .replay-link { grid-column: 3; grid-row: 1 / span 2; }
+  .selected-reference { grid-template-columns: 1fr; }
+  .selected-reference .reference-actions { justify-content: flex-start; }
+  .selected-reference .reference-actions > span { text-align: left; }
+  .version-timeline > li { grid-template-columns: 1fr; gap: 0; }
+  .version-date { padding: 0 0 0.5rem; text-align: left; }
+  .version-date::after, .version-date i { display: none; }
+  .version-timeline dl { grid-template-columns: 1fr; gap: 0.65rem; }
+  .version-actions { display: grid; }
+  .version-actions .reference-actions { justify-content: flex-start; }
 }
 
 @media (max-width: 959px) {

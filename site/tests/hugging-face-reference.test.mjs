@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  modelPageHref,
   parseHuggingFaceReference,
   resolveHuggingFaceReference,
 } from "../app/arena/hugging-face-reference.mjs";
@@ -40,5 +41,12 @@ test("rejects an invalid revision response", async () => {
       sha: "main",
     }))),
     /invalid model revision/,
+  );
+});
+
+test("builds a canonical model page link for an immutable reference", () => {
+  assert.equal(
+    modelPageHref("alice/quiet-model@1234567890abcdef1234567890abcdef12345678"),
+    "/models/alice/quiet-model?version=1234567890abcdef1234567890abcdef12345678",
   );
 });
