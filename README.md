@@ -46,6 +46,19 @@ The measured runs, validation, exact 50-50 paired result, package integrity, and
 interpretation limits are documented in
 [`docs/TOURNAMENT_CANDIDATES_0002_0003.md`](docs/TOURNAMENT_CANDIDATES_0002_0003.md).
 
+Experiments [`0004`](experiments/0004-strong-winner-snapshot-policy.toml) and
+[`0005`](experiments/0005-strong-winner-phase-moe-policy.toml) retrain those same
+architectures at exactly matched per-model position and FLOP budgets, retaining only
+moves by decisive-game winners rated at least 1600. Both beat their predecessors in
+100-game paired validation matches: 0004 scored 59.5–40.5 and 0005 scored 53–47.
+The complete design, honest comparison with the predicted 80% win rate, and package
+evidence are in
+[`docs/STRONG_WINNER_CANDIDATES_0004_0005.md`](docs/STRONG_WINNER_CANDIDATES_0004_0005.md).
+The public immutable packages are
+[0004 · strong-winner snapshot](https://huggingface.co/peterwooden/chess-gpt-board-snapshot-strong-winner-0004/tree/d29db50441c36a109f714b9aafd231fa8e37008c)
+and
+[0005 · strong-winner phase MoE](https://huggingface.co/peterwooden/chess-gpt-phase-moe-strong-winner-0005/tree/6bae33a48f207aa1519bbca620094f77ace61dfb).
+
 The reusable, resumable tournament-data workflow is documented in [`data/README.md`](data/README.md). Generated archives, prepared Parquet, checkpoints, ONNX models, and packages remain outside Git under `data/downloads/` and `runs/`.
 
 Both laptop runs use the same data, model width, encoder depth, optimizer, batch size,

@@ -1,6 +1,6 @@
 [experiment]
 id = "0004-strong-winner-snapshot-policy"
-status = "planned"
+status = "completed_and_published"
 question = "Does training only on moves made by decisive-game winners rated at least 1600 make the snapshot policy stronger than model 0002?"
 hypothesis = "Removing moves by losing players and winners rated below 1600 concentrates the fixed compute budget on stronger move choices."
 intentional_change = "Relative to model 0002, change only training-data selection: require a decisive result and winner ELO >= 1600, then retain only positions where the winner is to move. The losing player's ELO is unrestricted."
@@ -70,3 +70,68 @@ test_split_used = false
 hugging_face_repository = "peterwooden/chess-gpt-board-snapshot-strong-winner-0004"
 public = true
 github_release = "strong-winner-candidates-0004-0005"
+public_url = "https://huggingface.co/peterwooden/chess-gpt-board-snapshot-strong-winner-0004"
+immutable_artifact_revision = "d29db50441c36a109f714b9aafd231fa8e37008c"
+complete_evidence_revision = "0069b9427d101dfa9f18ab946b6870ec88523e68"
+remote_repository_private = false
+remote_byte_comparison_passed = true
+remote_manifest_validation_passed = true
+remote_onnx_runtime_web_1_27_load_passed = true
+remote_legal_san_self_play_plies = 40
+
+[result]
+completed_at_utc = "2026-07-30T01:46:35.789493+00:00"
+stop_reason = "position_limit"
+updates = 26262
+training_positions = 3356140
+training_tokens = 218149100
+final_training_loss = 2.708888053894043
+actual_training_flops = 11029491768153600
+total_lineage_flops = 11029491768153600
+elapsed_seconds_including_validation = 10504.68026479194
+training_cost_usd = 0.0
+validation_positions = 174404
+validation_loss = 2.7966004174602284
+validation_raw_top1_accuracy = 0.2848558519300016
+validation_legal_top1_accuracy = 0.30404692552923096
+validation_legal_move_rate = 1.0
+checkpoint_bytes = 42374517
+checkpoint_sha256 = "98f8ba18a00d35db72b6c58af121614b2c3ff871682475c71b32ed346130d50d"
+metrics_sha256 = "30be9a3ccfdf60c2c724b5b6a6b31f27184831923aa08c113c6e2908d1a21fef"
+loss_log_entries = 26262
+loss_log_bytes = 4026628
+loss_log_sha256 = "f770c2da8229fbaa18300b159f0fc735fab1e3ede791dc7cbd01dcbb5a87d5da"
+code_revision = "354f8feeb25b4db6786f1df2cec2b889204142bc"
+environment_lock_sha256 = "9a3b2f8cc72313233ce014e54133e89b3b28353837f32d5b97dd8db0c5f3be67"
+hardware = "Apple M4 Mac mini, 16 GB, MPS float32, macOS 26.5.1, arm64, PyTorch 2.13.0"
+
+[package]
+schema = "chess-gpt-package-v1"
+canonical_bytes = 42585891
+manifest_sha256 = "bb8bfc07ec10bb98535113a65c3b5393d6586dad140fe58945f6321d3c23f68c"
+entrypoint_bytes = 38737
+entrypoint_sha256 = "98c73c772e6301660a0a1db9e0d60deb9a05f41d94e684b79b87821fcd1115d7"
+model_bytes = 42545092
+model_sha256 = "c4a1fb08753b9e98584b3c5d5675125588298c2851e120e85c9b1e61d808f586"
+vocabulary_bytes = 1434
+vocabulary_sha256 = "55a7e3be3981a60ae332c041953bb79cbd3cb56ffa4f2b1dcd12c47dbdc6dca6"
+local_onnx_runtime_web_1_27_load_passed = true
+local_legal_san_self_play_plies = 40
+
+[paired_match]
+artifact = "runs/0004-vs-0002-paired-match.json"
+artifact_bytes = 24618
+artifact_sha256 = "3c43171ca5ad4280f35175b4213ac4007e1a39db2f6a54251527a3d6a6af2644"
+evaluator_source_sha256 = "e166624f4c9fdb1fce1a0b46f3abc00b75e3dbdd9ec62b43e9a393becaff4174"
+opening_source = "first 50 distinct valid ply-12 positions in the frozen unfiltered April validation shard; not the unrevealed official tournament openings"
+games = 100
+model_0004_wins = 22
+model_0002_wins = 3
+draws = 75
+model_0004_score = 59.5
+model_0002_score = 40.5
+model_0004_score_rate = 0.595
+model_0004_win_rate = 0.22
+result_against_prediction = "The direction was supported, but the predicted 80% all-game win rate was not: model 0004 won 22%, scoring 59.5%."
+failure_mode_tested = false
+failure_mode_note = "The match used model 0002 as the opponent and does not test play against deliberately weak players."
