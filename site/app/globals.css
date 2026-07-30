@@ -616,10 +616,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .player-strip.black { color: var(--white); background: #1b3027; }
 .board-frame .chessboard + .player-strip { border-top: 0; border-bottom: 1px solid var(--green); }
 .player-identity { display: flex; gap: 0.55rem; align-items: baseline; min-width: 0; }
-.player-identity > span { flex: none; color: var(--muted); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
-.player-strip.black .player-identity > span { color: #b8d5c7; }
-.player-identity > strong, .player-identity > a { overflow: hidden; font-size: 0.72rem; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
-.player-identity > a { text-underline-offset: 0.18rem; }
+.player-identity > .player-color { flex: none; color: var(--muted); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.player-strip.black .player-identity > .player-color { color: #b8d5c7; }
+.player-identity > strong, .player-identity > a, .player-identity .model-name-with-copy > a { overflow: hidden; font-size: 0.72rem; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
+.player-identity > a, .player-identity .model-name-with-copy > a { text-underline-offset: 0.18rem; }
 .captured-pieces { display: flex; overflow: hidden; gap: 0.08rem; align-items: center; min-height: 1.15rem; }
 .captured-piece { font-family: "Chess Merida"; font-size: 1.15rem; font-style: normal; font-weight: 400; line-height: 1; }
 .captured-piece.black { color: #18241d; }
@@ -754,9 +754,16 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .review-player { display: grid; gap: 0.28rem; min-width: 0; padding: 0.55rem 0.7rem; border-right: 1px solid var(--line); }
 .review-player:last-child { border-right: 0; }
 .review-player-heading { display: flex; gap: 0.38rem; align-items: baseline; min-width: 0; }
-.review-player-heading > span { flex: none; color: var(--muted); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; }
-.review-player-heading > b, .review-player-heading > a { overflow: hidden; color: var(--ink); font-size: 0.5rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-.review-player-heading > a { text-underline-offset: 0.15rem; }
+.review-player-heading > .review-player-color { flex: none; color: var(--muted); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; }
+.review-player-heading > b, .review-player-heading > a, .review-player-heading .model-name-with-copy > a { overflow: hidden; color: var(--ink); font-size: 0.5rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.review-player-heading > a, .review-player-heading .model-name-with-copy > a { text-underline-offset: 0.15rem; }
+.model-name-with-copy { display: flex; flex: 1 1 auto; gap: 0.22rem; align-items: center; min-width: 0; }
+.model-name-with-copy > a { flex: 1 1 auto; min-width: 0; }
+.model-name-copy { display: inline-grid; flex: none; width: 1.15rem; height: 1.15rem; padding: 0; border: 0; border-radius: 0.12rem; place-items: center; color: currentcolor; background: transparent; opacity: 0; pointer-events: none; cursor: pointer; transition: opacity 120ms ease, background 120ms ease; }
+.model-name-copy svg { width: 0.72rem; height: 0.72rem; overflow: visible; fill: none; stroke: currentcolor; stroke-width: 1.4; }
+.model-name-with-copy:hover .model-name-copy, .model-name-with-copy:focus-within .model-name-copy, .model-name-with-copy.copied .model-name-copy, .model-name-with-copy.revealed .model-name-copy { opacity: 1; pointer-events: auto; }
+.model-name-copy:hover, .model-name-copy:focus-visible { background: var(--green-soft); }
+.player-strip.black .model-name-copy:hover, .player-strip.black .model-name-copy:focus-visible { color: var(--green); }
 .review-player > strong { display: flex; gap: 0.32rem; align-items: baseline; color: var(--muted); font-size: 0.56rem; font-weight: 750; }
 .review-player > strong b { color: var(--ink); font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: 1.25rem; font-weight: 550; letter-spacing: -0.035em; }
 .review-categories { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 0.08rem; }
@@ -943,14 +950,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .version-timeline dd code { font-size: 0.62rem; }
 .version-actions { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
 .version-actions > a { color: var(--green); font-size: 0.68rem; font-weight: 900; }
-.replay-model-actions { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); background: var(--paper-light); }
-.replay-model-actions > div { display: grid; gap: 0.25rem; min-width: 0; padding: 0.55rem; }
-.replay-model-actions > div + div { border-left: 1px solid var(--line); }
-.replay-model-actions span { color: var(--muted); font-size: 0.52rem; font-weight: 850; }
-.replay-model-actions code { overflow: hidden; font-size: 0.54rem; text-overflow: ellipsis; white-space: nowrap; }
-.replay-model-actions .reference-actions { justify-content: flex-start; }
-.replay-model-actions .reference-actions > span { display: none; }
-
 @media (max-width: 700px) {
   .history-nav { min-height: 3.2rem; padding-inline: 0.75rem; }
   .history-nav > div { gap: 0.7rem; }

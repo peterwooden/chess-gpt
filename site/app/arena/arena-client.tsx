@@ -23,7 +23,6 @@ import {
   type ReviewJudgement,
   type ReviewProgress,
 } from "./stockfish-review.mjs";
-import { ReferenceActions } from "../models/reference-actions";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
 const MODEL_AUTOPLAY_DELAY_MS = 650;
@@ -1011,20 +1010,6 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                   {saveState.phase === "error" ? <button type="button" onClick={() => setSaveState({ phase: "idle", gameId: null, message: "" })}>Retry</button> : null}
                 </p>
               ) : null}
-              {gameEnded && (playerModelReferences.w || playerModelReferences.b) ? (
-                <section className="replay-model-actions" aria-label="Challenge models from this game">
-                  {(["w", "b"] as const).map((color) => {
-                    const reference = playerModelReferences[color];
-                    return reference ? (
-                      <div key={color}>
-                        <span>{color === "w" ? "White" : "Black"} · {players[color]}</span>
-                        <code>{reference}</code>
-                        <ReferenceActions reference={reference} compact />
-                      </div>
-                    ) : null;
-                  })}
-                </section>
-              ) : null}
               {gameEnded && shareOpen ? (
                 <div className="share-options" id="arena-share-options" role="menu" aria-label="Share game">
                   <button type="button" role="menuitem" onClick={() => void shareGame(false)}>
@@ -1175,9 +1160,9 @@ function PlayerReviewSummary({
   return (
     <div className="review-player">
       <div className="review-player-heading">
-        <span>{color}</span>
+        <span className="review-player-color">{color}</span>
         {modelReference
-          ? <Link href={modelPageHref(modelReference)} title={name}>{name}</Link>
+          ? <ModelNameWithCopy name={name} reference={modelReference} />
           : profileId ? <Link href={`/players/${profileId}`} title={name}>{name}</Link> : <b title={name}>{name}</b>}
       </div>
       <strong><b>{Math.round(review.accuracy)}%</b> accuracy</strong>
@@ -1233,6 +1218,54 @@ function judgementName(judgement: ReviewJudgement): string {
   return JUDGEMENT_META[judgement].label;
 }
 
+function ModelNameWithCopy({ name, reference }: { name: string; reference: string }) {
+  const [copied, setCopied] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+
+  const copyReference = async () => {
+    try {
+      await navigator.clipboard.writeText(reference);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <span className={`model-name-with-copy${copied ? " copied" : ""}${revealed ? " revealed" : ""}`}>
+      <Link
+        href={modelPageHref(reference)}
+        title={name}
+        onClick={(event) => {
+          if (!revealed && window.matchMedia("(hover: none)").matches) {
+            event.preventDefault();
+            setRevealed(true);
+          }
+        }}
+      >
+        {name}
+      </Link>
+      <button
+        className="model-name-copy"
+        type="button"
+        aria-label={`Copy full reference for ${name}`}
+        title={copied ? "Reference copied" : "Copy full reference"}
+        onClick={() => void copyReference()}
+      >
+        {copied ? (
+          <span aria-hidden="true">✓</span>
+        ) : (
+          <svg aria-hidden="true" viewBox="0 0 16 16">
+            <rect x="5" y="5" width="8" height="8" rx="1" />
+            <path d="M3 11H2.5A1.5 1.5 0 0 1 1 9.5v-7A1.5 1.5 0 0 1 2.5 1h7A1.5 1.5 0 0 1 11 2.5V3" />
+          </svg>
+        )}
+      </button>
+    </span>
+  );
+}
+
 function PlayerStrip({ color, name, profileId, modelReference, captured, lead }: PlayerStripProps) {
   const colorName = color === "w" ? "White" : "Black";
   const capturedColor = oppositeColor(color);
@@ -1240,9 +1273,9 @@ function PlayerStrip({ color, name, profileId, modelReference, captured, lead }:
   return (
     <section className={`player-strip ${color === "w" ? "white" : "black"}`} aria-label={`${colorName} player`}>
       <div className="player-identity">
-        <span>{colorName}</span>
+        <span className="player-color">{colorName}</span>
         {modelReference
-          ? <Link href={modelPageHref(modelReference)}>{name}</Link>
+          ? <ModelNameWithCopy name={name} reference={modelReference} />
           : profileId ? <Link href={`/players/${profileId}`}>{name}</Link> : <strong>{name}</strong>}
       </div>
       <div className="captured-pieces" aria-label={`${colorName} captured pieces`}>

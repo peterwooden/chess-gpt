@@ -318,11 +318,12 @@ test("mobile setup uses the page-sized workspace as its scroll container", async
   assert.match(mobileStyles, /env\(safe-area-inset-bottom\)/);
 });
 
-test("first-class model pages expose exact version and replay actions", async () => {
+test("first-class model pages expose exact versions and compact replay references", async () => {
   const catalog = await readFile(new URL("../app/models/page.tsx", import.meta.url), "utf8");
   const modelPage = await readFile(new URL("../app/models/[owner]/[repository]/page.tsx", import.meta.url), "utf8");
   const actions = await readFile(new URL("../app/models/reference-actions.tsx", import.meta.url), "utf8");
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const playerPage = await readFile(new URL("../app/players/[id]/page.tsx", import.meta.url), "utf8");
 
   assert.match(catalog, /Latest · \{model\.repository\}@\{model\.latestCommitSha\}/);
@@ -331,6 +332,13 @@ test("first-class model pages expose exact version and replay actions", async ()
   assert.match(actions, /navigator\.clipboard\.writeText\(reference\)/);
   assert.match(actions, /modelChallengeHref\(reference\)/);
   assert.doesNotMatch(actions, /import Link from "next\/link"/);
-  assert.match(arena, /aria-label="Challenge models from this game"/);
+  assert.match(arena, /model-name-with-copy/);
+  assert.match(arena, /navigator\.clipboard\.writeText\(reference\)/);
+  assert.match(arena, /aria-label=\{`Copy full reference for \$\{name\}`\}/);
+  assert.match(arena, /window\.matchMedia\("\(hover: none\)"\)\.matches/);
+  assert.match(arena, /event\.preventDefault\(\)/);
+  assert.doesNotMatch(arena, /className="replay-model-actions"/);
+  assert.match(styles, /\.model-name-with-copy\s*\{[^}]*display:\s*flex[^}]*min-width:\s*0/s);
+  assert.match(styles, /\.model-name-copy\s*\{[^}]*flex:\s*none/s);
   assert.match(playerPage, /redirect\(modelPageHref/);
 });
