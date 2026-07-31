@@ -3,7 +3,8 @@ import Link from "next/link";
 import { getChatGPTUser } from "../chatgpt-auth";
 import { isAdministrator, listTournaments } from "../../lib/tournaments";
 import { CreateTournamentForm } from "./create-tournament-form";
-import { formatDateTime, TournamentNav } from "./tournament-nav";
+import { HistoryNav } from "../history/history-components";
+import { formatDateTime } from "./tournament-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function TournamentsPage() {
 
   return (
     <main className="history-page">
-      <TournamentNav />
+      <HistoryNav active="tournaments" />
       <header className="history-hero">
         <p className="eyebrow">ChessGPT arena</p>
         <h1>Tournaments</h1>

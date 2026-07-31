@@ -1,19 +1,3 @@
-import Link from "next/link";
-
-export function TournamentNav() {
-  return (
-    <nav className="history-nav" aria-label="Site navigation">
-      <Link className="arena-title" href="/arena">ChessGPT arena</Link>
-      <div>
-        <Link href="/">Learn</Link>
-        <Link href="/models">Models</Link>
-        <Link href="/history">Players</Link>
-        <Link className="active" href="/tournaments">Tournaments</Link>
-      </div>
-    </nav>
-  );
-}
-
 export function formatDateTime(timestamp: number | null) {
   if (timestamp === null) return "—";
   return new Intl.DateTimeFormat("en", {

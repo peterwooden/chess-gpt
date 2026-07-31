@@ -790,7 +790,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     <main className="arena-page arena-page-v2">
       <nav className="arena-nav" aria-label="Arena navigation">
         <Link href="/" className="arena-title">ChessGPT arena</Link>
-        <div className="arena-nav-links"><Link href="/models">Models</Link><Link href="/history">Players</Link></div>
+        <div className="arena-nav-links"><Link href="/models">Models</Link><Link href="/history">Players</Link><Link href="/tournaments">Tournaments</Link></div>
       </nav>
 
       <section className={`arena-workspace ${gameStarted ? "game-mode" : "setup-mode"}`} aria-label="Chess arena">

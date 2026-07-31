@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { ensureHumanPlayer } from "../../../lib/history";
 import { getTournament, getTournamentResults, isAdministrator } from "../../../lib/tournaments";
-import { formatDateTime, formatScore, TournamentNav } from "../tournament-nav";
+import { HistoryNav } from "../../history/history-components";
+import { formatDateTime, formatScore } from "../tournament-nav";
 import { TournamentAdminControls } from "./admin-controls";
 import { RegisterEntryPanel } from "./register-entry-panel";
 
@@ -42,7 +43,7 @@ export default async function TournamentPage(
 
   return (
     <main className="history-page">
-      <TournamentNav />
+      <HistoryNav active="tournaments" />
       <header className="history-hero">
         <p className="eyebrow">{STATUS_LABEL[tournament.status]}</p>
         <h1>{tournament.name}</h1>

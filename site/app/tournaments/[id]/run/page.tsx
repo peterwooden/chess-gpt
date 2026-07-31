@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireChatGPTUser } from "../../../chatgpt-auth";
 import { getTournament } from "../../../../lib/tournaments";
-import { TournamentNav } from "../../tournament-nav";
+import { HistoryNav } from "../../../history/history-components";
 import { TournamentRunner } from "./tournament-runner";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function RunTournamentPage(
 
   return (
     <main className="history-page">
-      <TournamentNav />
+      <HistoryNav active="tournaments" />
       <header className="history-hero">
         <p className="eyebrow">Tournament runner</p>
         <h1>{tournament.name}</h1>

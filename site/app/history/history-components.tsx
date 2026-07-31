@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export function HistoryNav({ active }: { active?: "models" | "players" }) {
+export function HistoryNav({ active }: { active?: "models" | "players" | "tournaments" }) {
   return (
     <nav className="history-nav" aria-label="Site navigation">
       <Link className="arena-title" href="/arena">ChessGPT arena</Link>
@@ -8,6 +8,7 @@ export function HistoryNav({ active }: { active?: "models" | "players" }) {
         <Link href="/">Learn</Link>
         <Link className={active === "models" ? "active" : ""} href="/models">Models</Link>
         <Link className={active === "players" ? "active" : ""} href="/history">Players</Link>
+        <Link className={active === "tournaments" ? "active" : ""} href="/tournaments">Tournaments</Link>
       </div>
     </nav>
   );
