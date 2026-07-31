@@ -18,7 +18,7 @@ Player = Callable[[chess.Board], chess.Move]
 
 
 def load_model(checkpoint: Path) -> TinyPolicy:
-    saved = torch.load(checkpoint, weights_only=True)
+    saved = torch.load(checkpoint, weights_only=True, map_location="cpu")
     if isinstance(saved, dict) and "config" in saved:
         model = TinyPolicy(**saved["config"])
         model.load_state_dict(saved["model"])
