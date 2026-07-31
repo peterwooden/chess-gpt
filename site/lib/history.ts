@@ -11,9 +11,18 @@ const ARENA_VERSION = "history-v1";
 const MAX_PGN_BYTES = 64_000;
 const PAGE_SIZE = 24;
 
+/** Termination recorded when a game reaches its tournament ply cap. */
+export const MAX_PLIES_TERMINATION = "max_plies";
+
 export type ParticipantInput =
   | { kind: "human" }
   | { kind: "model"; reference: string };
+
+export type TournamentSlot = {
+  tournamentId: string;
+  pairKey: string;
+  gameIndex: number;
+};
 
 export type SaveGameInput = {
   id: string;
@@ -21,6 +30,7 @@ export type SaveGameInput = {
   playedAt?: string;
   white: ParticipantInput;
   black: ParticipantInput;
+  tournament?: TournamentSlot;
 };
 
 export type PublicPlayer = {
@@ -120,9 +130,19 @@ export async function saveCompletedGame(
     throw new HistoryError(400, "The arena supports at most one human player.");
   }
 
+  const slot = input.tournament;
+  if (slot !== undefined) {
+    if (modelCount !== 2) throw new HistoryError(400, "Tournament games are played between two models.");
+    assertTournamentSlot(slot);
+  }
+
   const validated = validateCompletedPgn(input.pgn);
   const db = await getD1();
-  const existing = await getPublicGame(input.id);
+  // A game already recorded for this schedule slot wins, whatever id the runner
+  // generated. This is what makes a retry after a lost response idempotent.
+  const existing = slot
+    ? await getPublicGame(input.id) ?? await getTournamentSlotGame(slot)
+    : await getPublicGame(input.id);
   if (existing) return existing;
 
   const [white, black] = await Promise.all([
@@ -143,11 +163,15 @@ export async function saveCompletedGame(
   );
 
   await db.batch([
+    // Unqualified ON CONFLICT so that a race on the schedule-key index is
+    // absorbed the same way a duplicate id is, rather than raising.
     db.prepare(`INSERT INTO games (
       id, white_player_id, black_player_id, white_name, black_name, result,
-      termination, pgn, move_count, arena_version, played_at, recorded_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO NOTHING`).bind(
+      termination, pgn, move_count, arena_version,
+      tournament_id, tournament_pair_key, tournament_game_index,
+      played_at, recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT DO NOTHING`).bind(
       input.id,
       white.id,
       black.id,
@@ -158,19 +182,22 @@ export async function saveCompletedGame(
       canonicalPgn,
       Math.ceil(validated.game.history().length / 2),
       ARENA_VERSION,
+      slot?.tournamentId ?? null,
+      slot?.pairKey ?? null,
+      slot?.gameIndex ?? null,
       playedAt,
       recordedAt,
     ),
     ...(white.id ? [db.prepare("UPDATE players SET last_played_at = ? WHERE id = ?").bind(recordedAt, white.id)] : []),
     ...(black.id ? [db.prepare("UPDATE players SET last_played_at = ? WHERE id = ?").bind(recordedAt, black.id)] : []),
   ]);
-  const saved = await getPublicGame(input.id);
+  const saved = await getPublicGame(input.id)
+    ?? (slot ? await getTournamentSlotGame(slot) : null);
   if (!saved) throw new HistoryError(500, "The completed game could not be saved.");
   return saved;
 }
 
-export async function getPublicGame(id: string): Promise<PublicGame | null> {
-  const row = await (await getD1()).prepare(`SELECT
+const PUBLIC_GAME_SELECT = `SELECT
       g.id, g.white_player_id AS whitePlayerId, g.black_player_id AS blackPlayerId,
       g.white_name AS whiteName, g.black_name AS blackName, g.result, g.termination,
       g.pgn, g.move_count AS moveCount, g.arena_version AS arenaVersion,
@@ -179,9 +206,35 @@ export async function getPublicGame(id: string): Promise<PublicGame | null> {
       CASE WHEN bmv.player_id IS NULL THEN NULL ELSE bmv.repository || '@' || bmv.commit_sha END AS blackModelReference
     FROM games g
     LEFT JOIN model_versions wmv ON wmv.player_id = g.white_player_id
-    LEFT JOIN model_versions bmv ON bmv.player_id = g.black_player_id
-    WHERE g.id = ?`).bind(id).first<PublicGame>();
+    LEFT JOIN model_versions bmv ON bmv.player_id = g.black_player_id`;
+
+export async function getPublicGame(id: string): Promise<PublicGame | null> {
+  const row = await (await getD1())
+    .prepare(`${PUBLIC_GAME_SELECT} WHERE g.id = ?`)
+    .bind(id)
+    .first<PublicGame>();
   return row ?? null;
+}
+
+async function getTournamentSlotGame(slot: TournamentSlot): Promise<PublicGame | null> {
+  const row = await (await getD1())
+    .prepare(`${PUBLIC_GAME_SELECT}
+      WHERE g.tournament_id = ? AND g.tournament_pair_key = ? AND g.tournament_game_index = ?`)
+    .bind(slot.tournamentId, slot.pairKey, slot.gameIndex)
+    .first<PublicGame>();
+  return row ?? null;
+}
+
+function assertTournamentSlot(slot: TournamentSlot): void {
+  if (typeof slot.tournamentId !== "string" || !slot.tournamentId) {
+    throw new HistoryError(400, "A tournament game requires a tournament id.");
+  }
+  if (typeof slot.pairKey !== "string" || !/^[0-9a-z:-]{1,120}$/i.test(slot.pairKey)) {
+    throw new HistoryError(400, "A tournament game requires a valid pairing key.");
+  }
+  if (!Number.isInteger(slot.gameIndex) || slot.gameIndex < 0) {
+    throw new HistoryError(400, "A tournament game requires a non-negative game index.");
+  }
 }
 
 export async function listPlayers(options: {
@@ -414,6 +467,10 @@ function validateCompletedPgn(pgn: string): {
   else if (game.isDraw()) result = "1/2-1/2";
   else if ((headers.Result === "1-0" || headers.Result === "0-1") && /^forfeit:/i.test(headers.Termination ?? "")) {
     result = headers.Result;
+  } else if (headers.Result === "1/2-1/2" && headers.Termination === MAX_PLIES_TERMINATION) {
+    // A tournament game that reaches its configured ply cap is a draw even though
+    // the position itself is not terminal. See docs/TOURNAMENT_RULES.md.
+    result = "1/2-1/2";
   } else {
     throw new HistoryError(400, "Only completed games can be saved.");
   }
@@ -441,6 +498,7 @@ function canonicalizePgn(
 }
 
 function terminationForGame(game: Chess, reported?: string): string {
+  if (!game.isGameOver() && reported === MAX_PLIES_TERMINATION) return MAX_PLIES_TERMINATION;
   if (!game.isGameOver() && reported && /^forfeit:/i.test(reported)) return sanitizeName(reported) || "forfeit";
   if (game.isCheckmate()) return "checkmate";
   if (game.isStalemate()) return "stalemate";

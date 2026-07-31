@@ -15,6 +15,13 @@
       "when": 1785398809193,
       "tag": "0001_first-class-models",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785458635738,
+      "tag": "0002_empty_the_captain",
+      "breakpoints": true
     }
   ]
 }
