@@ -3,7 +3,11 @@ import runtimeWasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm
 import { provisionOnnxRuntime } from "./onnx-runtime-provisioning.mjs";
 
 type PackageGame = {
-  chooseMove(input: { history: readonly string[]; legalMoves: readonly string[] }): Promise<string>;
+  chooseMove(input: {
+    history: readonly string[];
+    legalMoves: readonly string[];
+    moveTimeLimitMs: number;
+  }): Promise<string>;
   dispose(): Promise<void>;
 };
 
@@ -21,6 +25,7 @@ type WorkerRequest = {
   seed?: number;
   history?: string[];
   legalMoves?: string[];
+  moveTimeLimitMs?: number;
 };
 
 let loadedPackage: LoadedPackage | null = null;
@@ -102,9 +107,13 @@ async function chooseMove(request: WorkerRequest): Promise<string> {
   if (!Array.isArray(request.history) || !Array.isArray(request.legalMoves)) {
     throw new Error("The runner did not supply SAN history and legal moves.");
   }
+  if (!Number.isFinite(request.moveTimeLimitMs) || (request.moveTimeLimitMs ?? 0) <= 0) {
+    throw new Error("The runner did not supply a per-move time limit.");
+  }
   return currentGame.chooseMove({
     history: Object.freeze([...request.history]),
     legalMoves: Object.freeze([...request.legalMoves]),
+    moveTimeLimitMs: request.moveTimeLimitMs as number,
   });
 }
 

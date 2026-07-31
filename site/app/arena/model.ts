@@ -34,10 +34,35 @@ export type BrowserModelInfo = {
   artifactBytes: number;
 };
 
+/**
+ * Grace applied to the advertised per-move budget before the runner terminates
+ * the worker. It exists so a package aiming at its budget is not forfeited for a
+ * few milliseconds of overshoot; it is not additional thinking time.
+ * See docs/TOURNAMENT_RULES.md.
+ */
+export const MOVE_TIME_GRACE_FACTOR = 1.25;
+
+/** Per-move budget used for casual arena games, which have no tournament clock. */
+export const DEFAULT_MOVE_TIME_LIMIT_MS = 30_000;
+
+export function hardMoveLimitMs(moveTimeLimitMs: number): number {
+  return Math.ceil(moveTimeLimitMs * MOVE_TIME_GRACE_FACTOR);
+}
+
 export type BrowserChessModel = {
   info: BrowserModelInfo;
+  /**
+   * False once the worker has been terminated, by a timeout or a crash. The
+   * package forfeits only the game in progress, so a tournament runner must
+   * reload a model that is no longer alive before its next game.
+   */
+  readonly alive: boolean;
   newGame(seed: number): Promise<void>;
-  predict(history: string[], legalMoves: string[]): Promise<ModelPrediction>;
+  predict(
+    history: string[],
+    legalMoves: string[],
+    moveTimeLimitMs?: number,
+  ): Promise<ModelPrediction>;
   dispose(): Promise<void>;
 };
 
@@ -132,11 +157,19 @@ export async function loadBrowserModel(
       digest,
       artifactBytes: packageBytes,
     },
+    get alive() {
+      return client.alive;
+    },
     async newGame(seed) {
       await client.request("newGame", { seed: seed >>> 0 });
     },
-    async predict(history, legalMoves) {
-      const san = await client.request("chooseMove", { history, legalMoves });
+    async predict(history, legalMoves, moveTimeLimitMs = DEFAULT_MOVE_TIME_LIMIT_MS) {
+      const san = await client.request(
+        "chooseMove",
+        { history, legalMoves, moveTimeLimitMs },
+        [],
+        hardMoveLimitMs(moveTimeLimitMs),
+      );
       if (typeof san !== "string") throw new Error("The package returned a non-string move.");
       if (!legalMoves.includes(san)) throw new Error(`The package returned illegal SAN move “${san}”.`);
       return { san, source: "Package v1" };
@@ -195,18 +228,44 @@ function createWorkerClient(worker: Worker) {
   });
 
   return {
-    request(type: string, payload: Record<string, unknown>, transfer: Transferable[] = []) {
+    get alive() {
+      return !terminated;
+    },
+    request(
+      type: string,
+      payload: Record<string, unknown>,
+      transfer: Transferable[] = [],
+      timeoutMs?: number,
+    ) {
       if (terminated) return Promise.reject(new Error("The package worker has stopped."));
       const id = nextId;
       nextId += 1;
       return new Promise<unknown>((resolve, reject) => {
-        pending.set(id, { resolve, reject });
+        // Terminating the worker is the only enforcement that survives a package
+        // which blocks its worker synchronously: a busy worker never reads a
+        // message, so cooperative cancellation cannot work here.
+        const timer = timeoutMs === undefined
+          ? undefined
+          : setTimeout(() => {
+            pending.delete(id);
+            const message = `The package exceeded its ${timeoutMs} ms move time limit.`;
+            reject(new Error(message));
+            failWorker(message);
+          }, timeoutMs);
+        const settle = (finish: () => void) => {
+          if (timer !== undefined) clearTimeout(timer);
+          finish();
+        };
+        pending.set(id, {
+          resolve: (value) => settle(() => resolve(value)),
+          reject: (error) => settle(() => reject(error)),
+        });
         try {
           worker.postMessage({ id, type, ...payload }, transfer);
         } catch (error) {
           pending.delete(id);
           const message = error instanceof Error ? error.message : "The package request failed.";
-          reject(new Error(message));
+          settle(() => reject(new Error(message)));
           failWorker(message);
         }
       });
