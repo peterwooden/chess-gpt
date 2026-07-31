@@ -19,7 +19,12 @@ Player = Callable[[chess.Board], chess.Move]
 
 def load_model(checkpoint: Path) -> TinyPolicy:
     saved = torch.load(checkpoint, weights_only=True, map_location="cpu")
-    if isinstance(saved, dict) and "config" in saved:
+    if isinstance(saved, dict) and "sweep_recipe" in saved:
+        from lab.cloud_sweep import DEFAULTS, TinyPolicy as SweepPolicy
+
+        model = SweepPolicy({**DEFAULTS, **saved["sweep_recipe"]})
+        model.load_state_dict(saved["model"])
+    elif isinstance(saved, dict) and "config" in saved:
         model = TinyPolicy(**saved["config"])
         model.load_state_dict(saved["model"])
     else:  # legacy bench-S checkpoint
