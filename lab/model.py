@@ -63,7 +63,7 @@ class TinyPolicy(nn.Module):
         self.per_square_readout = per_square_readout
         self.use_moe = moe
         self.use_geo_bias = geo_bias
-        assert not (arch == "mlp" and (per_square_readout or moe or geo_bias or history))
+        assert not (arch == "mlp" and (moe or geo_bias))
 
         self.piece = nn.Embedding(PIECE_CODES, d_model)
         if piece_value_init:
@@ -93,12 +93,13 @@ class TinyPolicy(nn.Module):
             if geo_bias:
                 self.register_buffer("geo", _geometry_bias())
         else:
-            width = 65 * d_model
+            # Token-in, token-out MLP trunk: same readout heads as the transformer.
+            width = (65 + history) * d_model
             blocks: list[nn.Module] = []
             for _ in range(layers):
                 blocks += [nn.Linear(width, mlp_hidden), nn.ReLU(), nn.Dropout(dropout)]
                 width = mlp_hidden
-            blocks.append(nn.Linear(width, d_model))
+            blocks.append(nn.Linear(width, 65 * d_model))
             self.mlp = nn.Sequential(*blocks)
 
         if moe:
@@ -145,9 +146,12 @@ class TinyPolicy(nn.Module):
         state_vector = self._state_vector(squares, state, repetition)
 
         if self.arch == "mlp":
-            flat = torch.cat((state_vector[:, None], board), dim=1).flatten(1)
-            summary = self.mlp(flat)
-            tokens = None
+            parts = [state_vector[:, None], board]
+            if self.history:
+                moves = self.history_from(history_from) + self.history_to(history_to)
+                parts.append(moves + self.history_position)
+            tokens = self.mlp(torch.cat(parts, dim=1).flatten(1)).view(-1, 65, board.shape[-1])
+            summary = tokens[:, 0]
         else:
             parts = [state_vector[:, None] if self.use_state_token else
                      torch.zeros_like(state_vector)[:, None], board]

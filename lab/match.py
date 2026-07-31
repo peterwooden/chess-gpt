@@ -62,8 +62,15 @@ def make_player(
     search: str = "none",
     contempt: float = 0.0,
     seed: int = 0,
+    depth: int = 4,
+    beam: int = 6,
+    root_beam: int = 8,
 ) -> Player:
     model = load_model(checkpoint)
+    if search == "beam":
+        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        model.to(device)
+        return _beam_player(model, device, depth, beam, root_beam, contempt)
     rng = random.Random(seed)
 
     def policy_choice(board: chess.Board) -> chess.Move:
@@ -114,6 +121,119 @@ def make_player(
         return legal[best]
 
     return value_search_choice if search == "value1" else policy_choice
+
+
+def _terminal_white_score(board: chess.Board) -> float | None:
+    """White-perspective score if the position ends the game, else None."""
+    if board.is_checkmate():
+        return 0.0 if board.turn == chess.WHITE else 1.0
+    if board.is_game_over(claim_draw=True):
+        return 0.5
+    return None
+
+
+class _Node:
+    __slots__ = ("board", "score", "children", "repetition")
+
+    def __init__(self, board: chess.Board, score: float | None, repetition: bool = False):
+        self.board = board
+        self.score = score  # white-perspective; None until evaluated or backed up
+        self.children: list[_Node] = []
+        self.repetition = repetition
+
+
+def _beam_player(
+    model: TinyPolicy,
+    device: torch.device,
+    depth: int,
+    beam: int,
+    root_beam: int,
+    contempt: float,
+) -> Player:
+    """Policy-pruned minimax: value screen at the root, policy beam below, value leaves."""
+
+    def run(boards: list[chess.Board]) -> tuple[torch.Tensor, torch.Tensor]:
+        batched = [_inputs(model, board) for board in boards]
+        stacked = {
+            key: torch.cat([b[key] for b in batched]).to(device) for key in batched[0]
+        }
+        with torch.no_grad():
+            output = model(**stacked)
+        return output["policy"].cpu(), _white_score(output["value"]).cpu()
+
+    def expand(node: _Node, policy_logits: torch.Tensor, width: int) -> list[_Node]:
+        legal = list(node.board.legal_moves)
+        scores = policy_logits[torch.tensor([move_index(m) for m in legal])]
+        for rank in scores.argsort(descending=True)[:width]:
+            successor = node.board.copy()
+            successor.push(legal[int(rank)])
+            node.children.append(_Node(successor, _terminal_white_score(successor)))
+        return [child for child in node.children if child.score is None]
+
+    def backup(node: _Node) -> float:
+        if node.score is not None:
+            return node.score
+        child_scores = [backup(child) for child in node.children]
+        if not child_scores:  # unexpanded frontier leaf that never got valued
+            node.score = 0.5
+            return node.score
+        node.score = (
+            max(child_scores) if node.board.turn == chess.WHITE else min(child_scores)
+        )
+        return node.score
+
+    def choose(board: chess.Board) -> chess.Move:
+        legal = list(board.legal_moves)
+        if len(legal) == 1:
+            return legal[0]
+        mover_is_white = board.turn == chess.WHITE
+
+        roots: list[_Node] = []
+        for move in legal:
+            successor = board.copy()
+            successor.push(move)
+            roots.append(
+                _Node(successor, _terminal_white_score(successor), successor.is_repetition(2))
+            )
+        open_roots = [n for n in roots if n.score is None]
+        if open_roots:
+            _, screen = run([n.board for n in open_roots])
+            for node, value in zip(open_roots, screen):
+                node.score = float(value)
+
+        # Deepen only the root moves the 1-ply screen likes best.
+        ordered = sorted(
+            open_roots,
+            key=lambda n: n.score if mover_is_white else -n.score,
+            reverse=True,
+        )
+        frontier = ordered[:root_beam]
+        for node in frontier:
+            node.score = None  # their verdicts now come from the subtree
+        for _ in range(depth - 1):
+            if not frontier:
+                break
+            policies, values = run([n.board for n in frontier])
+            next_frontier: list[_Node] = []
+            for node, policy_logits in zip(frontier, policies):
+                next_frontier.extend(expand(node, policy_logits, beam))
+            frontier = next_frontier
+        if frontier:
+            _, leaf_values = run([n.board for n in frontier])
+            for node, value in zip(frontier, leaf_values):
+                node.score = float(value)
+
+        best_move, best_score = legal[0], -1.0
+        for move, node in zip(legal, roots):
+            white = backup(node)
+            mine = white if mover_is_white else 1.0 - white
+            if contempt > 0 and node.repetition and mine > 0.55:
+                mine -= contempt
+            if mine > best_score:
+                best_move, best_score = move, mine
+        return best_move
+
+    return choose
 
 
 def load_policy(checkpoint: Path) -> Player:
@@ -175,10 +295,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--checkpoint-b", type=Path, help="Opponent checkpoint; random-legal if omitted")
+    parser.add_argument("--opponent-search", choices=("none", "value1", "beam"), default="none")
+    parser.add_argument("--stockfish-elo", type=int, help="Play calibrated Stockfish (UCI_LimitStrength) instead of a checkpoint")
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-k", type=int, default=0)
-    parser.add_argument("--search", choices=("none", "value1"), default="none")
+    parser.add_argument("--search", choices=("none", "value1", "beam"), default="none")
+    parser.add_argument("--depth", type=int, default=4)
+    parser.add_argument("--beam", type=int, default=6)
+    parser.add_argument("--root-beam", type=int, default=8)
     parser.add_argument("--contempt", type=float, default=0.0)
     parser.add_argument("--opening-plies", type=int, default=6)
     parser.add_argument("--max-plies", type=int, default=200)
@@ -187,10 +312,31 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     candidate = make_player(
-        args.checkpoint, args.temperature, args.top_k, args.search, args.contempt, args.seed
+        args.checkpoint, args.temperature, args.top_k, args.search, args.contempt, args.seed,
+        depth=args.depth, beam=args.beam, root_beam=args.root_beam,
     )
-    opponent = make_player(args.checkpoint_b) if args.checkpoint_b else random_player(rng)
-    tally = play_series(candidate, opponent, args.games, rng, args.opening_plies, args.max_plies)
+    engine = None
+    if args.stockfish_elo is not None:
+        import chess.engine
+
+        engine = chess.engine.SimpleEngine.popen_uci("stockfish")
+        engine.configure({"UCI_LimitStrength": True, "UCI_Elo": args.stockfish_elo})
+        opponent = lambda board: engine.play(  # noqa: E731
+            board, chess.engine.Limit(time=0.05)
+        ).move
+    elif args.checkpoint_b:
+        opponent = make_player(
+            args.checkpoint_b,
+            search=args.opponent_search,
+            contempt=0.15 if args.opponent_search != "none" else 0.0,
+        )
+    else:
+        opponent = random_player(rng)
+    try:
+        tally = play_series(candidate, opponent, args.games, rng, args.opening_plies, args.max_plies)
+    finally:
+        if engine is not None:
+            engine.quit()
     score = tally["win"] + 0.5 * tally["draw"]
     print(json.dumps({**tally, "score": score, "games": sum(tally.values())}))
 
