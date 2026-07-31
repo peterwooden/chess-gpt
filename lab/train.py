@@ -192,7 +192,8 @@ def main() -> None:
 
     steps = 0
     generator = np.random.default_rng(args.seed)
-    for _ in range(args.epochs):
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    for epoch in range(args.epochs):
         order = torch.from_numpy(generator.permutation(len(train["target"]))).to(device)
         for start in range(0, len(order), args.batch_size):
             batch = order[start : start + args.batch_size]
@@ -212,6 +213,16 @@ def main() -> None:
             optimizer.step()
             scheduler.step()
             steps += 1
+        # Deadline insurance: every epoch leaves a packageable checkpoint behind.
+        torch.save(
+            {"config": config, "model": model.state_dict()}, args.output.with_suffix(".pt")
+        )
+        print(
+            json.dumps(
+                {"epoch": epoch + 1, "elapsed": round(time.perf_counter() - started, 1)}
+            ),
+            flush=True,
+        )
 
     metrics = {
         "games": data.games,
