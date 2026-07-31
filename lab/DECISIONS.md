@@ -88,6 +88,10 @@ Diagnosis-driven squeeze on #49's 6-point overfit gap: data ×3 (120k games ≈ 
 
 **Battery (20 games each):** 4-ply vs 1-ply same weights: **18.5/20** (teacher predicted 14+, hit — depth ≈ +430 Elo-equivalent over 1-ply). 4-ply vs Stockfish UCI_Elo 1320: **0.5/20** (teacher predicted 3–7, too optimistic — first calibrated-scale reading; absolute strength still far below 1320, one survived draw). New judge vs old judge at 1-ply: **13/20** (teacher predicted noise, too pessimistic — the +0.22% aggregate value accuracy hid a real decision-quality gain; 20-game CI keeps this suggestive). Lesson pair: aggregate metrics can hide decision-relevant improvement, and depth compounds harder than any training lever measured so far.
 
+## Experiment 53 — exhibition submission (2026-07-31, evening)
+
+Deadline build for the exhibition match. Model: MLP composite (hidden 768, d128 embeddings, history-8, per-square readout, value weight 1.0, dropout 0.1, 14.2M params) chosen over the transformer for WASM searchability (~5× cheaper per evaluated position); trained 6 epochs on a fresh 240k-game January shard (15.9M positions, 69 minutes, per-epoch deadline checkpoints). Result: **32.39% validation top-1** (lab record, +3 over #50), value 56.4%, gap 0.9. Adapter: depth-4 beam search (root value screen 6, policy beam 5, contempt 0.15) ported to JavaScript, validated on ONNX Runtime Web at ~0.7s/move, 57 MB package. Sanity match vs #51 at identical beam-4: **17.5/20**. Compliance: pinned January data only, fresh lineage, trivial FLOPs, package under cap. Published: `peterwooden/chess-gpt-beam-exhibition-53` @ `355e21607668248070873400f610f1e1c04810f7`. Feb/Mar archive downloads running for the post-exhibition scaling phase.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.
