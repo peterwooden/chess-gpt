@@ -92,6 +92,10 @@ Diagnosis-driven squeeze on #49's 6-point overfit gap: data ×3 (120k games ≈ 
 
 Deadline build for the exhibition match. Model: MLP composite (hidden 768, d128 embeddings, history-8, per-square readout, value weight 1.0, dropout 0.1, 14.2M params) chosen over the transformer for WASM searchability (~5× cheaper per evaluated position); trained 6 epochs on a fresh 240k-game January shard (15.9M positions, 69 minutes, per-epoch deadline checkpoints). Result: **32.39% validation top-1** (lab record, +3 over #50), value 56.4%, gap 0.9. Adapter: depth-4 beam search (root value screen 6, policy beam 5, contempt 0.15) ported to JavaScript, validated on ONNX Runtime Web at ~0.7s/move, 57 MB package. Sanity match vs #51 at identical beam-4: **17.5/20**. Compliance: pinned January data only, fresh lineage, trivial FLOPs, package under cap. Published: `peterwooden/chess-gpt-beam-exhibition-53` @ `355e21607668248070873400f610f1e1c04810f7`. Feb/Mar archive downloads running for the post-exhibition scaling phase.
 
+## Experiment 54 — lab graduate vs pre-lab champion (2026-07-31)
+
+50 games, both as submitted: #53 (beam-4 entry) vs tournament candidate 0004 (greedy legal argmax). Result: **44/50 — 39 wins, 10 draws, 1 loss (88%)**, ≈ +340 Elo. Teacher's sealed 45–48 at 75% was a near-miss low (0004's draw-scraping was slightly better than credited). Perspective: the entire pre-lab strong-winner program (full compute budget, matched-FLOP design) moved 0004 to 59.5/100 over its predecessor; two days of lab plus one evening of training moved 88/100 over 0004 — with the inference layer carrying most of it. The single loss is queued for autopsy.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.
