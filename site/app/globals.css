@@ -1085,3 +1085,48 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Tournaments */
+.tournament-panel { width: min(100% - 2rem, 72rem); margin: 1.5rem auto 0; padding: 1.25rem; border: 1px solid var(--green); background: var(--paper-light); }
+.tournament-panel h2 { margin: 0 0 0.85rem; font-size: 1.05rem; }
+.tournament-primary { color: var(--white); background: var(--green); font-weight: 850; }
+.tournament-panel button { min-height: 2.7rem; padding-inline: 1.1rem; border: 1px solid var(--green); border-radius: 0.15rem; color: var(--green); background: var(--white); font: inherit; font-weight: 800; cursor: pointer; }
+.tournament-panel button:disabled { opacity: 0.55; cursor: progress; }
+.tournament-form { display: grid; gap: 0.85rem; }
+.tournament-form label, .tournament-register label, .tournament-runner-label { display: grid; gap: 0.3rem; }
+.tournament-form label > span, .tournament-register label > span, .tournament-runner-label > span { color: var(--muted); font-size: 0.56rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.tournament-form input, .tournament-register input, .tournament-runner-label input { min-height: 2.7rem; padding: 0 0.75rem; border: 1px solid var(--green); border-radius: 0.15rem; color: var(--ink); background: var(--white); font: inherit; }
+.tournament-form small, .tournament-register small, .tournament-runner-label small { color: var(--muted); font-size: 0.7rem; line-height: 1.45; }
+.tournament-form-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.4rem; }
+.tournament-estimate, .tournament-note { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+.tournament-error { margin: 0.6rem 0 0; padding: 0.55rem 0.7rem; border: 1px solid var(--amber); color: var(--amber); font-size: 0.8rem; }
+.tournament-warning { margin: 0 0 0.6rem; padding: 0.6rem 0.75rem; border: 1px solid var(--amber); font-size: 0.82rem; line-height: 1.5; }
+.tournament-runner-callout { margin: 0; font-size: 0.9rem; line-height: 1.55; }
+.tournament-runner-changes { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.78rem; line-height: 1.6; }
+.tournament-status { font-size: 0.62rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.tournament-status.is-running { color: var(--amber); }
+.tournament-status.is-completed { color: var(--green); }
+.tournament-status.is-registration { color: var(--muted); }
+.tournament-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.tournament-table th, .tournament-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); text-align: left; }
+.tournament-table th { color: var(--muted); font-size: 0.56rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.tournament-details { margin-top: 0.9rem; font-size: 0.82rem; }
+.tournament-details summary { color: var(--green); font-weight: 800; cursor: pointer; }
+.tournament-details ul { margin: 0.5rem 0 0; padding-left: 1.1rem; line-height: 1.7; }
+.tournament-entries { display: grid; gap: 0.5rem; margin: 0 0 1rem; padding: 0; list-style: none; }
+.tournament-entries li { display: flex; gap: 1rem; align-items: center; justify-content: space-between; padding: 0.7rem 0.8rem; border: 1px solid var(--line); background: var(--white); }
+.tournament-entries li > div { display: grid; gap: 0.2rem; min-width: 0; }
+.tournament-entries code { overflow: hidden; color: var(--amber); font-family: ui-monospace, monospace; font-size: 0.6rem; text-overflow: ellipsis; white-space: nowrap; }
+.tournament-entries small { color: var(--muted); font-size: 0.68rem; }
+.tournament-register { display: grid; gap: 0.7rem; }
+.tournament-admin-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.tournament-admin-actions button { display: grid; gap: 0.15rem; padding: 0.6rem 1rem; text-align: left; }
+.tournament-admin-actions small { color: var(--muted); font-size: 0.65rem; font-weight: 500; }
+.tournament-progress { height: 0.65rem; margin-bottom: 0.9rem; border: 1px solid var(--green); background: var(--white); }
+.tournament-progress > div { height: 100%; background: var(--green); transition: width 200ms linear; }
+.tournament-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.8rem; margin: 0; }
+.tournament-stats dt { color: var(--muted); font-size: 0.56rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+.tournament-stats dd { margin: 0.2rem 0 0; font-size: 0.9rem; }
+.tournament-recent { margin: 0; padding-left: 1.1rem; font-size: 0.8rem; line-height: 1.7; }
+.tournament-override { display: flex; gap: 0.5rem; align-items: start; margin-top: 0.8rem; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+.tournament-row, .tournament-game-row { grid-template-columns: minmax(0, 1.6fr) minmax(9rem, 0.5fr) 10rem 1rem; }
