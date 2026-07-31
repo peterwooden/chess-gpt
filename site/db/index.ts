@@ -4,6 +4,8 @@ import * as schema from "./schema";
 export type ChessGptRuntimeEnv = {
   DB?: D1Database;
   PLAYER_ID_HMAC_SECRET?: string;
+  /** Comma-separated emails allowed to create tournaments and change their phase. */
+  TOURNAMENT_ADMIN_EMAILS?: string;
 };
 
 export async function getRuntimeEnvironment(): Promise<ChessGptRuntimeEnv> {
