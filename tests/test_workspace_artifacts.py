@@ -42,13 +42,33 @@ def test_tournament_dataset_is_frozen_by_month_and_checksum() -> None:
     assert all(re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) for item in files)
 
 
-def test_tournament_rules_are_five_bold_labelled_bullets() -> None:
+def test_tournament_rules_summary_is_bold_labelled_bullets() -> None:
+    """Every agreed rule is a bold-labelled bullet covering each required topic.
+
+    This deliberately asserts the topics rather than a bullet count. The count
+    went stale as soon as the evaluation rule was agreed, and again when the
+    match protocol, game length, and per-move time limit were added.
+    """
     rules = (ROOT / "docs/TOURNAMENT_RULES.md").read_text()
     summary = rules.split("## Technical appendix", 1)[0]
     bullets = [line for line in summary.splitlines() if line.startswith("- ")]
 
-    assert len(bullets) == 5
+    assert bullets
     assert all(line.startswith("- **") for line in bullets)
+
+    labels = {line.split("**", 2)[1].rstrip(":") for line in bullets}
+    assert {
+        "Submission-size limit",
+        "Shared dataset",
+        "Training-compute limit",
+        "Evaluation",
+        "Inference interface",
+        "Entries and nomination",
+        "Match protocol",
+        "Tournament winner",
+        "Game length",
+        "Per-move time limit",
+    } <= labels
 
 
 def test_tournament_rules_include_unified_package_contract() -> None:
