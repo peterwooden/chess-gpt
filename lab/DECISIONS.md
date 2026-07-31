@@ -96,6 +96,10 @@ Deadline build for the exhibition match. Model: MLP composite (hidden 768, d128 
 
 50 games, both as submitted: #53 (beam-4 entry) vs tournament candidate 0004 (greedy legal argmax). Result: **44/50 — 39 wins, 10 draws, 1 loss (88%)**, ≈ +340 Elo. Teacher's sealed 45–48 at 75% was a near-miss low (0004's draw-scraping was slightly better than credited). Perspective: the entire pre-lab strong-winner program (full compute budget, matched-FLOP design) moved 0004 to 59.5/100 over its predecessor; two days of lab plus one evening of training moved 88/100 over 0004 — with the inference layer carrying most of it. The single loss is queued for autopsy.
 
+## Experiments 55–56 — the hour that taught instead of improved (2026-07-31, late)
+
+Plan: warm-start #53 on 240k fresh January games (3 epochs) then elite fine-tune. Both stages failed the beam-vs-beam sanity gate against #53: continuation #55 scored 7.5/20 despite *better* validation top-1 (33.1 vs 32.4) and equal value accuracy; polished #56 scored 3/20. Three lessons, all measured: (1) the first #56 attempt poisoned the value head via winner-only label leakage (value_top1 = 100% — "side to move wins"); caught by reading metrics, rerun policy-only; (2) policy-only fine-tuning still shifts the shared trunk under a frozen value head — a conclusion measured under greedy decode (#39's +106) does not transfer to search decode; (3) warm-starting a converged model with fresh optimizer state at full constant LR improves aggregate imitation metrics while degrading match strength — proper continuation needs decayed LR + warmup. Teacher's 13–15/20 prediction was the worst miss of the course. #53 remains champion and the published exhibition ref stands. Corrected-continuation recipe queued for the scaling phase.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.

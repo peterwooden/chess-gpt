@@ -138,6 +138,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--games", type=int, required=True)
+    parser.add_argument("--skip-games", type=int, default=0, help="Discard this many games from the archive first")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--min-winner-elo", type=int)
     parser.add_argument("--both-min-elo", type=int)
@@ -162,6 +163,8 @@ def main() -> None:
             if game is None:
                 break
             read += 1
+            if read <= args.skip_games:
+                continue
             result = RESULTS.get(game.headers.get("Result", ""))
             if result is None or game.errors:
                 continue
