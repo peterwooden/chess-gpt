@@ -27,7 +27,7 @@ DEFAULTS = {
     "id": "control", "optimizer": "adamw", "lr": 1.2e-3, "wd": 0.01, "betas": [0.9, 0.999],
     "eps": 1e-8, "clip": 0.0, "schedule": "cosine", "warmup": 0.02, "cosine_floor": 0.0,
     "cycles": 1, "embed_lr_scale": 1.0, "batch": 1024, "epochs": 2, "ema": 0.0, "swa": False,
-    "grad_noise": 0.0, "activation": "relu", "residual": False, "block_norm": False,
+    "grad_noise": 0.0, "arch": "mlp", "heads": 4, "activation": "relu", "residual": False, "block_norm": False,
     "gated": False, "two_tower": False, "input_norm": False, "input_residual": False,
     "token_rank": 0, "untied_readout": False, "layers": 2, "hidden": 1152, "d_model": 128,
     "dropout": 0.1, "label_smoothing": 0.0, "value_weight": 1.0, "value_mode": "ce",
@@ -79,7 +79,14 @@ class TinyPolicy(nn.Module):
         self.drop = nn.Dropout(r["dropout"])
         width = (65 + history) * d
         self.input_norm = nn.LayerNorm(width) if r["input_norm"] else nn.Identity()
-        self.inproj, self.blocks, self.norms = trunk(width, hidden, r["layers"], r)
+        if r["arch"] == "transformer":
+            layer = nn.TransformerEncoderLayer(
+                d, r["heads"], dim_feedforward=4 * d,
+                batch_first=True, norm_first=True, dropout=r["dropout"],
+            )
+            self.encoder = nn.TransformerEncoder(layer, r["layers"])
+        else:
+            self.inproj, self.blocks, self.norms = trunk(width, hidden, r["layers"], r)
         if r["token_rank"] > 0:
             self.outproj = nn.Sequential(
                 nn.Linear(hidden, r["token_rank"]), nn.Linear(r["token_rank"], 65 * d)
@@ -136,9 +143,12 @@ class TinyPolicy(nn.Module):
         vector = vector + self.halfmove(state[:, 6].clamp(max=HALFMOVE_CAP))
         moves = self.history_from(history_from) + self.history_to(history_to)
         parts = torch.cat([vector[:, None], board, moves + self.history_position], dim=1)
-        flat = self.input_norm(parts.flatten(1))
-        h = self._run_trunk(flat, self.inproj, self.blocks, self.norms)
-        tokens = self.outproj(h).view(-1, 65, d)
+        if self.r["arch"] == "transformer":
+            tokens = self.encoder(parts)[:, :65]
+        else:
+            flat = self.input_norm(parts.flatten(1))
+            h = self._run_trunk(flat, self.inproj, self.blocks, self.norms)
+            tokens = self.outproj(h).view(-1, 65, d)
         if self.r["input_residual"]:
             tokens = tokens + self.skip_scale * parts[:, :65]
         summary = tokens[:, 0]
