@@ -4,6 +4,7 @@ import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  DEFAULT_MOVE_TIME_LIMIT_MS,
   loadBrowserModel,
   type BrowserChessModel,
   type LoadProgress,
@@ -137,6 +138,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const [humanColor, setHumanColor] = useState<Color>("w");
   const [player1Color, setPlayer1Color] = useState<Color>("w");
   const [sidePreference, setSidePreference] = useState<SidePreference>("random");
+  const [moveTimeLimitMsA, setMoveTimeLimitMsA] = useState(DEFAULT_MOVE_TIME_LIMIT_MS);
+  const [moveTimeLimitMsB, setMoveTimeLimitMsB] = useState(DEFAULT_MOVE_TIME_LIMIT_MS);
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
   const [thinking, setThinking] = useState<string | null>(null);
@@ -543,7 +546,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   }
 
   const playModelMove = useCallback(
-    async (model: BrowserChessModel, actor: string) => {
+    async (model: BrowserChessModel, actor: string, moveTimeLimitMs: number) => {
       const epoch = gameEpoch.current;
       const activeGame = gameRef.current;
       if (activeGame.isGameOver()) return;
@@ -551,7 +554,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       setGameError(null);
       const started = performance.now();
       try {
-        const prediction = await model.predict(activeGame.history(), activeGame.moves());
+        const prediction = await model.predict(activeGame.history(), activeGame.moves(), moveTimeLimitMs);
         if (gameEpoch.current !== epoch) return;
         const move = activeGame.move(prediction.san);
         const elapsedMs = performance.now() - started;
@@ -588,18 +591,34 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     if (!running || game.isGameOver()) return null;
     if (mode === "models") {
       return game.turn() === player1Color
-        ? modelA.model && { model: modelA.model, actor: modelA.model.info.name }
-        : modelB.model && { model: modelB.model, actor: modelB.model.info.name };
+        ? modelA.model && {
+            model: modelA.model,
+            actor: modelA.model.info.name,
+            moveTimeLimitMs: moveTimeLimitMsA,
+          }
+        : modelB.model && {
+            model: modelB.model,
+            actor: modelB.model.info.name,
+            moveTimeLimitMs: moveTimeLimitMsB,
+          };
     }
     if (game.turn() === humanColor) return null;
     const singleModel = modelA.model ?? modelB.model;
-    return singleModel && { model: singleModel, actor: singleModel.info.name };
+    return singleModel && {
+      model: singleModel,
+      actor: singleModel.info.name,
+      moveTimeLimitMs: modelA.model ? moveTimeLimitMsA : moveTimeLimitMsB,
+    };
   })();
 
   useEffect(() => {
     if (!activeModel || thinking) return;
     const timer = window.setTimeout(
-      () => void playModelMove(activeModel.model, activeModel.actor),
+      () => void playModelMove(
+        activeModel.model,
+        activeModel.actor,
+        activeModel.moveTimeLimitMs,
+      ),
       mode === "models" ? MODEL_AUTOPLAY_DELAY_MS : 180,
     );
     return () => window.clearTimeout(timer);
@@ -664,16 +683,35 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
 
   async function stepOnce() {
     if (thinking || game.isGameOver()) return;
-    const humanOpponent = modelA.model ?? modelB.model;
     const candidate =
       mode === "models"
         ? game.turn() === player1Color
-          ? modelA.model && { model: modelA.model, actor: modelA.model.info.name }
-          : modelB.model && { model: modelB.model, actor: modelB.model.info.name }
+          ? modelA.model && {
+              model: modelA.model,
+              actor: modelA.model.info.name,
+              moveTimeLimitMs: moveTimeLimitMsA,
+            }
+          : modelB.model && {
+              model: modelB.model,
+              actor: modelB.model.info.name,
+              moveTimeLimitMs: moveTimeLimitMsB,
+            }
         : game.turn() !== humanColor
-          ? humanOpponent && { model: humanOpponent, actor: humanOpponent.info.name }
+          ? modelA.model
+            ? {
+                model: modelA.model,
+                actor: modelA.model.info.name,
+                moveTimeLimitMs: moveTimeLimitMsA,
+              }
+            : modelB.model && {
+                model: modelB.model,
+                actor: modelB.model.info.name,
+                moveTimeLimitMs: moveTimeLimitMsB,
+              }
           : null;
-    if (candidate) await playModelMove(candidate.model, candidate.actor);
+    if (candidate) {
+      await playModelMove(candidate.model, candidate.actor, candidate.moveTimeLimitMs);
+    }
   }
 
   function showPosition(ply: number | null) {
@@ -860,6 +898,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                 label="Player 1"
                 role="Model · optional"
                 slot={modelA}
+                moveTimeLimitMs={moveTimeLimitMsA}
+                onMoveTimeLimitMs={setMoveTimeLimitMsA}
                 onReference={(reference) => updateReference("a", reference)}
                 onLoad={() => void loadModel("a")}
               />
@@ -889,6 +929,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                 label="Player 2"
                 role="Optional · Human if empty"
                 slot={modelB}
+                moveTimeLimitMs={moveTimeLimitMsB}
+                onMoveTimeLimitMs={setMoveTimeLimitMsB}
                 onReference={(reference) => updateReference("b", reference)}
                 onLoad={() => void loadModel("b")}
               />
@@ -1298,25 +1340,31 @@ function ModelLoader({
   label,
   role,
   slot,
+  moveTimeLimitMs,
+  onMoveTimeLimitMs,
   onReference,
   onLoad,
 }: {
   label: string;
   role: string;
   slot: ModelSlot;
+  moveTimeLimitMs: number;
+  onMoveTimeLimitMs: (value: number) => void;
   onReference: (reference: string) => void;
   onLoad: () => void;
 }) {
+  const inputId = `model-${label.toLowerCase().replace(" ", "-")}`;
+  const capId = `${inputId}-thinking-cap`;
   const percent = slot.progress?.totalBytes
     ? Math.min(100, (slot.progress.loadedBytes / slot.progress.totalBytes) * 100)
     : null;
   return (
     <article className="model-loader">
       <header><span>{label}</span><small>{role}</small></header>
-      <label htmlFor={`model-${label.toLowerCase().replace(" ", "-")}`}>Hugging Face model</label>
+      <label htmlFor={inputId}>Hugging Face model</label>
       <div className="model-input-row">
         <input
-          id={`model-${label.toLowerCase().replace(" ", "-")}`}
+          id={inputId}
           type="text"
           value={slot.reference}
           onChange={(event) => onReference(event.target.value)}
@@ -1329,10 +1377,26 @@ function ModelLoader({
           {slot.phase === "loading" ? "Loading…" : slot.phase === "ready" ? "Reload" : "Load"}
         </button>
       </div>
+      <label className="thinking-cap-field" htmlFor={capId}>
+        <span>Thinking cap (ms)</span>
+        <input
+          id={capId}
+          type="number"
+          min={1}
+          max={600000}
+          required
+          value={moveTimeLimitMs}
+          onChange={(event) => onMoveTimeLimitMs(Number(event.target.value))}
+        />
+        <small>Per-move budget passed to the package.</small>
+      </label>
       {slot.phase === "loading" && slot.progress ? (
         <div className="load-progress" aria-live="polite">
           <div><i style={{ width: percent === null ? "24%" : `${percent}%` }} /></div>
-          <span>{slot.progress.label} · {formatBytes(slot.progress.loadedBytes)}{slot.progress.totalBytes ? ` / ${formatBytes(slot.progress.totalBytes)}` : ""}</span>
+          <span>
+            {slot.progress.label} · {formatBytes(slot.progress.loadedBytes)}
+            {slot.progress.totalBytes ? ` / ${formatBytes(slot.progress.totalBytes)}` : ""}
+          </span>
         </div>
       ) : null}
       {slot.model ? (
@@ -1340,8 +1404,13 @@ function ModelLoader({
           {slot.profileId
             ? <Link href={modelPageHref(slot.model.info.reference)}><strong>{slot.model.info.name}</strong></Link>
             : <strong>{slot.model.info.name}</strong>}
-          <span>{slot.model.info.runtime} · {formatBytes(slot.model.info.artifactBytes)} · {slot.model.info.pinned ? "Pinned" : "Mutable"}</span>
-          <code title={`SHA-256 ${slot.model.info.digest}`}>SHA {slot.model.info.digest.slice(0, 12)}…</code>
+          <span>
+            {slot.model.info.runtime} · {formatBytes(slot.model.info.artifactBytes)} ·{" "}
+            {slot.model.info.pinned ? "Pinned" : "Mutable"}
+          </span>
+          <code title={`SHA-256 ${slot.model.info.digest}`}>
+            SHA {slot.model.info.digest.slice(0, 12)}…
+          </code>
         </div>
       ) : null}
       {slot.error ? <p className="model-error" role="alert">{slot.error}</p> : null}

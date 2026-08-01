@@ -673,6 +673,33 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .arena-page-v2 .model-input-row input,
 .arena-page-v2 .model-input-row button { min-height: 2.25rem; }
 .arena-page-v2 .model-input-row button { padding-inline: 0.7rem; }
+.arena-page-v2 .thinking-cap-field {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.55rem;
+}
+.arena-page-v2 .thinking-cap-field > span {
+  color: var(--muted);
+  font-size: 0.55rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.arena-page-v2 .thinking-cap-field > input {
+  min-height: 2.25rem;
+  width: 100%;
+  max-width: 12rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 0.2rem;
+  background: transparent;
+  font: inherit;
+}
+.arena-page-v2 .thinking-cap-field > small {
+  color: var(--muted);
+  font-size: 0.57rem;
+  line-height: 1.35;
+}
 .arena-page-v2 .load-progress { gap: 0.25rem; margin-top: 0.45rem; }
 .model-summary { display: grid; gap: 0.15rem; min-width: 0; margin-top: 0.55rem; padding-left: 0.55rem; border-left: 0.18rem solid var(--green); }
 .model-summary strong, .model-summary span, .model-summary code { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
