@@ -133,6 +133,25 @@ test("arena defaults Player 1 to a random side and falls back to a human opponen
   assert.match(arena, /aria-pressed=\{sidePreference === side\.value\}/);
 });
 
+test("arena casual default move time limit is 10 seconds", async () => {
+  const model = await readFile(new URL("../app/arena/model.ts", import.meta.url), "utf8");
+  assert.match(model, /export const DEFAULT_MOVE_TIME_LIMIT_MS = 10_000;/);
+});
+
+test("arena setup exposes a per-player thinking cap defaulting to 10000 ms", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+
+  assert.match(arena, /DEFAULT_MOVE_TIME_LIMIT_MS/);
+  assert.match(arena, /useState\(DEFAULT_MOVE_TIME_LIMIT_MS\)/);
+  assert.match(arena, /Thinking cap \(ms\)/);
+  assert.match(arena, /Per-move budget passed to the package/);
+  assert.match(arena, /moveTimeLimitMs=\{moveTimeLimitMsA\}/);
+  assert.match(arena, /moveTimeLimitMs=\{moveTimeLimitMsB\}/);
+  assert.match(arena, /model\.predict\(activeGame\.history\(\), activeGame\.moves\(\), moveTimeLimitMs\)/);
+  assert.doesNotMatch(arena, /chess-gpt:arena-move-time/);
+  assert.doesNotMatch(arena, /searchParams\.(get|set)\(["']t(?:ime)?/);
+});
+
 test("arena renders filled pieces, player strips, captures, and material advantage", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
