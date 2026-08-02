@@ -39,7 +39,7 @@ DEFAULTS = {
     "history_k": 8, "shuffle_history": False, "zero_halfmove": False, "zero_castling": False,
     "rankfile_squares": False, "input_square_dropout": 0.0, "shuffle_squares": False,
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
-    "flip": False, "shard_set": "legacy",
+    "flip": False, "shard_set": "legacy", "init_from": "",
 }
 
 SHARD_SETS = {
@@ -354,9 +354,12 @@ def load_shard(path, offset):
                 seen[gid] = len(seen) + offset
             ordinals[row] = seen[gid]
         chunk = {"game_ordinal": ordinals}
+        dtypes = {"squares": np.uint8, "state": np.uint8, "history_from": np.uint8,
+                  "history_to": np.uint8, "target": np.int16, "result": np.uint8,
+                  "ply": np.int16, "plies_remaining": np.int16, "future_material": np.int16}
         for name in columns[1:]:
             arr = batch[name].to_numpy(zero_copy_only=False)
-            chunk[name] = (np.stack(arr) if arr.dtype == object else arr).astype(np.int64)
+            chunk[name] = (np.stack(arr) if arr.dtype == object else arr).astype(dtypes[name])
         chunks.append(chunk)
     return {k: np.concatenate([c[k] for c in chunks]) for k in chunks[0]}, len(seen)
 
@@ -385,7 +388,7 @@ def main():
         parts.append(merged)
     data = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
     # next-move targets: valid only when the following row belongs to the same game
-    nxt = np.full(len(data["target"]), -100, dtype=np.int64)
+    nxt = np.full(len(data["target"]), -100, dtype=np.int16)
     same = data["game_ordinal"][1:] == data["game_ordinal"][:-1]
     nxt[:-1][same] = data["target"][1:][same]
     data["next_target"] = nxt
@@ -446,6 +449,10 @@ def main():
         weights = weights / weights.sum()
 
     model = TinyPolicy(r).to(device)
+    if r["init_from"]:
+        prior = torch.load(hf_hub_download(DATASET, r["init_from"], repo_type="dataset"),
+                           map_location=device, weights_only=True)
+        model.load_state_dict(prior["model"])
     teacher = None
     if r["distill"]:
         saved = torch.load(hf_hub_download(TEACHER_REPO, "57-cloud.pt"), map_location=device, weights_only=True)
@@ -495,18 +502,18 @@ def main():
                     masked_positions,
                 )
                 if r["focal"]:
-                    ce = torch.nn.functional.cross_entropy(out["policy"], train["target"][batch], reduction="none")
+                    ce = torch.nn.functional.cross_entropy(out["policy"], train["target"][batch].long(), reduction="none")
                     p = torch.exp(-ce)
                     loss = ((1 - p) ** 2 * ce).mean()
                 else:
                     loss = torch.nn.functional.cross_entropy(
-                        out["policy"], train["target"][batch], label_smoothing=r["label_smoothing"]
+                        out["policy"], train["target"][batch].long(), label_smoothing=r["label_smoothing"]
                     )
                 if r["entropy_bonus"] > 0:
                     logp = torch.log_softmax(out["policy"], dim=1)
                     loss = loss - r["entropy_bonus"] * (-(logp.exp() * logp).sum(1).mean())
                 if r["value_weight"] > 0:
-                    result = train["result"][batch]
+                    result = train["result"][batch].long()
                     if r["value_mode"] == "bce":
                         target_p = 1.0 - result.float() / 2.0
                         v_loss = torch.nn.functional.binary_cross_entropy_with_logits(
@@ -526,16 +533,16 @@ def main():
                     loss = loss + r["value_weight"] * (v_loss * sample_w).mean()
                 if r["aux_plies"]:
                     loss = loss + 0.25 * torch.nn.functional.cross_entropy(
-                        out["aux_plies"], (train["plies_remaining"][batch] // 10).clamp(0, 7))
+                        out["aux_plies"], (train["plies_remaining"][batch].long() // 10).clamp(0, 7))
                 if r["aux_material"]:
                     loss = loss + 0.25 * torch.nn.functional.cross_entropy(
-                        out["aux_material"], (train["future_material"][batch].clamp(-20, 20) + 20))
+                        out["aux_material"], (train["future_material"][batch].long().clamp(-20, 20) + 20))
                 if r["aux_next_move"]:
                     loss = loss + 0.25 * torch.nn.functional.cross_entropy(
-                        out["aux_next"], train["next_target"][batch], ignore_index=-100)
+                        out["aux_next"], train["next_target"][batch].long(), ignore_index=-100)
                 if r["aux_masked"]:
                     loss = loss + 0.25 * torch.nn.functional.cross_entropy(
-                        out["aux_masked"].flatten(0, 1), masked_truth.flatten())
+                        out["aux_masked"].flatten(0, 1), masked_truth.long().flatten())
                 if teacher is not None:
                     with torch.no_grad():
                         ref = teacher(
@@ -560,6 +567,13 @@ def main():
                 with torch.no_grad():
                     for k, v in model.state_dict().items():
                         ema_state[k].mul_(r["ema"]).add_(v.float(), alpha=1 - r["ema"])
+            if r["save_ckpt"] and not smoke_games and step > 0 and step % max(1, total_steps // 4) == 0:
+                try:
+                    torch.save({"sweep_recipe": r, "config": {}, "model": model.state_dict()}, "/tmp/partial.pt")
+                    api.upload_file(path_or_fileobj="/tmp/partial.pt", path_in_repo=f"results3/{r['id']}.partial.pt",
+                                    repo_id=DATASET, repo_type="dataset")
+                except Exception:
+                    pass
             if r["swa"] and step >= int(total_steps * 0.8):
                 with torch.no_grad():
                     if swa_state is None:
@@ -587,14 +601,14 @@ def main():
             b = slice(start, start + 8192)
             out = model(val["squares"][b].long(), val["state"][b].long(),
                         val["history_from"][b].long(), val["history_to"][b].long())
-            loss_sum += torch.nn.functional.cross_entropy(out["policy"], val["target"][b], reduction="sum").item()
-            correct += (out["policy"].argmax(1) == val["target"][b]).sum().item()
+            loss_sum += torch.nn.functional.cross_entropy(out["policy"], val["target"][b].long(), reduction="sum").item()
+            correct += (out["policy"].argmax(1) == val["target"][b].long()).sum().item()
             if r["value_mode"] in ("ce", "smooth"):
-                value_correct += (out["value"].argmax(1) == val["result"][b]).sum().item()
+                value_correct += (out["value"].argmax(1) == val["result"][b].long()).sum().item()
             else:
                 predicted = (out["value"][:, 0] > 0.5 if r["value_mode"] == "mse"
                              else out["value"][:, 0] > 0)
-                value_correct += (predicted == (val["result"][b] == 0)).sum().item()
+                value_correct += (predicted == (val["result"][b].long() == 0)).sum().item()
     metrics = {
         "id": r["id"], "recipe": r,
         "parameters": sum(p.numel() for p in model.parameters()),

@@ -14,6 +14,9 @@ const entry = await import(pathToFileURL(resolve(dir, manifest.entrypoint.path))
 const pkg = await entry.loadPackage({ artifacts, ort });
 
 const probes = [
+  { name: "BLACK mate-in-1 (Fool's, flip path)", history: ["f3", "e5", "g4"], expect: ["Qh4#"] },
+  { name: "BLACK deep mate (flip search path)", history: ["a3", "e5", "f3", "Nc6", "h3", "Bc5", "g4"], expect: ["Qh4#"] },
+  { name: "BLACK wins hung queen (flip search)", history: ["a3", "e5", "e4", "Nf6", "Bc4", "Nc6", "Qh5"], expect: ["Nxh5"] },
   { name: "mate-in-1 (Scholar's)", history: ["e4", "e5", "Bc4", "Nc6", "Qh5", "Nf6"], expect: ["Qxf7#"] },
   { name: "win rook w/ check", history: ["e4", "e5", "Qh5", "g6"], expect: ["Qxe5+"] },
   { name: "recapture the queen", history: ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qe5+", "Qe2", "Qxe2+"], expect: ["Bxe2", "Ngxe2", "Kxe2", "Nxe2", "Ncxe2"] },

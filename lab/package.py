@@ -51,13 +51,20 @@ def main() -> None:
     args = parser.parse_args()
 
     saved = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
-    config = saved["config"]
-    model = TinyPolicy(**config)
-    model.load_state_dict(saved["model"])
+    if "sweep_recipe" in saved:
+        from lab.cloud_sweep import DEFAULTS, TinyPolicy as SweepPolicy
+
+        model = SweepPolicy({**DEFAULTS, **saved["sweep_recipe"]})
+        model.load_state_dict(saved["model"])
+        history = 8
+    else:
+        config = saved["config"]
+        model = TinyPolicy(**config)
+        model.load_state_dict(saved["model"])
+        history = config.get("history", 0)
+        if history != 8:
+            raise SystemExit("this adapter expects a history-8 checkpoint")
     model.eval()
-    history = config.get("history", 0)
-    if history != 8:
-        raise SystemExit("this adapter expects a history-8 checkpoint")
 
     args.output.mkdir(parents=True, exist_ok=True)
     model_path = args.output / "model.onnx"
@@ -101,7 +108,7 @@ def main() -> None:
         },
         "config": {
             "architecture": "lab-tinypolicy",
-            "model_config": config,
+            "model_config": saved.get("sweep_recipe") or saved.get("config"),
             "decode": "value-search-1ply-contempt-0.15",
         },
     }
