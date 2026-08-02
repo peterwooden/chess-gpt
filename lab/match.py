@@ -11,10 +11,33 @@ from pathlib import Path
 import chess
 import torch
 
-from chess_gpt.snapshot_model import encode_board, move_index
+from chess_gpt.snapshot_model import PROMOTION_UCI_MOVES, encode_board, move_index
 from lab.model import TinyPolicy
 
 Player = Callable[[chess.Board], chess.Move]
+
+_PROMO_INDEX = {u: i for i, u in enumerate(PROMOTION_UCI_MOVES)}
+
+
+def _mirror_move(move: chess.Move) -> chess.Move:
+    return chess.Move(move.from_square ^ 56, move.to_square ^ 56, promotion=move.promotion)
+
+
+def move_index_for(model, board: chess.Board, move: chess.Move) -> int:
+    """Model-frame move index: mirrored when a flip model sees a black-to-move position."""
+    if getattr(model, "flip", False) and board.turn == chess.BLACK:
+        return move_index(_mirror_move(move))
+    return move_index(move)
+
+
+def white_value(model, mover_is_white: bool, scores: torch.Tensor) -> torch.Tensor:
+    """Convert value-head win score to white's perspective.
+
+    Flip models output P(side-to-move wins); legacy models output white-perspective.
+    """
+    if getattr(model, "flip", False):
+        return scores if mover_is_white else 1.0 - scores
+    return scores
 
 
 def load_model(checkpoint: Path) -> TinyPolicy:
@@ -35,13 +58,16 @@ def load_model(checkpoint: Path) -> TinyPolicy:
 
 
 def _inputs(model: TinyPolicy, board: chess.Board) -> dict[str, torch.Tensor]:
-    snapshot = encode_board(board)
+    flipped = getattr(model, "flip", False) and board.turn == chess.BLACK
+    snapshot = encode_board(board.mirror() if flipped else board)
     inputs: dict[str, torch.Tensor] = {
         "squares": torch.tensor([snapshot.squares], dtype=torch.long),
         "state": torch.tensor([snapshot.state], dtype=torch.long),
     }
     if model.history:
         moves = board.move_stack[-model.history :]
+        if flipped:
+            moves = [_mirror_move(m) for m in moves]
         pad = model.history - len(moves)
         inputs["history_from"] = torch.tensor(
             [[64] * pad + [m.from_square for m in moves]], dtype=torch.long
@@ -82,7 +108,7 @@ def make_player(
         with torch.no_grad():
             logits = model(**_inputs(model, board))["policy"][0]
         legal = list(board.legal_moves)
-        scores = logits[torch.tensor([move_index(m) for m in legal])]
+        scores = logits[torch.tensor([move_index_for(model, board, m) for m in legal])]
         if temperature > 0:
             keep = scores.topk(min(top_k, len(legal))).indices if top_k else torch.arange(len(legal))
             probabilities = torch.softmax(scores[keep] / temperature, dim=0)
@@ -116,7 +142,8 @@ def make_player(
                 key: torch.cat([b[key] for b in batched]) for key in batched[0]
             }
             with torch.no_grad():
-                white = _white_score(model(**stacked)["value"])
+                raw = _white_score(model(**stacked)["value"])
+                white = white_value(model, not my_turn_is_white, raw)
             for i, slot in enumerate(batch_slots):
                 mine = float(white[i]) if my_turn_is_white else 1.0 - float(white[i])
                 if contempt > 0 and repetition_flags[i] and mine > 0.55:
@@ -164,11 +191,15 @@ def _beam_player(
         }
         with torch.no_grad():
             output = model(**stacked)
-        return output["policy"].cpu(), _white_score(output["value"]).cpu()
+        raw = _white_score(output["value"]).cpu()
+        if getattr(model, "flip", False):
+            movers_white = torch.tensor([b.turn == chess.WHITE for b in boards])
+            raw = torch.where(movers_white, raw, 1.0 - raw)
+        return output["policy"].cpu(), raw
 
     def expand(node: _Node, policy_logits: torch.Tensor, width: int) -> list[_Node]:
         legal = list(node.board.legal_moves)
-        scores = policy_logits[torch.tensor([move_index(m) for m in legal])]
+        scores = policy_logits[torch.tensor([move_index_for(model, node.board, m) for m in legal])]
         for rank in scores.argsort(descending=True)[:width]:
             successor = node.board.copy()
             successor.push(legal[int(rank)])

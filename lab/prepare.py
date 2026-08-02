@@ -33,6 +33,8 @@ SCHEMA = pa.schema(
         pa.field("repetition", pa.uint8()),
         pa.field("plies_remaining", pa.uint16()),
         pa.field("future_material", pa.int8()),
+        pa.field("white_elo", pa.uint16()),
+        pa.field("black_elo", pa.uint16()),
     ]
 )
 
@@ -44,6 +46,7 @@ def rows_from_moves(
     keep_color: chess.Color | None,
     global_counts: dict[int, int] | None,
     dedup_cap: int,
+    elos: tuple[int, int] = (0, 0),
 ) -> list[dict[str, object]] | None:
     """Replay a finished game into enriched training rows.
 
@@ -89,6 +92,8 @@ def rows_from_moves(
                 "repetition": min(repetition, 3),
                 "plies_remaining": total - ply,
                 "future_material": max(-127, min(127, balances[min(ply + 6, total)])),
+                "white_elo": elos[0],
+                "black_elo": elos[1],
             }
         )
     return rows or None
@@ -178,6 +183,10 @@ def main() -> None:
                 decision,
                 global_counts,
                 args.dedup_cap,
+                elos=(
+                    min(65535, max(0, _elo(game, "WhiteElo") or 0)),
+                    min(65535, max(0, _elo(game, "BlackElo") or 0)),
+                ),
             )
             if rows is None:
                 continue

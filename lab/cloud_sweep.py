@@ -27,7 +27,8 @@ DEFAULTS = {
     "id": "control", "optimizer": "adamw", "lr": 1.2e-3, "wd": 0.01, "betas": [0.9, 0.999],
     "eps": 1e-8, "clip": 0.0, "schedule": "cosine", "warmup": 0.02, "cosine_floor": 0.0,
     "cycles": 1, "embed_lr_scale": 1.0, "batch": 1024, "epochs": 2, "ema": 0.0, "swa": False,
-    "grad_noise": 0.0, "arch": "mlp", "heads": 4, "activation": "relu", "residual": False, "block_norm": False,
+    "grad_noise": 0.0, "arch": "mlp", "heads": 4, "ffn_ratio": 4, "attn_bias": False,
+    "mega_corpus": False, "activation": "relu", "residual": False, "block_norm": False,
     "gated": False, "two_tower": False, "input_norm": False, "input_residual": False,
     "token_rank": 0, "untied_readout": False, "layers": 2, "hidden": 1152, "d_model": 128,
     "dropout": 0.1, "label_smoothing": 0.0, "value_weight": 1.0, "value_mode": "ce",
@@ -38,7 +39,89 @@ DEFAULTS = {
     "history_k": 8, "shuffle_history": False, "zero_halfmove": False, "zero_castling": False,
     "rankfile_squares": False, "input_square_dropout": 0.0, "shuffle_squares": False,
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
+    "flip": False, "shard_set": "legacy",
 }
+
+SHARD_SETS = {
+    "elo1600": [f"shards/elo1600-{c}.parquet" for c in "abcd"],
+    "elite2600": [f"shards/elite2600-{c}.parquet" for c in "ab"],
+}
+
+
+def _promotion_moves():
+    moves = []
+    for source_rank, target_rank in (("7", "8"), ("2", "1")):
+        for f in "abcdefgh":
+            i = ord(f) - ord("a")
+            for j in range(max(0, i - 1), min(7, i + 1) + 1):
+                for piece in "bnqr":
+                    moves.append(f"{f}{source_rank}{chr(ord('a') + j)}{target_rank}{piece}")
+    return sorted(moves)
+
+
+def _flip_uci(uci):
+    def sq(s):
+        return s[0] + str(9 - int(s[1]))
+    return sq(uci[:2]) + sq(uci[2:4]) + uci[4:]
+
+
+PROMOS = _promotion_moves()
+PROMO_INDEX = {u: i for i, u in enumerate(PROMOS)}
+PROMO_FLIP = np.array([PROMO_INDEX[_flip_uci(u)] for u in PROMOS], dtype=np.int64)
+
+
+def flip_in_place(part):
+    """Canonicalize to side-to-move perspective: mirror ranks, swap colors, remap targets."""
+    black = part["state"][:, 0] == 1
+    if not black.any():
+        return
+    sq_perm = np.arange(64) ^ 56
+    squares = part["squares"][black][:, sq_perm]
+    part["squares"][black] = np.where(
+        squares == 0, 0, np.where(squares <= 6, squares + 6, squares - 6)
+    )
+    state = part["state"][black]
+    state[:, 0] = 0
+    state[:, [1, 2, 3, 4]] = state[:, [3, 4, 1, 2]]
+    state[:, 5] = np.where(state[:, 5] < 64, state[:, 5] ^ 56, 64)
+    part["state"][black] = state
+    for name in ("history_from", "history_to"):
+        h = part[name][black]
+        part[name][black] = np.where(h < 64, h ^ 56, 64)
+    t = part["target"][black]
+    base = t < 4096
+    flipped = np.where(base, ((t // 64) ^ 56) * 64 + ((t % 64) ^ 56),
+                       4096 + PROMO_FLIP[np.clip(t - 4096, 0, 175)])
+    part["target"][black] = flipped
+    part["result"][black] = 2 - part["result"][black]
+    part["future_material"][black] = -part["future_material"][black]
+
+
+class BiasedBlock(nn.Module):
+    """Pre-norm transformer block with a learned per-head additive attention bias."""
+
+    def __init__(self, d, heads, ffn_ratio, tokens=73):
+        super().__init__()
+        self.heads, self.dh = heads, d // heads
+        self.norm1 = nn.LayerNorm(d)
+        self.qkv = nn.Linear(d, 3 * d, bias=False)
+        self.out = nn.Linear(d, d)
+        self.bias = nn.Parameter(torch.zeros(heads, tokens, tokens))
+        self.norm2 = nn.LayerNorm(d)
+        self.ffn = nn.Sequential(
+            nn.Linear(d, ffn_ratio * d), nn.GELU(), nn.Linear(ffn_ratio * d, d)
+        )
+
+    def forward(self, tokens):
+        b, n, d = tokens.shape
+        q, k, v = self.qkv(self.norm1(tokens)).chunk(3, dim=-1)
+        shape = (b, n, self.heads, self.dh)
+        q, k, v = (t.view(shape).transpose(1, 2) for t in (q, k, v))
+        mixed = torch.nn.functional.scaled_dot_product_attention(
+            q, k, v, attn_mask=self.bias[:, :n, :n]
+        )
+        tokens = tokens + self.out(mixed.transpose(1, 2).reshape(b, n, d))
+        return tokens + self.ffn(self.norm2(tokens))
 
 
 def trunk(width_in, hidden, layers, r):
@@ -57,6 +140,7 @@ class TinyPolicy(nn.Module):
         d, hidden, history = r["d_model"], r["hidden"], 8
         self.history = history
         self.use_repetition = False  # match-harness compatibility
+        self.flip = r["flip"]  # side-to-move canonicalized inputs/outputs
         self.piece = nn.Embedding(14 if r["aux_masked"] else 13, d)
         if r["rankfile_squares"]:
             self.rank_embed = nn.Embedding(8, d)
@@ -80,19 +164,25 @@ class TinyPolicy(nn.Module):
         width = (65 + history) * d
         self.input_norm = nn.LayerNorm(width) if r["input_norm"] else nn.Identity()
         if r["arch"] == "transformer":
-            layer = nn.TransformerEncoderLayer(
-                d, r["heads"], dim_feedforward=4 * d,
-                batch_first=True, norm_first=True, dropout=r["dropout"],
-            )
-            self.encoder = nn.TransformerEncoder(layer, r["layers"])
+            if r["attn_bias"]:
+                self.encoder = nn.Sequential(
+                    *(BiasedBlock(d, r["heads"], r["ffn_ratio"]) for _ in range(r["layers"]))
+                )
+            else:
+                layer = nn.TransformerEncoderLayer(
+                    d, r["heads"], dim_feedforward=r["ffn_ratio"] * d,
+                    batch_first=True, norm_first=True, dropout=r["dropout"],
+                )
+                self.encoder = nn.TransformerEncoder(layer, r["layers"])
         else:
             self.inproj, self.blocks, self.norms = trunk(width, hidden, r["layers"], r)
-        if r["token_rank"] > 0:
-            self.outproj = nn.Sequential(
-                nn.Linear(hidden, r["token_rank"]), nn.Linear(r["token_rank"], 65 * d)
-            )
-        else:
-            self.outproj = nn.Linear(hidden, 65 * d)
+        if r["arch"] != "transformer":
+            if r["token_rank"] > 0:
+                self.outproj = nn.Sequential(
+                    nn.Linear(hidden, r["token_rank"]), nn.Linear(r["token_rank"], 65 * d)
+                )
+            else:
+                self.outproj = nn.Linear(hidden, 65 * d)
         if r["two_tower"]:
             self.v_inproj, self.v_blocks, self.v_norms = trunk(width, hidden, r["layers"], r)
             self.v_out = nn.Linear(hidden, d)
@@ -281,7 +371,13 @@ def main():
     torch.manual_seed(r["seed"])
     smoke_games = int(os.environ.get("SMOKE_GAMES", "0"))
 
-    shard_list = SHARDS + ([BIG_SHARD] if r["big_shard"] else [])
+    if r["shard_set"] != "legacy":
+        shard_list = SHARD_SETS[r["shard_set"]]
+    else:
+        shard_list = SHARDS + ([BIG_SHARD] if r["big_shard"] or r["mega_corpus"] else [])
+        if r["mega_corpus"]:
+            shard_list += ["shards/enriched-chunk3.parquet", "shards/enriched-chunk4.parquet"]
+    assert not (r["flip"] and r["aux_next_move"]), "next-move aux not flip-aware"
     offset, parts = 0, []
     for shard in shard_list:
         merged, games = load_shard(hf_hub_download(DATASET, shard, repo_type="dataset"), offset)
@@ -305,8 +401,13 @@ def main():
     if r["subsample"] < 1.0:
         train_mask &= rng.random(len(mask)) < r["subsample"]
     keys = [k for k in data if k != "game_ordinal"]
-    train = {k: torch.from_numpy(data[k][train_mask]).to(device) for k in keys}
-    val = {k: torch.from_numpy(data[k][mask]).to(device) for k in keys}
+    train_np = {k: data[k][train_mask].copy() for k in keys}
+    val_np = {k: data[k][mask].copy() for k in keys}
+    if r["flip"]:
+        flip_in_place(train_np)
+        flip_in_place(val_np)
+    train = {k: torch.from_numpy(v).to(device) for k, v in train_np.items()}
+    val = {k: torch.from_numpy(v).to(device) for k, v in val_np.items()}
     if r["label_noise"] > 0:
         noise = torch.rand(len(train["target"]), device=device) < r["label_noise"]
         train["target"] = torch.where(
