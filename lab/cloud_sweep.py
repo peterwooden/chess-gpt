@@ -40,6 +40,7 @@ DEFAULTS = {
     "rankfile_squares": False, "input_square_dropout": 0.0, "shuffle_squares": False,
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
     "flip": False, "shard_set": "legacy", "init_from": "",
+    "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False,
 }
 
 SHARD_SETS = {
@@ -124,6 +125,74 @@ class BiasedBlock(nn.Module):
         return tokens + self.ffn(self.norm2(tokens))
 
 
+class ConvBlock(nn.Module):
+    """Residual 3x3 block with KataGo-style global pooling bias."""
+
+    def __init__(self, filters):
+        super().__init__()
+        self.conv1 = nn.Conv2d(filters, filters, 3, padding=1)
+        self.conv2 = nn.Conv2d(filters, filters, 3, padding=1)
+        self.norm1 = nn.BatchNorm2d(filters)
+        self.norm2 = nn.BatchNorm2d(filters)
+        self.pool_bias = nn.Linear(filters, filters)
+
+    def forward(self, x):
+        h = torch.relu(self.norm1(self.conv1(x)))
+        pooled = self.pool_bias(h.mean(dim=(2, 3)))
+        h = h + pooled[:, :, None, None]
+        return torch.relu(x + self.norm2(self.conv2(h)))
+
+
+class RayBranch(nn.Module):
+    """Full-rank and full-file kernels: every square sees its whole row and column."""
+
+    def __init__(self, filters):
+        super().__init__()
+        self.rank = nn.Conv2d(filters, filters // 2, (1, 15), padding=(0, 7))
+        self.file = nn.Conv2d(filters, filters // 2, (15, 1), padding=(7, 0))
+        self.mix = nn.Conv2d(filters * 2, filters, 1)
+
+    def forward(self, x):
+        rays = torch.cat([torch.relu(self.rank(x)), torch.relu(self.file(x)), x], dim=1)
+        return torch.relu(x + self.mix(rays))
+
+
+class ChessCNN(nn.Module):
+    """AlphaZero-family trunk over 8x8 planes, sharing the lab's heads and inputs."""
+
+    def __init__(self, r, d):
+        super().__init__()
+        channels = 13 + 7 + 16  # piece one-hots, broadcast state, history from/to planes
+        f = r["cnn_filters"]
+        self.stem = nn.Conv2d(channels, f, 5, padding=2)  # knight/king/pawn geometry in one hop
+        self.blocks = nn.ModuleList(ConvBlock(f) for _ in range(r["cnn_blocks"]))
+        self.ray = RayBranch(f) if r["cnn_rays"] else None
+        self.to_tokens = nn.Conv2d(f, d, 1)
+        self.summary = nn.Linear(f, d)
+
+    def forward(self, squares, state, history_from, history_to):
+        b = squares.shape[0]
+        planes = torch.zeros(b, 36, 64, device=squares.device)
+        planes.scatter_(1, squares.unsqueeze(1), 1.0)  # channels 0-12 by piece code
+        planes[:, 13:20] = (state.float() / torch.tensor(
+            [1, 1, 1, 1, 1, 64, 100], device=squares.device
+        ))[:, :, None]
+        for slot in range(8):
+            fr, to = history_from[:, slot], history_to[:, slot]
+            on_board = fr < 64
+            planes[torch.arange(b, device=squares.device)[on_board], 20 + slot, fr[on_board]] = 1.0
+            on_board = to < 64
+            planes[torch.arange(b, device=squares.device)[on_board], 28 + slot, to[on_board]] = 1.0
+        x = torch.relu(self.stem(planes.view(b, 36, 8, 8)))
+        for index, block in enumerate(self.blocks):
+            x = block(x)
+            if self.ray is not None and index == len(self.blocks) // 2:
+                x = self.ray(x)
+        square_tokens = self.to_tokens(x).flatten(2).transpose(1, 2)  # (B, 64, d)
+        summary = self.summary(x.mean(dim=(2, 3)))
+        return torch.cat([summary[:, None], square_tokens], dim=1)  # 65 tokens
+
+
 def trunk(width_in, hidden, layers, r):
     inproj = nn.Linear(width_in, hidden * (2 if r["gated"] else 1))
     blocks = nn.ModuleList(nn.Linear(hidden, hidden) for _ in range(layers - 1))
@@ -163,7 +232,9 @@ class TinyPolicy(nn.Module):
         self.drop = nn.Dropout(r["dropout"])
         width = (65 + history) * d
         self.input_norm = nn.LayerNorm(width) if r["input_norm"] else nn.Identity()
-        if r["arch"] == "transformer":
+        if r["arch"] == "cnn":
+            self.encoder = ChessCNN(r, d)
+        elif r["arch"] == "transformer":
             if r["attn_bias"]:
                 self.encoder = nn.Sequential(
                     *(BiasedBlock(d, r["heads"], r["ffn_ratio"]) for _ in range(r["layers"]))
@@ -217,6 +288,12 @@ class TinyPolicy(nn.Module):
 
     def forward(self, squares, state, history_from, history_to, masked_positions=None):
         d = self.r["d_model"]
+        if self.r["arch"] == "cnn":
+            tokens = self.encoder(squares, state, history_from, history_to)
+            summary = tokens[:, 0]
+            base = self.to_square(tokens[:, 1:65]).flatten(1)
+            policy = torch.cat((base, self.promotions(summary)), dim=1)
+            return {"policy": policy, "value": self.value(summary)}
         if self.r["rankfile_squares"]:
             ranks = torch.arange(64, device=squares.device) // 8
             files = torch.arange(64, device=squares.device) % 8
