@@ -124,6 +124,10 @@ Fully co-designed submission candidate; every choice the learner's: transformer 
 
 Learner's hypothesis: spatial invariance + parameter sharing → CNNs learn chess well. Five matched-budget arms (flipped ≥1600 data, ~52M passes): classic 5×5-stem/3×3-resnet/global-pool 50.21; +rook rays 50.69; +full compass (shear diagonals, oracle-verified) & free knight leap **50.77**; +true knight mask 50.73 (null — free 5×5 had learned the right taps); transformer control **51.71**. Verdicts: geometry priors climbed monotonically (+0.56, mostly rook rays — sliding-piece blindness confirmed as the CNN's handicap); transformer wins per position; **per tournament-FLOP it is a statistical tie** (CNN ~0.9 vs 1.5 GFLOPs/pos; scaling-adjusted TF ≈ 50.6 at CNN's spend), and CNN wall-cost is ~40% lower. Teacher's 70% "transformer wins" survives only per-position. Knight-masked kernel = clean prior-vs-learning null. x5b rerun launched with checkpoint for the kernel autopsy + replication.
 
+## Experiment 60b — kernel autopsy (2026-08-03)
+
+x5b replicated x5 exactly (50.75/1.5496 vs 50.77/1.5497). Weight census of the trained 5×5 stem: **24 knight-detector filters (best: 89% of mass on the 8 knight taps), 72 rook-cross filters, 60 bishop-diagonal filters** — piece-movement geometry self-organized from free kernels in layer one. The mid-network leap group learned no knight structure (max 0.45): by that depth channels are abstract, geometry extraction belongs to the stem — which mechanistically explains the knight-mask null. Lesson sealed: provide the support, let the structure grow; and first-layer conv kernels are a readable window into what the network knows.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.
