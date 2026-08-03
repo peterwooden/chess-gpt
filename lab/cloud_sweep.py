@@ -40,7 +40,7 @@ DEFAULTS = {
     "rankfile_squares": False, "input_square_dropout": 0.0, "shuffle_squares": False,
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
     "flip": False, "shard_set": "legacy", "init_from": "",
-    "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False,
+    "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False,
 }
 
 SHARD_SETS = {
@@ -157,6 +157,50 @@ class RayBranch(nn.Module):
         return torch.relu(x + self.mix(rays))
 
 
+class FullRayBranch(nn.Module):
+    """All sliding directions plus the knight leap: rank, file, both diagonals, 5x5.
+
+    Diagonals via shear: shift row r sideways by r so diagonals become columns,
+    apply a vertical 15-kernel, shear back. Linear kernels see the whole ray;
+    blocking logic is left to the nonlinear layers above.
+    """
+
+    def __init__(self, filters):
+        super().__init__()
+        g = filters // 4
+        self.rank = nn.Conv2d(filters, g, (1, 15), padding=(0, 7))
+        self.file = nn.Conv2d(filters, g, (15, 1), padding=(7, 0))
+        self.diag = nn.Conv2d(filters, g, (15, 1), padding=(7, 0))
+        self.anti = nn.Conv2d(filters, g, (15, 1), padding=(7, 0))
+        self.leap = nn.Conv2d(filters, g, 5, padding=2)
+        self.mix = nn.Conv2d(filters + 5 * g, filters, 1)
+        rows = torch.arange(8)[:, None]
+        cols = torch.arange(15)[None, :]
+        self.register_buffer("shear_main", (cols + rows).expand(8, 15).clone())
+        self.register_buffer("shear_anti", (cols + (7 - rows)).expand(8, 15).clone())
+        out_cols = torch.arange(8)[None, :]
+        self.register_buffer("unshear_main", (out_cols - rows + 7).expand(8, 8).clone())
+        self.register_buffer("unshear_anti", (out_cols - (7 - rows) + 7).expand(8, 8).clone())
+
+    def _ray(self, x, conv, shear, unshear):
+        b, c = x.shape[:2]
+        padded = torch.nn.functional.pad(x, (7, 7))  # (B, C, 8, 22)
+        sheared = padded.gather(3, shear[None, None].expand(b, c, 8, 15))
+        out = torch.relu(conv(sheared))  # vertical kernel now reads a full diagonal
+        return out.gather(3, unshear[None, None].expand(b, out.shape[1], 8, 8))
+
+    def forward(self, x):
+        parts = [
+            x,
+            torch.relu(self.rank(x)),
+            torch.relu(self.file(x)),
+            self._ray(x, self.diag, self.shear_main, self.unshear_main),
+            self._ray(x, self.anti, self.shear_anti, self.unshear_anti),
+            torch.relu(self.leap(x)),
+        ]
+        return torch.relu(x + self.mix(torch.cat(parts, dim=1)))
+
+
 class ChessCNN(nn.Module):
     """AlphaZero-family trunk over 8x8 planes, sharing the lab's heads and inputs."""
 
@@ -166,7 +210,7 @@ class ChessCNN(nn.Module):
         f = r["cnn_filters"]
         self.stem = nn.Conv2d(channels, f, 5, padding=2)  # knight/king/pawn geometry in one hop
         self.blocks = nn.ModuleList(ConvBlock(f) for _ in range(r["cnn_blocks"]))
-        self.ray = RayBranch(f) if r["cnn_rays"] else None
+        self.ray = FullRayBranch(f) if r["cnn_fullrays"] else RayBranch(f) if r["cnn_rays"] else None
         self.to_tokens = nn.Conv2d(f, d, 1)
         self.summary = nn.Linear(f, d)
 
