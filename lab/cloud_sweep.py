@@ -745,10 +745,16 @@ def main():
                     for p in model.parameters():
                         if p.grad is not None:
                             p.grad.add_(torch.randn_like(p.grad), alpha=r["grad_noise"])
+            skip_step = False
             if r["clip"] > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), r["clip"])
-            for opt in optimizers:
-                opt.step()
+                norm = torch.nn.utils.clip_grad_norm_(model.parameters(), r["clip"])
+                if not torch.isfinite(norm):  # one bad gradient must not poison every parameter
+                    skip_step = True
+                    for opt in optimizers:
+                        opt.zero_grad()
+            if not skip_step:
+                for opt in optimizers:
+                    opt.step()
             if ema_state is not None:
                 with torch.no_grad():
                     for k, v in model.state_dict().items():
