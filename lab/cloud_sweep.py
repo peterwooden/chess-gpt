@@ -503,9 +503,10 @@ def build_optimizer(model, r):
         ]
         return [torch.optim.AdamW(groups, weight_decay=r["wd"], betas=tuple(r["betas"]), eps=r["eps"],
                                   fused=torch.cuda.is_available())], None
+    fused_ok = torch.cuda.is_available() and r["arch"] != "cnn"  # fused + channels_last corrupts updates
     return [torch.optim.AdamW(model.parameters(), lr=r["lr"], weight_decay=r["wd"],
                               betas=tuple(r["betas"]), eps=r["eps"],
-                              fused=torch.cuda.is_available())], None
+                              fused=fused_ok)], None
 
 
 def lr_scale(r, step, total):
