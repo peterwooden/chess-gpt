@@ -41,6 +41,7 @@ DEFAULTS = {
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
     "flip": False, "shard_set": "legacy", "init_from": "",
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
+    "cnn_modern": False,
 }
 
 SHARD_SETS = {
@@ -211,6 +212,52 @@ class FullRayBranch(nn.Module):
         return torch.relu(x + self.mix(torch.cat(parts, dim=1)))
 
 
+class ModernBlock(nn.Module):
+    """ConvNeXt-style chess block: 7x7 depthwise, inverted-bottleneck FFN, GELU,
+    squeeze-excite gate, mean+max global pooling bias, depthwise compass rays."""
+
+    def __init__(self, f):
+        super().__init__()
+        self.dw = nn.Conv2d(f, f, 7, padding=3, groups=f)
+        self.norm = nn.GroupNorm(1, f)
+        self.expand = nn.Conv2d(f, 4 * f, 1)
+        self.project = nn.Conv2d(4 * f, f, 1)
+        self.se = nn.Sequential(nn.Linear(f, f // 8), nn.GELU(), nn.Linear(f // 8, f))
+        self.pool_bias = nn.Linear(2 * f, f)
+        self.ray_rank = nn.Conv2d(f, f, (1, 15), padding=(0, 7), groups=f)
+        self.ray_file = nn.Conv2d(f, f, (15, 1), padding=(7, 0), groups=f)
+        self.ray_diag = nn.Conv2d(f, f, (15, 1), padding=(7, 0), groups=f)
+        self.ray_anti = nn.Conv2d(f, f, (15, 1), padding=(7, 0), groups=f)
+        self.ray_leap = nn.Conv2d(f, f, 5, padding=2, groups=f)
+        self.ray_gates = nn.Parameter(torch.zeros(5))
+        rows = torch.arange(8)[:, None]
+        cols15 = torch.arange(15)[None, :]
+        out_cols = torch.arange(8)[None, :]
+        self.register_buffer("sh_m", (cols15 + rows).expand(8, 15).clone())
+        self.register_buffer("sh_a", (cols15 + (7 - rows)).expand(8, 15).clone())
+        self.register_buffer("un_m", (out_cols - rows + 7).expand(8, 8).clone())
+        self.register_buffer("un_a", (out_cols - (7 - rows) + 7).expand(8, 8).clone())
+
+    def _sheared(self, x, conv, shear, unshear):
+        b, c = x.shape[:2]
+        padded = torch.nn.functional.pad(x, (7, 7))
+        sheared = padded.gather(3, shear[None, None].expand(b, c, 8, 15))
+        out = conv(sheared)
+        return out.gather(3, unshear[None, None].expand(b, c, 8, 8))
+
+    def forward(self, x):
+        h = self.norm(self.dw(x))
+        g = torch.tanh(self.ray_gates)
+        h = h + g[0] * self.ray_rank(x) + g[1] * self.ray_file(x)
+        h = h + g[2] * self._sheared(x, self.ray_diag, self.sh_m, self.un_m)
+        h = h + g[3] * self._sheared(x, self.ray_anti, self.sh_a, self.un_a)
+        h = h + g[4] * self.ray_leap(x)
+        h = self.project(torch.nn.functional.gelu(self.expand(h)))
+        h = h * torch.sigmoid(self.se(h.mean(dim=(2, 3))))[:, :, None, None]
+        pooled = self.pool_bias(torch.cat([h.mean(dim=(2, 3)), h.amax(dim=(2, 3))], dim=1))
+        return x + h + pooled[:, :, None, None]
+
+
 class ChessCNN(nn.Module):
     """AlphaZero-family trunk over 8x8 planes, sharing the lab's heads and inputs."""
 
@@ -219,7 +266,8 @@ class ChessCNN(nn.Module):
         channels = 13 + 7 + 16  # piece one-hots, broadcast state, history from/to planes
         f = r["cnn_filters"]
         self.stem = nn.Conv2d(channels, f, 5, padding=2)  # knight/king/pawn geometry in one hop
-        self.blocks = nn.ModuleList(ConvBlock(f) for _ in range(r["cnn_blocks"]))
+        block_type = ModernBlock if r["cnn_modern"] else ConvBlock
+        self.blocks = nn.ModuleList(block_type(f) for _ in range(r["cnn_blocks"]))
         self.ray = FullRayBranch(f) if r["cnn_fullrays"] else RayBranch(f) if r["cnn_rays"] else None
         if self.ray is not None and isinstance(self.ray, FullRayBranch):
             self.ray.mask_leap = r["cnn_knightmask"]
