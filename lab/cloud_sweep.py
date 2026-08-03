@@ -224,6 +224,7 @@ class ModernBlock(nn.Module):
         self.project = nn.Conv2d(4 * f, f, 1)
         self.se = nn.Sequential(nn.Linear(f, f // 8), nn.GELU(), nn.Linear(f // 8, f))
         self.pool_bias = nn.Linear(2 * f, f)
+        self.gamma = nn.Parameter(torch.full((f, 1, 1), 1e-6))  # LayerScale: branch starts silent
         self.ray_rank = nn.Conv2d(f, f, (1, 15), padding=(0, 7), groups=f)
         self.ray_file = nn.Conv2d(f, f, (15, 1), padding=(7, 0), groups=f)
         self.ray_diag = nn.Conv2d(f, f, (15, 1), padding=(7, 0), groups=f)
@@ -246,16 +247,17 @@ class ModernBlock(nn.Module):
         return out.gather(3, unshear[None, None].expand(b, c, 8, 8))
 
     def forward(self, x):
-        h = self.norm(self.dw(x))
+        base = self.norm(x)  # pre-norm feeds every branch input
+        h = self.dw(base)
         g = torch.tanh(self.ray_gates)
-        h = h + g[0] * self.ray_rank(x) + g[1] * self.ray_file(x)
-        h = h + g[2] * self._sheared(x, self.ray_diag, self.sh_m, self.un_m)
-        h = h + g[3] * self._sheared(x, self.ray_anti, self.sh_a, self.un_a)
-        h = h + g[4] * self.ray_leap(x)
+        h = h + g[0] * self.ray_rank(base) + g[1] * self.ray_file(base)
+        h = h + g[2] * self._sheared(base, self.ray_diag, self.sh_m, self.un_m)
+        h = h + g[3] * self._sheared(base, self.ray_anti, self.sh_a, self.un_a)
+        h = h + g[4] * self.ray_leap(base)
         h = self.project(torch.nn.functional.gelu(self.expand(h)))
         h = h * torch.sigmoid(self.se(h.mean(dim=(2, 3))))[:, :, None, None]
-        pooled = self.pool_bias(torch.cat([h.mean(dim=(2, 3)), h.amax(dim=(2, 3))], dim=1))
-        return x + h + pooled[:, :, None, None]
+        h = h + self.pool_bias(torch.cat([h.mean(dim=(2, 3)), h.amax(dim=(2, 3))], dim=1))[:, :, None, None]
+        return x + self.gamma * h
 
 
 class ChessCNN(nn.Module):
