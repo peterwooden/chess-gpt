@@ -289,7 +289,7 @@ class ChessCNN(nn.Module):
             planes[torch.arange(b, device=squares.device)[on_board], 20 + slot, fr[on_board]] = 1.0
             on_board = to < 64
             planes[torch.arange(b, device=squares.device)[on_board], 28 + slot, to[on_board]] = 1.0
-        x = torch.relu(self.stem(planes.view(b, 36, 8, 8).contiguous(memory_format=torch.channels_last)))
+        x = torch.relu(self.stem(planes.view(b, 36, 8, 8)))
         for index, block in enumerate(self.blocks):
             x = block(x)
             if self.ray is not None and index == len(self.blocks) // 2:
@@ -633,8 +633,6 @@ def main():
         weights = weights / weights.sum()
 
     model = TinyPolicy(r).to(device)
-    if r["arch"] == "cnn" and device.type == "cuda":
-        model = model.to(memory_format=torch.channels_last)
     if r["init_from"]:
         prior = torch.load(hf_hub_download(DATASET, r["init_from"], repo_type="dataset"),
                            map_location=device, weights_only=True)
