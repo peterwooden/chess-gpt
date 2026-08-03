@@ -40,7 +40,7 @@ DEFAULTS = {
     "rankfile_squares": False, "input_square_dropout": 0.0, "shuffle_squares": False,
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
     "flip": False, "shard_set": "legacy", "init_from": "",
-    "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False,
+    "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
 }
 
 SHARD_SETS = {
@@ -173,6 +173,12 @@ class FullRayBranch(nn.Module):
         self.diag = nn.Conv2d(filters, g, (15, 1), padding=(7, 0))
         self.anti = nn.Conv2d(filters, g, (15, 1), padding=(7, 0))
         self.leap = nn.Conv2d(filters, g, 5, padding=2)
+        knight = torch.zeros(1, 1, 5, 5)
+        for dr, dc in ((1, 2), (2, 1), (-1, 2), (-2, 1), (1, -2), (2, -1), (-1, -2), (-2, -2 + 1)):
+            knight[0, 0, 2 + dr, 2 + dc] = 1.0
+        knight[0, 0, 2, 2] = 1.0  # centre tap: condition on the piece itself
+        self.register_buffer("knight_mask", knight)
+        self.mask_leap = False
         self.mix = nn.Conv2d(filters + 5 * g, filters, 1)
         rows = torch.arange(8)[:, None]
         cols = torch.arange(15)[None, :]
@@ -196,7 +202,11 @@ class FullRayBranch(nn.Module):
             torch.relu(self.file(x)),
             self._ray(x, self.diag, self.shear_main, self.unshear_main),
             self._ray(x, self.anti, self.shear_anti, self.unshear_anti),
-            torch.relu(self.leap(x)),
+            torch.relu(
+                torch.nn.functional.conv2d(
+                    x, self.leap.weight * self.knight_mask, self.leap.bias, padding=2
+                ) if self.mask_leap else self.leap(x)
+            ),
         ]
         return torch.relu(x + self.mix(torch.cat(parts, dim=1)))
 
@@ -211,6 +221,8 @@ class ChessCNN(nn.Module):
         self.stem = nn.Conv2d(channels, f, 5, padding=2)  # knight/king/pawn geometry in one hop
         self.blocks = nn.ModuleList(ConvBlock(f) for _ in range(r["cnn_blocks"]))
         self.ray = FullRayBranch(f) if r["cnn_fullrays"] else RayBranch(f) if r["cnn_rays"] else None
+        if self.ray is not None and isinstance(self.ray, FullRayBranch):
+            self.ray.mask_leap = r["cnn_knightmask"]
         self.to_tokens = nn.Conv2d(f, d, 1)
         self.summary = nn.Linear(f, d)
 
