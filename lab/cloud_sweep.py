@@ -287,7 +287,7 @@ class ChessCNN(nn.Module):
             planes[torch.arange(b, device=squares.device)[on_board], 20 + slot, fr[on_board]] = 1.0
             on_board = to < 64
             planes[torch.arange(b, device=squares.device)[on_board], 28 + slot, to[on_board]] = 1.0
-        x = torch.relu(self.stem(planes.view(b, 36, 8, 8)))
+        x = torch.relu(self.stem(planes.view(b, 36, 8, 8).contiguous(memory_format=torch.channels_last)))
         for index, block in enumerate(self.blocks):
             x = block(x)
             if self.ray is not None and index == len(self.blocks) // 2:
@@ -630,6 +630,8 @@ def main():
         weights = weights / weights.sum()
 
     model = TinyPolicy(r).to(device)
+    if r["arch"] == "cnn" and device.type == "cuda":
+        model = model.to(memory_format=torch.channels_last)
     if r["init_from"]:
         prior = torch.load(hf_hub_download(DATASET, r["init_from"], repo_type="dataset"),
                            map_location=device, weights_only=True)
@@ -732,6 +734,8 @@ def main():
                     loss = 0.5 * loss + torch.nn.functional.kl_div(
                         torch.log_softmax(out["policy"] / 2.0, dim=1),
                         torch.softmax(ref["policy"] / 2.0, dim=1), reduction="batchmean")
+            if step % 500 == 0 and not bool(torch.isfinite(loss.detach())):
+                raise RuntimeError(f"DIVERGED: non-finite loss at step {step}/{total_steps}")
             for opt in optimizers:
                 opt.zero_grad()
             loss.backward()
@@ -750,8 +754,9 @@ def main():
                         ema_state[k].mul_(r["ema"]).add_(v.float(), alpha=1 - r["ema"])
             if r["save_ckpt"] and not smoke_games and step > 0 and step % max(1, total_steps // 4) == 0:
                 try:
+                    mark = round(100 * step / total_steps)
                     torch.save({"sweep_recipe": r, "config": {}, "model": model.state_dict()}, "/tmp/partial.pt")
-                    api.upload_file(path_or_fileobj="/tmp/partial.pt", path_in_repo=f"results3/{r['id']}.partial.pt",
+                    api.upload_file(path_or_fileobj="/tmp/partial.pt", path_in_repo=f"results3/{r['id']}.partial{mark}.pt",
                                     repo_id=DATASET, repo_type="dataset")
                 except Exception:
                     pass
