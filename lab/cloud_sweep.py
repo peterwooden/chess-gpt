@@ -566,8 +566,10 @@ def main():
             shard_list += ["shards/enriched-chunk3.parquet", "shards/enriched-chunk4.parquet"]
     assert not (r["flip"] and r["aux_next_move"]), "next-move aux not flip-aware"
     offset, parts = 0, []
+    local_dir = os.environ.get("LOCAL_SHARDS", "")
     for shard in shard_list:
-        merged, games = load_shard(hf_hub_download(DATASET, shard, repo_type="dataset"), offset)
+        path = os.path.join(local_dir, os.path.basename(shard)) if local_dir else hf_hub_download(DATASET, shard, repo_type="dataset")
+        merged, games = load_shard(path, offset)
         offset += games
         parts.append(merged)
     data = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
