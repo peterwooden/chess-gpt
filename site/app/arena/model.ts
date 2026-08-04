@@ -42,8 +42,8 @@ export type BrowserModelInfo = {
  */
 export const MOVE_TIME_GRACE_FACTOR = 1.25;
 
-/** Per-move budget used for casual arena games, which have no tournament clock. */
-export const DEFAULT_MOVE_TIME_LIMIT_MS = 30_000;
+/** Per-move budget used for casual arena games when the caller omits a limit. */
+export const DEFAULT_MOVE_TIME_LIMIT_MS = 10_000;
 
 export function hardMoveLimitMs(moveTimeLimitMs: number): number {
   return Math.ceil(moveTimeLimitMs * MOVE_TIME_GRACE_FACTOR);
