@@ -41,7 +41,7 @@ DEFAULTS = {
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
     "flip": False, "shard_set": "legacy", "init_from": "",
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
-    "cnn_modern": False,
+    "cnn_modern": False, "bilinear_head": False,
 }
 
 SHARD_SETS = {
@@ -261,6 +261,94 @@ class ModernBlock(nn.Module):
         return x + self.gamma * h
 
 
+
+
+class BEB(nn.Module):
+    """Board-embedding broadcast: spatially-weighted global summary added everywhere."""
+
+    def __init__(self, c):
+        super().__init__()
+        self.summary = nn.Conv2d(c, c // 2, 8)  # valid conv -> (B, C/2, 1, 1)
+        self.up = nn.Conv2d(c // 2, c, 1)
+
+    def forward(self, x):
+        return x + self.up(torch.relu(self.summary(x)))
+
+
+class CNN2Block(nn.Module):
+    """Pre-activation residual block; second conv zero-initialized (SkipInit)."""
+
+    def __init__(self, c, ray=None):
+        super().__init__()
+        self.norm = nn.BatchNorm2d(c)
+        self.conv1 = nn.Conv2d(c, c, 3, padding=1)
+        if ray == "rank":
+            self.conv2 = nn.Conv2d(c, c, (1, 15), padding=(0, 7))
+        elif ray == "file":
+            self.conv2 = nn.Conv2d(c, c, (15, 1), padding=(7, 0))
+        else:
+            self.conv2 = nn.Conv2d(c, c, 3, padding=1)
+        nn.init.zeros_(self.conv2.weight)
+        nn.init.zeros_(self.conv2.bias)
+
+    def forward(self, x):
+        h = torch.relu(self.conv1(torch.relu(self.norm(x))))
+        return x + self.conv2(h)
+
+
+class ChessCNN2(nn.Module):
+    """Fresh-design dense CNN: few fat kernels, bilinear policy head."""
+
+    def __init__(self, r):
+        super().__init__()
+        c, n = r["cnn_filters"], r["cnn_blocks"]
+        self.history = 8
+        self.use_repetition = False
+        self.flip = r["flip"]
+        self.stem = nn.Conv2d(36, c, 5, padding=2)
+        self.stem_norm = nn.BatchNorm2d(c)
+        rays = {n * 3 // 8: "rank", n * 6 // 8: "file"}
+        self.blocks = nn.ModuleList(CNN2Block(c, rays.get(i)) for i in range(n))
+        self.bebs = nn.ModuleDict({str(i): BEB(c) for i in (n // 4, n // 2, 3 * n // 4)})
+        self.f_proj = nn.Conv2d(c, 128, 1)
+        self.t_proj = nn.Conv2d(c, 128, 1)
+        self.promotions = nn.Linear(128, PROMOTION_MOVES)
+        self.value_reduce = nn.Conv2d(c, 32, 1)
+        self.value_fc1 = nn.Linear(32 * 64, 128)
+        self.value_fc2 = nn.Linear(128, 3)
+
+    def forward(self, squares, state, history_from, history_to, masked_positions=None):
+        b = squares.shape[0]
+        device = squares.device
+        planes = torch.zeros(b, 36, 64, device=device)
+        planes.scatter_(1, squares.unsqueeze(1), 1.0)                 # 0-12 pieces
+        planes[:, 13:17] = state[:, 1:5].float()[:, :, None]          # castling
+        ep = state[:, 5]
+        has_ep = ep < 64
+        file_index = (ep % 8).clamp(0, 7)
+        cols = torch.arange(64, device=device) % 8
+        planes[:, 17] = has_ep[:, None].float() * (cols[None, :] == file_index[:, None]).float()
+        planes[:, 18] = (state[:, 6].float() / 100.0)[:, None]        # halfmove clock
+        rows_idx = torch.arange(b, device=device)
+        for slot in range(8):
+            fr, to = history_from[:, slot], history_to[:, slot]
+            m = fr < 64
+            planes[rows_idx[m], 19 + slot, fr[m]] = 1.0
+            m = to < 64
+            planes[rows_idx[m], 27 + slot, to[m]] = 1.0
+        planes[:, 35] = 1.0                                           # edge-detector constant
+        x = torch.relu(self.stem_norm(self.stem(planes.view(b, 36, 8, 8))))
+        for i, block in enumerate(self.blocks):
+            x = block(x)
+            if str(i) in self.bebs:
+                x = self.bebs[str(i)](x)
+        f = self.f_proj(x).flatten(2).transpose(1, 2)                 # (B, 64, 128)
+        t = self.t_proj(x).flatten(2).transpose(1, 2)
+        base = (f @ t.transpose(1, 2) / 128 ** 0.5).flatten(1)        # from x to logits
+        policy = torch.cat((base, self.promotions(f.mean(dim=1))), dim=1)
+        v = torch.relu(self.value_fc1(self.value_reduce(x).flatten(1)))
+        return {"policy": policy, "value": self.value_fc2(v)}
+
 class ChessCNN(nn.Module):
     """AlphaZero-family trunk over 8x8 planes, sharing the lab's heads and inputs."""
 
@@ -339,7 +427,9 @@ class TinyPolicy(nn.Module):
         self.drop = nn.Dropout(r["dropout"])
         width = (65 + history) * d
         self.input_norm = nn.LayerNorm(width) if r["input_norm"] else nn.Identity()
-        if r["arch"] == "cnn":
+        if r["arch"] == "cnn2":
+            self.encoder = ChessCNN2(r)
+        elif r["arch"] == "cnn":
             self.encoder = ChessCNN(r, d)
         elif r["arch"] == "transformer":
             if r["attn_bias"]:
@@ -352,9 +442,9 @@ class TinyPolicy(nn.Module):
                     batch_first=True, norm_first=True, dropout=r["dropout"],
                 )
                 self.encoder = nn.TransformerEncoder(layer, r["layers"])
-        else:
+        elif r["arch"] == "mlp":
             self.inproj, self.blocks, self.norms = trunk(width, hidden, r["layers"], r)
-        if r["arch"] != "transformer":
+        if r["arch"] == "mlp":
             if r["token_rank"] > 0:
                 self.outproj = nn.Sequential(
                     nn.Linear(hidden, r["token_rank"]), nn.Linear(r["token_rank"], 65 * d)
@@ -366,7 +456,10 @@ class TinyPolicy(nn.Module):
             self.v_out = nn.Linear(hidden, d)
         if r["input_residual"]:
             self.skip_scale = nn.Parameter(torch.tensor(0.1))
-        if r["untied_readout"]:
+        if r["bilinear_head"]:
+            self.f_proj = nn.Linear(d, 128)
+            self.t_proj = nn.Linear(d, 128)
+        elif r["untied_readout"]:
             self.to_square_bank = nn.Parameter(torch.zeros(64, d, 64))
         else:
             self.to_square = nn.Linear(d, 64)
@@ -395,6 +488,8 @@ class TinyPolicy(nn.Module):
 
     def forward(self, squares, state, history_from, history_to, masked_positions=None):
         d = self.r["d_model"]
+        if self.r["arch"] == "cnn2":
+            return self.encoder(squares, state, history_from, history_to)
         if self.r["arch"] == "cnn":
             tokens = self.encoder(squares, state, history_from, history_to)
             summary = tokens[:, 0]
@@ -426,7 +521,11 @@ class TinyPolicy(nn.Module):
         if self.r["input_residual"]:
             tokens = tokens + self.skip_scale * parts[:, :65]
         summary = tokens[:, 0]
-        if self.r["untied_readout"]:
+        if self.r["bilinear_head"]:
+            f = self.f_proj(tokens[:, 1:65])
+            t2 = self.t_proj(tokens[:, 1:65])
+            base = (f @ t2.transpose(1, 2) / 128 ** 0.5).flatten(1)
+        elif self.r["untied_readout"]:
             base = torch.einsum("bsd,sdt->bst", tokens[:, 1:65], self.to_square_bank).flatten(1)
         else:
             base = self.to_square(tokens[:, 1:65]).flatten(1)
