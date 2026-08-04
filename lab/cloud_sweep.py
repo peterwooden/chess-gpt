@@ -239,6 +239,7 @@ class ModernBlock(nn.Module):
         self.register_buffer("un_m", (out_cols - rows + 7).expand(8, 8).clone())
         self.register_buffer("un_a", (out_cols - (7 - rows) + 7).expand(8, 8).clone())
 
+    @torch.compiler.disable
     def _sheared(self, x, conv, shear, unshear):
         b, c = x.shape[:2]
         padded = torch.nn.functional.pad(x, (7, 7))
