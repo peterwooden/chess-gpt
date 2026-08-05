@@ -144,6 +144,26 @@ Compile-off smoke trained cleanly (39.9% at 5.2M positions, ~$1) — the fix wor
 
 A context-free subagent co-designed cnn2 (36 dense planes, 5×5 stem, pre-activation zero-init blocks, dense 1×15/15×1 ray convs, BEB global broadcast, bilinear from·to policy head, spatial value head). Stage 1 (5.2M positions, three arms): cnn2 44.28 / tf+bilinear 45.10 / tf-control 40.13 — the **bilinear head alone is worth ~+5 top-1 at small scale** (agent predicted +0.5–1.5; per-square readout was starving every model), and cnn2 beats the plain transformer trunk-for-trunk. Stage 2 (129M positions, 20% budget each): **cap64-tf-bilinear 54.12 / 1.406 loss** (capstone-59: 53.68), value 59.04, 105 min; **cap63-cnn2 53.21 / 1.444**, value 58.82, 78 min (25% cheaper wall — the fresh design fixed the modern-CNN 10× slowdown). Bilinear's +5 at 5.2M shrank to +0.44 at 129M: a data-efficiency win that mostly converges away. Gates vs capstone-59 (20 games, beam both sides): **cap63 5.5–14.5 (fails)**, **cap64 11–9 (narrow pass, within noise — not the 20-0 of prior adoptions)**. Metric authority (loss → top-1 → gate): cap64 leads on all three, none decisively. CNN verdict: real architecture, wrong side of 0.5 points; closed with honor. Export note: cnn2 plane builder rewritten concat-style for ONNX (bit-exact parity verified). Published: `peterwooden/chess-gpt-cap64-tf-bilinear` @ `cc840e2c15685fb6ca2b107fb204e74d5f149ea6`, `peterwooden/chess-gpt-cap63-cnn2` @ `1f11da86da81a56e25e871d35040bf679889c62a`. Adoption call deferred to learner: cap64 as new champion, or hold capstone-59 pending a larger gate.
 
+## Experiment 65 — QKV weight-tying symmetry, double-controlled (2026-08-06)
+
+**Question:** attention gives Q, K and V their own projection of the same input. How much of that separation is load-bearing? Tie each pair (and all three) and measure what it costs.
+
+**Arms (5):** control `none` (Q, K, V independent), `qk` (Q = K, symmetric scores), `kv` (K = V, address is payload), `qv` (Q = V), `qkv` (all one projection). Everything else held at cap64's recipe: transformer 8L·d256·8h·FFN1×, learned attention bias, bilinear head, flip, elo1600, batch 1024, cosine + 5% warmup, seed 20260730. The control uses split per-role Linears rather than the legacy fused `qkv` weight, so all five arms share one code path; it lands at 3,713,011 parameters — bit-identical in count to cap64, which confirms the control is architecturally the same model.
+
+**Two budgets, because tying cuts compute as well as weights** (each distinct projection is computed once, so a tie is cheaper per step, and a fixed step count would silently hand the control more FLOPs):
+
+| arm | params | Δ params | fwd FLOPs/pos | vs control | equal-FLOPs steps | equal-time |
+|---|---|---|---|---|---|---|
+| none (control) | 3,713,011 | — | 512,591,360 | 100.0% | 36,000 | 1800 s |
+| qk / kv / qv | 3,188,723 | −524,288 | 436,045,312 | 85.1% | 42,320 | 1800 s |
+| qkv | 2,664,435 | −1,048,576 | 359,499,264 | 70.1% | 51,331 | 1800 s |
+
+Ten runs: an equal-FLOPs family (step counts fixed a priori from the analytic FLOP model, ~5.7e16 each) and an equal-wall-clock family (new `time_budget_s` knob: the trainer measures its own steady-state rate over steps 20→70, after compile, then sets `total_steps` so the cosine schedule completes exactly at the budget). Running the control in both families is the consistency check — if its two cells disagree, the families are not comparable.
+
+**Preregistered predictions (teacher):** (1) control ≥ every tie on val loss at equal FLOPs, 65% — but by a small margin, under 0.02 loss / 0.4 top-1; (2) `qk` is the least damaging tie, 60% — chess relations are largely symmetric (if A stands on B's ray, B stands on A's ray), so a symmetric score matrix loses less than it looks; (3) `kv` and `qv` cost more than `qk`, because merging address with payload constrains what a head can transport; (4) `qkv` is worst per step but claws most of it back at equal FLOPs via 1.43× the steps — the interesting cell is whether it closes the gap entirely; (5) the equal-time family ranks ties slightly worse than the equal-FLOPs family, because the FLOP saving will not fully convert to wall-clock (attention scores, optimizer and data movement are unchanged). Learner's predictions not yet recorded.
+
+**Result:** pending.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.

@@ -43,6 +43,14 @@ DEFAULTS = {
     "flip": False, "shard_set": "legacy", "init_from": "",
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
     "cnn_modern": False, "bilinear_head": False,
+    "qkv_tie": "", "max_steps": 0, "time_budget_s": 0.0,
+}
+
+# Which projection each of q, k, v reads from. "" keeps the legacy fused qkv weight so
+# older checkpoints still load; "none" is the split-projection control for tie experiments.
+TIE_ROLES = {
+    "none": ("q", "k", "v"), "qk": ("qk", "qk", "v"), "kv": ("q", "kv", "kv"),
+    "qv": ("qv", "k", "qv"), "qkv": ("qkv", "qkv", "qkv"),
 }
 
 SHARD_SETS = {
@@ -103,11 +111,18 @@ def flip_in_place(part):
 class BiasedBlock(nn.Module):
     """Pre-norm transformer block with a learned per-head additive attention bias."""
 
-    def __init__(self, d, heads, ffn_ratio, tokens=73):
+    def __init__(self, d, heads, ffn_ratio, tokens=73, tie=""):
         super().__init__()
         self.heads, self.dh = heads, d // heads
         self.norm1 = nn.LayerNorm(d)
-        self.qkv = nn.Linear(d, 3 * d, bias=False)
+        self.tie = tie
+        if tie:
+            self.roles = TIE_ROLES[tie]
+            self.projs = nn.ModuleDict(
+                {name: nn.Linear(d, d, bias=False) for name in dict.fromkeys(self.roles)}
+            )
+        else:
+            self.qkv = nn.Linear(d, 3 * d, bias=False)
         self.out = nn.Linear(d, d)
         self.bias = nn.Parameter(torch.zeros(heads, tokens, tokens))
         self.norm2 = nn.LayerNorm(d)
@@ -117,7 +132,13 @@ class BiasedBlock(nn.Module):
 
     def forward(self, tokens):
         b, n, d = tokens.shape
-        q, k, v = self.qkv(self.norm1(tokens)).chunk(3, dim=-1)
+        x = self.norm1(tokens)
+        if self.tie:
+            # each distinct projection is computed once, so a tie saves compute as well as weights
+            cache = {name: proj(x) for name, proj in self.projs.items()}
+            q, k, v = (cache[name] for name in self.roles)
+        else:
+            q, k, v = self.qkv(x).chunk(3, dim=-1)
         shape = (b, n, self.heads, self.dh)
         q, k, v = (t.view(shape).transpose(1, 2) for t in (q, k, v))
         mixed = torch.nn.functional.scaled_dot_product_attention(
@@ -434,7 +455,8 @@ class TinyPolicy(nn.Module):
         elif r["arch"] == "transformer":
             if r["attn_bias"]:
                 self.encoder = nn.Sequential(
-                    *(BiasedBlock(d, r["heads"], r["ffn_ratio"]) for _ in range(r["layers"]))
+                    *(BiasedBlock(d, r["heads"], r["ffn_ratio"], tie=r["qkv_tie"])
+                      for _ in range(r["layers"]))
                 )
             else:
                 layer = nn.TransformerEncoderLayer(
@@ -625,6 +647,28 @@ def lr_scale(r, step, total):
     return 1.0
 
 
+def forward_flops(r):
+    """Analytic forward FLOPs per position for the biased-attention transformer (None elsewhere).
+
+    Counts the matmuls that differ between recipes; embeddings and elementwise ops are ignored.
+    Training cost is taken as 3x forward (backward is ~2x), the usual convention.
+    """
+    if r["arch"] != "transformer" or not r["attn_bias"]:
+        return None
+    d, layers, n = r["d_model"], r["layers"], 65 + 8
+    projections = len(set(TIE_ROLES[r["qkv_tie"] or "none"]))
+    per_layer = (
+        n * d * d * (projections + 1)          # q/k/v projections (deduplicated) + output
+        + 2 * n * n * d                        # scores and the weighted sum over values
+        + 2 * n * d * d * r["ffn_ratio"]       # feed-forward, both matrices
+    )
+    if r["bilinear_head"]:
+        head = 2 * 65 * d * 128 + 64 * 64 * 128 + d * PROMOTION_MOVES + 3 * d
+    else:
+        head = 65 * d * 64 + d * PROMOTION_MOVES + 3 * d
+    return 2 * (layers * per_layer + head)
+
+
 def load_shard(path, offset):
     parquet = pq.ParquetFile(path)
     columns = ["game_id", "squares", "state", "target", "result",
@@ -753,6 +797,16 @@ def main():
 
     n_train = len(train["target"])
     total_steps = r["epochs"] * math.ceil(n_train / r["batch"])
+    if r["max_steps"]:
+        total_steps = r["max_steps"]
+    elif r["time_budget_s"]:
+        total_steps = int(20 * r["time_budget_s"])   # provisional; replaced by the measured rate
+    # calibration window starts after compile/warmup so the measured rate is the steady-state one
+    CALIB_FROM, CALIB_TO = 20, 70
+    calibrated = not r["time_budget_s"]
+    mark_time = None
+    train_started = time.perf_counter()
+    stop = False
     step = 0
     autocast = torch.autocast(device.type, dtype=torch.bfloat16) if device.type != "cpu" else torch.autocast("cpu", enabled=False)
     for epoch in range(r["epochs"]):
@@ -879,8 +933,29 @@ def main():
                         for k, v in model.state_dict().items():
                             swa_state[k].add_((v.float() - swa_state[k]) / swa_count)
             step += 1
+            if not calibrated:
+                if step == CALIB_FROM:
+                    if device.type == "cuda":
+                        torch.cuda.synchronize()
+                    mark_time = time.perf_counter()
+                elif step == CALIB_TO:
+                    if device.type == "cuda":
+                        torch.cuda.synchronize()
+                    now = time.perf_counter()
+                    rate = (CALIB_TO - CALIB_FROM) / max(1e-6, now - mark_time)
+                    remaining = r["time_budget_s"] - (now - train_started)
+                    total_steps = CALIB_TO + max(1, int(rate * remaining))
+                    calibrated = True
+                    print(json.dumps({"steps_per_second": round(rate, 2),
+                                      "calibrated_total_steps": total_steps}), flush=True)
+            if step >= total_steps:
+                stop = True
+                break
         print(json.dumps({"epoch": epoch + 1, "elapsed": round(time.perf_counter() - started, 1)}), flush=True)
+        if stop:
+            break
 
+    train_elapsed = time.perf_counter() - train_started
     if opt_mode == "sfree":
         optimizers[0].eval()
     final_state = ema_state or swa_state
@@ -909,8 +984,14 @@ def main():
         "parameters": sum(p.numel() for p in model.parameters()),
         "val_loss": loss_sum / count, "val_top1": correct / count, "value_top1": value_correct / count,
         "train_positions": n_train, "steps": step,
+        "positions_seen": step * r["batch"],
         "wall_seconds": round(time.perf_counter() - started, 1),
+        "train_seconds": round(train_elapsed, 1),
     }
+    fwd = forward_flops(r)
+    if fwd is not None:
+        metrics["forward_flops_per_position"] = fwd
+        metrics["train_flops"] = 3 * fwd * step * r["batch"]
     print(json.dumps(metrics), flush=True)
     if smoke_games:
         return
