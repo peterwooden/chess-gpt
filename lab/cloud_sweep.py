@@ -15,6 +15,7 @@ import pyarrow.parquet as pq
 import torch
 from huggingface_hub import HfApi, hf_hub_download
 from torch import nn
+from torch.nn import functional as F
 
 DATASET = "peterwooden/chess-gpt-lab-shards"
 SHARDS = ["shards/enriched-240k.parquet", "shards/enriched-fresh240k.parquet"]
@@ -320,23 +321,22 @@ class ChessCNN2(nn.Module):
     def forward(self, squares, state, history_from, history_to, masked_positions=None):
         b = squares.shape[0]
         device = squares.device
-        planes = torch.zeros(b, 36, 64, device=device)
-        planes.scatter_(1, squares.unsqueeze(1), 1.0)                 # 0-12 pieces
-        planes[:, 13:17] = state[:, 1:5].float()[:, :, None]          # castling
+        # Built by concatenation (no index_put) so ONNX export works.
+        piece = torch.zeros(b, 13, 64, device=device)
+        piece.scatter_(1, squares.unsqueeze(1), 1.0)                  # 0-12 pieces
+        castling = state[:, 1:5].float()[:, :, None].expand(b, 4, 64)
         ep = state[:, 5]
         has_ep = ep < 64
         file_index = (ep % 8).clamp(0, 7)
         cols = torch.arange(64, device=device) % 8
-        planes[:, 17] = has_ep[:, None].float() * (cols[None, :] == file_index[:, None]).float()
-        planes[:, 18] = (state[:, 6].float() / 100.0)[:, None]        # halfmove clock
-        rows_idx = torch.arange(b, device=device)
-        for slot in range(8):
-            fr, to = history_from[:, slot], history_to[:, slot]
-            m = fr < 64
-            planes[rows_idx[m], 19 + slot, fr[m]] = 1.0
-            m = to < 64
-            planes[rows_idx[m], 27 + slot, to[m]] = 1.0
-        planes[:, 35] = 1.0                                           # edge-detector constant
+        ep_plane = has_ep[:, None].float() * (cols[None, :] == file_index[:, None]).float()
+        half_plane = (state[:, 6].float() / 100.0)[:, None].expand(b, 64)
+        hist_f = F.one_hot(history_from.clamp(max=64).long(), 65)[..., :64].float()  # sentinel 64 -> zeros
+        hist_t = F.one_hot(history_to.clamp(max=64).long(), 65)[..., :64].float()
+        edge = torch.ones(b, 1, 64, device=device)                    # edge-detector constant
+        planes = torch.cat(
+            (piece, castling, ep_plane[:, None], half_plane[:, None], hist_f, hist_t, edge), dim=1
+        )
         x = torch.relu(self.stem_norm(self.stem(planes.view(b, 36, 8, 8))))
         for i, block in enumerate(self.blocks):
             x = block(x)
