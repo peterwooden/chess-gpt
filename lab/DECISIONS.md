@@ -162,7 +162,33 @@ Ten runs: an equal-FLOPs family (step counts fixed a priori from the analytic FL
 
 **Preregistered predictions (teacher):** (1) control ≥ every tie on val loss at equal FLOPs, 65% — but by a small margin, under 0.02 loss / 0.4 top-1; (2) `qk` is the least damaging tie, 60% — chess relations are largely symmetric (if A stands on B's ray, B stands on A's ray), so a symmetric score matrix loses less than it looks; (3) `kv` and `qv` cost more than `qk`, because merging address with payload constrains what a head can transport; (4) `qkv` is worst per step but claws most of it back at equal FLOPs via 1.43× the steps — the interesting cell is whether it closes the gap entirely; (5) the equal-time family ranks ties slightly worse than the equal-FLOPs family, because the FLOP saving will not fully convert to wall-clock (attention scores, optimizer and data movement are unchanged). Learner's predictions not yet recorded.
 
-**Result:** pending.
+**Result (2026-08-06).** Consistency check passes first: the control's throughput is 25.78 steps/s in the FLOPs family and 25.86 steps/s in the time family (0.3% apart), so the two families are on the same footing.
+
+| arm | equal FLOPs (66.1 PFLOPs) | | equal wall-clock (1800 s) | | |
+|---|---|---|---|---|---|
+| | steps / loss / top-1 | Δ loss | steps / loss / top-1 | Δ loss | PFLOPs spent |
+| none (control) | 42,000 / 1.4660 / 52.62% | — | 46,547 / 1.4590 / 52.79% | — | 73.3 |
+| Q=K | 49,373 / 1.4668 / 52.59% | +0.0008 | 48,325 / 1.4684 / 52.55% | +0.0094 | 64.7 |
+| K=V | 49,373 / **1.4574** / **52.83%** | **−0.0085** | 48,650 / 1.4579 / 52.80% | −0.0011 | 65.2 |
+| Q=V | 49,373 / 1.4670 / 52.59% | +0.0010 | 48,470 / 1.4702 / 52.50% | +0.0112 | 64.9 |
+| Q=K=V | 59,886 / 1.4672 / 52.56% | +0.0012 | 51,419 / 1.4791 / 52.27% | +0.0201 | 56.8 |
+
+**The two budgets answer different questions, and the control's own two cells let us ask a third.** Those cells define a compute-scaling slope of −0.0015 loss per 1,000 steps; scoring every arm against that curve at its own step count gives the *per-step* penalty of a tie, and each arm's two independent runs agree closely — an internal replication we did not pay for:
+
+| tie | per-step penalty (FLOPs cell / time cell) | verdict |
+|---|---|---|
+| K=V | +0.0028 / +0.0021 | nearly free |
+| Q=K | +0.0122 / +0.0121 | ~5x the K=V damage |
+| Q=V | +0.0124 / +0.0142 | same as Q=K |
+| Q=K=V | +0.0287 / +0.0276 | ≈ Q=K + Q=V, roughly additive |
+
+So three rankings, all true: **per step** the control wins and every tie costs something; **per FLOP** K=V wins outright and the rest are a wash (each tie's FLOP saving buys back roughly what it lost); **per second** the control wins, because only ~22–25% of the theoretical FLOP saving converts to throughput (Q=K=V spends 0.70x the FLOPs but runs just 1.105x faster — attention scores, norms, embeddings, optimizer and memory traffic don't shrink when projections do). The tournament caps FLOPs, not seconds, so the middle column is the one that governs submissions; the right-hand column governs lab iteration speed.
+
+**Why K=V is nearly free, mechanistically:** the output projection sits after the mixing, so the value path's effective map is W_out·W_V. Tying V to K makes it W_out·W_K — and W_out is still free, so the composition can express any linear map the untied pair could. Tying loses almost nothing on the value path; it only forces one projection to serve both matching and payload. Q=K is different in kind: it forces the score matrix to be x_i^T W^T W x_j, i.e. **symmetric**, and no downstream linear map can undo that. The measured costs match the argument — and Q=K=V's penalty is about the sum of Q=K's and Q=V's.
+
+**Prediction scorecard (teacher): 2 of 5.** (1) FAILED — the control did *not* beat every tie at equal FLOPs; K=V beat it. (2) FAILED — Q=K was not the least damaging tie; K=V was, by 5x. (3) FAILED for K=V (predicted worse than Q=K, was much better), correct for Q=V. (4) CORRECT — Q=K=V is worst per step and closes the gap at equal FLOPs (+0.0012). (5) CORRECT, and strongly — the equal-time family ranks ties worse, with only a quarter of the theoretical saving converting. The reasoning behind (1)–(3) treated "address vs payload" as the load-bearing distinction; the actual structure is that **anything the output projection can absorb is cheap, and anything it cannot is expensive.** Symmetry of the score matrix, which sounded like the drastic constraint, costs 0.012 — real but small, because the learned positional bias B already carries the asymmetry that chess geometry needs.
+
+**Follow-up before adopting:** K=V is a free 14% parameter cut and a small per-FLOP win, but every cell is a single seed. The per-step penalties replicate across two horizons, which supports the *ordering*; it does not bound seed variance. Cheapest confirmation is 2 seed replicates of control and K=V at the equal-FLOPs budget (~1 GPU-hour) before folding K=V into the next full-budget lineage run.
 
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
