@@ -201,6 +201,38 @@ So three rankings, all true: **per step** the control wins and every tie costs s
 
 **K=V wins again: −0.0073 loss, +0.18 top-1, on 14% fewer parameters.** At 6.6e16 the gap was −0.0085 / +0.21, so the advantage persists at 1.5x scale with a mild shrink — watch for bilinear-style compression at full budget, but two scales × two horizons all agree on the sign (4 of 4 cells). Checkpoints saved (`results3/tie66-none.pt`, `results3/tie66-kv.pt`) for a match gate. Caveat unchanged: single seed throughout; the control here uses the split-projection code path (same architecture as cap64, different init stream than the fused layer).
 
+## Experiment 67 — training-data slicing screen, 9 arms (preregistered 2026-08-07)
+
+**Question:** which training-data slices help, hurt, or do nothing at fixed compute? The champion's both>1600 floor was adopted inside capstone-59's many-variable bundle and has never been isolated; the other filters have never been tested at the modern recipe.
+
+**Design.** Nine arms, one data variable each, everything else frozen at cap64's recipe (transformer 8L·d256·8h·FFN1×, attention bias, bilinear head, flip, untied QKV, seed 20260730, batch 1024, cosine + warmup). All arms 42,000 steps = 43.0M positions = 6.61e16 FLOPs — identical architecture means identical FLOPs, so data is the only variable. Every arm's pool is a fresh 750k-game January shard (~45–52M positions), so training is a single pass with no reuse and game-diversity is matched — the control deliberately does NOT reuse the 2M-game elo1600 set, which would hand it a 3× larger game pool. **Comparability fix:** per-arm 10% holdouts are population-incomparable (Exp 4's lesson), so a new `val_shard` option in cloud_sweep evaluates every arm on one frozen shard: April, both>1600, 25k games, 1,792,588 positions (`shards/slice67-val-april.parquet`). April is the designated validation month and is never trained on.
+
+| arm | filter | prep note |
+|---|---|---|
+| control | both>1600 | champion policy at matched pool size |
+| unfiltered | none | completes the ladder downward |
+| elo1800 / elo2000 / elo2200 | dose-response | header-band census: >1800 = 35.7% of all January games, >2000 = 18.1%, >2200 = 7.3% — every rung has a deep pool; 2200 subset pre-skimmed by awk header filter |
+| nobullet | >1600 + base time ≥180s | flag existed, never run |
+| decisive | >1600 + drop draws | value-target population shifts (no draw labels) |
+| noforfeit | >1600 + drop Termination="Time forfeit" games | new prepare.py flag; whole-game drop protects value labels at the cost of valid data (a flag in a lost position is a correct label; a flag while winning is noise — indistinguishable without eval). Finer variant (keep positions for policy, mask value loss) deferred unless this arm shows signal |
+| dedup64 | >1600 + identical positions capped at 64 occurrences per shard | cap=64 chosen as moderate dose; val-loss interpretation caveat — dedup underweights openings relative to the natural val distribution |
+
+Known caveats, accepted for a screen: single seed; arms sample different depths of the (roughly chronology-ordered) archive; nobullet and noforfeit overlap mechanistically (most forfeits are bullet); April acceptance for both>1600 measured at 53%. Cost: ~9 × 30 min A100 ≈ $10–12.
+
+**Protocol restoration (2026-08-07):** the learner called out that Experiments 65–66 ran with no learner prediction on record — teacher predictions had quietly become the only ones. Standing rule restored: **results are not revealed until the learner's predictions are recorded.** Learner slots below are open; prep and training may proceed meanwhile.
+
+**Teacher predictions (sealed before any result):**
+1. Ladder shape: val loss bottoms at **elo1800**; elo2000 ≈ control; unfiltered clearly worst of the ladder (+0.02–0.04 loss vs control, 70%); elo2200 between control and 1800's improvement but not the minimum. Confidence 1800 is the exact minimum: 45%.
+2. nobullet: small improvement, −0.004 to −0.010 loss, 55% — extra thinking time buys move quality, partially offset by the val set itself containing bullet-style moves.
+3. decisive: policy slightly worse (+0.003–0.010); **value_top1 markedly worse (−3 to −8 points)** because a 3-class value head trained without draw labels can never predict the draw class that April contains. 70%.
+4. noforfeit: policy ≈ control (±0.003); value_top1 better by +0.2–0.8. 55% on the value direction (the learner's own mechanism).
+5. dedup64: val loss worse (+0.01–0.03) for distribution reasons, not strength reasons — flagged as the arm where val loss most misleads. 65%.
+6. Headline: **no slicing arm beats control by more than 0.010 val loss** — at fixed FLOPs, slicing is mostly distribution-matching, not quality-mining. 55%.
+
+**Learner predictions:** _open — required before results are revealed._ (1) ladder minimum and confidence; (2) nobullet direction; (3) noforfeit value-head effect (learner's mechanism: outcomes should reflect position strength, not clock).
+
+Result: pending.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.

@@ -124,6 +124,8 @@ def accept(game: chess.pgn.Game, result: int, args: argparse.Namespace) -> chess
         return "reject"
     if args.no_bullet and ((_base_seconds(game) or 0) < 180):
         return "reject"
+    if args.no_time_forfeit and game.headers.get("Termination", "") == "Time forfeit":
+        return "reject"
     if args.both_min_elo is not None:
         white, black = _elo(game, "WhiteElo"), _elo(game, "BlackElo")
         if white is None or black is None or min(white, black) <= args.both_min_elo:
@@ -150,6 +152,7 @@ def main() -> None:
     parser.add_argument("--decisive-only", action="store_true")
     parser.add_argument("--draws-only", action="store_true")
     parser.add_argument("--no-bullet", action="store_true")
+    parser.add_argument("--no-time-forfeit", action="store_true")
     parser.add_argument("--dedup-cap", type=int, default=0)
     args = parser.parse_args()
 

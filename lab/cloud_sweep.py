@@ -43,7 +43,7 @@ DEFAULTS = {
     "flip": False, "shard_set": "legacy", "init_from": "",
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
     "cnn_modern": False, "bilinear_head": False,
-    "qkv_tie": "", "max_steps": 0, "time_budget_s": 0.0,
+    "qkv_tie": "", "max_steps": 0, "time_budget_s": 0.0, "val_shard": "",
 }
 
 # Which projection each of q, k, v reads from. "" keeps the legacy fused qkv weight so
@@ -56,6 +56,13 @@ TIE_ROLES = {
 SHARD_SETS = {
     "elo1600": [f"shards/elo1600-{c}.parquet" for c in "abcd"],
     "elite2600": [f"shards/elite2600-{c}.parquet" for c in "ab"],
+    **{
+        f"slice67-{name}": [f"shards/slice67-{name}.parquet"]
+        for name in (
+            "control", "unfiltered", "elo1800", "elo2000", "elo2200",
+            "nobullet", "decisive", "noforfeit", "dedup64",
+        )
+    },
 }
 
 
@@ -727,7 +734,9 @@ def main():
         data = {k: v[keep] for k, v in data.items()}
         offset = smoke_games
     rng = np.random.default_rng(r["seed"])
-    val_games = rng.random(offset) < 0.1
+    # A frozen external val shard makes metrics comparable across arms trained on
+    # differently-filtered data; the internal 10% game holdout is population-specific.
+    val_games = np.zeros(offset, dtype=bool) if r["val_shard"] else rng.random(offset) < 0.1
     mask = val_games[data["game_ordinal"]]
     row_ok = (data["ply"] >= r["ply_min"]) & (data["ply"] < r["ply_max"])
     train_mask = ~mask & row_ok
@@ -735,7 +744,20 @@ def main():
         train_mask &= rng.random(len(mask)) < r["subsample"]
     keys = [k for k in data if k != "game_ordinal"]
     train_np = {k: data[k][train_mask].copy() for k in keys}
-    val_np = {k: data[k][mask].copy() for k in keys}
+    if r["val_shard"]:
+        vpath = (
+            os.path.join(local_dir, os.path.basename(r["val_shard"]))
+            if local_dir
+            else hf_hub_download(DATASET, r["val_shard"], repo_type="dataset")
+        )
+        vdata, _ = load_shard(vpath, 0)
+        vnxt = np.full(len(vdata["target"]), -100, dtype=np.int16)
+        vsame = vdata["game_ordinal"][1:] == vdata["game_ordinal"][:-1]
+        vnxt[:-1][vsame] = vdata["target"][1:][vsame]
+        vdata["next_target"] = vnxt
+        val_np = {k: vdata[k].copy() for k in keys}
+    else:
+        val_np = {k: data[k][mask].copy() for k in keys}
     if r["flip"]:
         flip_in_place(train_np)
         flip_in_place(val_np)
