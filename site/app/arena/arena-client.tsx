@@ -656,7 +656,10 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         setHistoryPlaying(false);
         setSelectedSquare(null);
         setPromotion(null);
-        setViewedPly(displayPly + 1);
+        // Mirrors showPosition's guard: advancing past the last
+        // move returns to the live (null) view.
+        const nextPly = displayPly + 1;
+        setViewedPly(nextPly >= moves.length ? null : nextPly);
       }
     }
 
