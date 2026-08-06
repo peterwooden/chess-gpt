@@ -219,7 +219,7 @@ So three rankings, all true: **per step** the control wins and every tie costs s
 
 Known caveats, accepted for a screen: single seed; arms sample different depths of the (roughly chronology-ordered) archive; nobullet and noforfeit overlap mechanistically (most forfeits are bullet); April acceptance for both>1600 measured at 53%. Cost: ~9 × 30 min A100 ≈ $10–12.
 
-**Protocol restoration (2026-08-07):** the learner called out that Experiments 65–66 ran with no learner prediction on record — teacher predictions had quietly become the only ones. Standing rule restored: **results are not revealed until the learner's predictions are recorded.** Learner slots below are open; prep and training may proceed meanwhile.
+**Protocol change (2026-08-07):** the learner retired the shared-prediction ritual — its purpose was coached theory-building, which they consider complete; they now predict privately without recording here. Teacher predictions remain sealed before results, as before. This supersedes the NOTES.md line requiring recorded learner predictions.
 
 **Teacher predictions (sealed before any result):**
 1. Ladder shape: val loss bottoms at **elo1800**; elo2000 ≈ control; unfiltered clearly worst of the ladder (+0.02–0.04 loss vs control, 70%); elo2200 between control and 1800's improvement but not the minimum. Confidence 1800 is the exact minimum: 45%.
@@ -229,7 +229,7 @@ Known caveats, accepted for a screen: single seed; arms sample different depths 
 5. dedup64: val loss worse (+0.01–0.03) for distribution reasons, not strength reasons — flagged as the arm where val loss most misleads. 65%.
 6. Headline: **no slicing arm beats control by more than 0.010 val loss** — at fixed FLOPs, slicing is mostly distribution-matching, not quality-mining. 55%.
 
-**Learner predictions:** _open — required before results are revealed._ (1) ladder minimum and confidence; (2) nobullet direction; (3) noforfeit value-head effect (learner's mechanism: outcomes should reflect position strength, not clock).
+**Learner predictions:** held privately by the learner's choice (see protocol change above).
 
 Result: pending.
 

@@ -23,7 +23,7 @@
 - Keep site progress device-local and account-free. Completion codes and learning records are the durable cross-device record.
 - Teach each mechanism first with a tiny fully inspectable example, then apply it immediately to the real chess data or model.
 - Collaborate on consequential choices involving data, targets, architecture, optimization, compute allocation, or evaluation. Routine agreed mechanical work may proceed without interruption.
-- Record the learner's prediction in every consequential versioned experiment before running it, then compare prediction with evidence afterward.
+- Retired 2026-08-07 at the learner's request: recorded learner predictions. The learner now predicts privately; do not ask for or block on shared predictions. Teacher predictions are still sealed in preregistrations before results, and prediction-vs-evidence comparison continues on that side.
 - Present the site as a serious interactive field notebook: causal diagrams, small numerical simulators, implementation comparisons, experiment records, and restrained progress indicators rather than gamification.
 - Include a post-core reinforcement-learning extension grounded in chess, with self-play gated on an explicit tournament ruling about generated training experience and compute accounting.
 - Give every core and extension chapter a curated reading trail of one to three primary sources and one to three secondary sources, pinpointing the useful section rather than assigning whole works by default.
