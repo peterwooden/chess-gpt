@@ -190,6 +190,17 @@ So three rankings, all true: **per step** the control wins and every tie costs s
 
 **Follow-up before adopting:** K=V is a free 14% parameter cut and a small per-FLOP win, but every cell is a single seed. The per-step penalties replicate across two horizons, which supports the *ordering*; it does not bound seed variance. Cheapest confirmation is 2 seed replicates of control and K=V at the equal-FLOPs budget (~1 GPU-hour) before folding K=V into the next full-budget lineage run.
 
+## Experiment 66 — K=V vs control at 10% budget (2026-08-06)
+
+**Question:** does K=V's per-FLOP win at 6.6e16 survive a 1.5x scale-up to 1e17 (10% of the tournament budget per arm, cap64's recipe, same seed, single epoch — no data reuse)? Step counts fixed a priori from the analytic FLOP model so both arms land on 1.0000e17 exactly.
+
+| arm | params | steps | train_s | val_loss | top-1 | value |
+|---|---|---|---|---|---|---|
+| control (untied) | 3,713,011 | 63,505 | 2459 | 1.4408 | 53.24% | 58.85% |
+| **K=V** | 3,188,723 | 74,653 | 2755 | **1.4335** | **53.42%** | **58.89%** |
+
+**K=V wins again: −0.0073 loss, +0.18 top-1, on 14% fewer parameters.** At 6.6e16 the gap was −0.0085 / +0.21, so the advantage persists at 1.5x scale with a mild shrink — watch for bilinear-style compression at full budget, but two scales × two horizons all agree on the sign (4 of 4 cells). Checkpoints saved (`results3/tie66-none.pt`, `results3/tie66-kv.pt`) for a match gate. Caveat unchanged: single seed throughout; the control here uses the split-projection code path (same architecture as cap64, different init stream than the fused layer).
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.
