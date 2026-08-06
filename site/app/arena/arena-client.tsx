@@ -624,6 +624,46 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     return () => window.clearTimeout(timer);
   }, [activeModel, mode, playModelMove, thinking]);
 
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      // Don't intercept arrow keys when the user is typing in a form field
+      // or editing contenteditable text.
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+      // Only navigate when there is a game to replay.
+      if (moves.length === 0) return;
+
+      // displayPly mirrors the "Next" / "Previous" button logic:
+      // null (live view) resolves to moves.length (the end of the game).
+      const displayPly = viewedPly ?? moves.length;
+
+      if (event.key === "ArrowLeft") {
+        if (displayPly === 0) return; // can't go before the start
+        event.preventDefault();
+        setHistoryPlaying(false);
+        setSelectedSquare(null);
+        setPromotion(null);
+        setViewedPly(displayPly - 1);
+      } else if (event.key === "ArrowRight") {
+        if (viewedPly === null) return; // can't go forward from the live/end position
+        event.preventDefault();
+        setHistoryPlaying(false);
+        setSelectedSquare(null);
+        setPromotion(null);
+        setViewedPly(displayPly + 1);
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [viewedPly, moves.length]);
+
   function chooseSquare(square: Square) {
     if (!isLiveView || mode !== "human" || !running || thinking || game.turn() !== humanColor) return;
     const piece = game.get(square);
