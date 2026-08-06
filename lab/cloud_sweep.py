@@ -15,6 +15,7 @@ import pyarrow.parquet as pq
 import torch
 from huggingface_hub import HfApi, hf_hub_download
 from torch import nn
+from torch.nn import functional as F
 
 DATASET = "peterwooden/chess-gpt-lab-shards"
 SHARDS = ["shards/enriched-240k.parquet", "shards/enriched-fresh240k.parquet"]
@@ -41,7 +42,7 @@ DEFAULTS = {
     "ply_min": 0, "ply_max": 999, "subsample": 1.0, "label_noise": 0.0, "big_shard": False,
     "flip": False, "shard_set": "legacy", "init_from": "",
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
-    "cnn_modern": False,
+    "cnn_modern": False, "bilinear_head": False,
 }
 
 SHARD_SETS = {
@@ -239,6 +240,7 @@ class ModernBlock(nn.Module):
         self.register_buffer("un_m", (out_cols - rows + 7).expand(8, 8).clone())
         self.register_buffer("un_a", (out_cols - (7 - rows) + 7).expand(8, 8).clone())
 
+    @torch.compiler.disable
     def _sheared(self, x, conv, shear, unshear):
         b, c = x.shape[:2]
         padded = torch.nn.functional.pad(x, (7, 7))
@@ -259,6 +261,93 @@ class ModernBlock(nn.Module):
         h = h + self.pool_bias(torch.cat([h.mean(dim=(2, 3)), h.amax(dim=(2, 3))], dim=1))[:, :, None, None]
         return x + self.gamma * h
 
+
+
+
+class BEB(nn.Module):
+    """Board-embedding broadcast: spatially-weighted global summary added everywhere."""
+
+    def __init__(self, c):
+        super().__init__()
+        self.summary = nn.Conv2d(c, c // 2, 8)  # valid conv -> (B, C/2, 1, 1)
+        self.up = nn.Conv2d(c // 2, c, 1)
+
+    def forward(self, x):
+        return x + self.up(torch.relu(self.summary(x)))
+
+
+class CNN2Block(nn.Module):
+    """Pre-activation residual block; second conv zero-initialized (SkipInit)."""
+
+    def __init__(self, c, ray=None):
+        super().__init__()
+        self.norm = nn.BatchNorm2d(c)
+        self.conv1 = nn.Conv2d(c, c, 3, padding=1)
+        if ray == "rank":
+            self.conv2 = nn.Conv2d(c, c, (1, 15), padding=(0, 7))
+        elif ray == "file":
+            self.conv2 = nn.Conv2d(c, c, (15, 1), padding=(7, 0))
+        else:
+            self.conv2 = nn.Conv2d(c, c, 3, padding=1)
+        nn.init.zeros_(self.conv2.weight)
+        nn.init.zeros_(self.conv2.bias)
+
+    def forward(self, x):
+        h = torch.relu(self.conv1(torch.relu(self.norm(x))))
+        return x + self.conv2(h)
+
+
+class ChessCNN2(nn.Module):
+    """Fresh-design dense CNN: few fat kernels, bilinear policy head."""
+
+    def __init__(self, r):
+        super().__init__()
+        c, n = r["cnn_filters"], r["cnn_blocks"]
+        self.history = 8
+        self.use_repetition = False
+        self.flip = r["flip"]
+        self.stem = nn.Conv2d(36, c, 5, padding=2)
+        self.stem_norm = nn.BatchNorm2d(c)
+        rays = {n * 3 // 8: "rank", n * 6 // 8: "file"}
+        self.blocks = nn.ModuleList(CNN2Block(c, rays.get(i)) for i in range(n))
+        self.bebs = nn.ModuleDict({str(i): BEB(c) for i in (n // 4, n // 2, 3 * n // 4)})
+        self.f_proj = nn.Conv2d(c, 128, 1)
+        self.t_proj = nn.Conv2d(c, 128, 1)
+        self.promotions = nn.Linear(128, PROMOTION_MOVES)
+        self.value_reduce = nn.Conv2d(c, 32, 1)
+        self.value_fc1 = nn.Linear(32 * 64, 128)
+        self.value_fc2 = nn.Linear(128, 3)
+
+    def forward(self, squares, state, history_from, history_to, masked_positions=None):
+        b = squares.shape[0]
+        device = squares.device
+        # Built by concatenation (no index_put) so ONNX export works.
+        piece = torch.zeros(b, 13, 64, device=device)
+        piece.scatter_(1, squares.unsqueeze(1), 1.0)                  # 0-12 pieces
+        castling = state[:, 1:5].float()[:, :, None].expand(b, 4, 64)
+        ep = state[:, 5]
+        has_ep = ep < 64
+        file_index = (ep % 8).clamp(0, 7)
+        cols = torch.arange(64, device=device) % 8
+        ep_plane = has_ep[:, None].float() * (cols[None, :] == file_index[:, None]).float()
+        half_plane = (state[:, 6].float() / 100.0)[:, None].expand(b, 64)
+        hist_f = F.one_hot(history_from.clamp(max=64).long(), 65)[..., :64].float()  # sentinel 64 -> zeros
+        hist_t = F.one_hot(history_to.clamp(max=64).long(), 65)[..., :64].float()
+        edge = torch.ones(b, 1, 64, device=device)                    # edge-detector constant
+        planes = torch.cat(
+            (piece, castling, ep_plane[:, None], half_plane[:, None], hist_f, hist_t, edge), dim=1
+        )
+        x = torch.relu(self.stem_norm(self.stem(planes.view(b, 36, 8, 8))))
+        for i, block in enumerate(self.blocks):
+            x = block(x)
+            if str(i) in self.bebs:
+                x = self.bebs[str(i)](x)
+        f = self.f_proj(x).flatten(2).transpose(1, 2)                 # (B, 64, 128)
+        t = self.t_proj(x).flatten(2).transpose(1, 2)
+        base = (f @ t.transpose(1, 2) / 128 ** 0.5).flatten(1)        # from x to logits
+        policy = torch.cat((base, self.promotions(f.mean(dim=1))), dim=1)
+        v = torch.relu(self.value_fc1(self.value_reduce(x).flatten(1)))
+        return {"policy": policy, "value": self.value_fc2(v)}
 
 class ChessCNN(nn.Module):
     """AlphaZero-family trunk over 8x8 planes, sharing the lab's heads and inputs."""
@@ -338,7 +427,9 @@ class TinyPolicy(nn.Module):
         self.drop = nn.Dropout(r["dropout"])
         width = (65 + history) * d
         self.input_norm = nn.LayerNorm(width) if r["input_norm"] else nn.Identity()
-        if r["arch"] == "cnn":
+        if r["arch"] == "cnn2":
+            self.encoder = ChessCNN2(r)
+        elif r["arch"] == "cnn":
             self.encoder = ChessCNN(r, d)
         elif r["arch"] == "transformer":
             if r["attn_bias"]:
@@ -351,9 +442,9 @@ class TinyPolicy(nn.Module):
                     batch_first=True, norm_first=True, dropout=r["dropout"],
                 )
                 self.encoder = nn.TransformerEncoder(layer, r["layers"])
-        else:
+        elif r["arch"] == "mlp":
             self.inproj, self.blocks, self.norms = trunk(width, hidden, r["layers"], r)
-        if r["arch"] != "transformer":
+        if r["arch"] == "mlp":
             if r["token_rank"] > 0:
                 self.outproj = nn.Sequential(
                     nn.Linear(hidden, r["token_rank"]), nn.Linear(r["token_rank"], 65 * d)
@@ -365,7 +456,10 @@ class TinyPolicy(nn.Module):
             self.v_out = nn.Linear(hidden, d)
         if r["input_residual"]:
             self.skip_scale = nn.Parameter(torch.tensor(0.1))
-        if r["untied_readout"]:
+        if r["bilinear_head"]:
+            self.f_proj = nn.Linear(d, 128)
+            self.t_proj = nn.Linear(d, 128)
+        elif r["untied_readout"]:
             self.to_square_bank = nn.Parameter(torch.zeros(64, d, 64))
         else:
             self.to_square = nn.Linear(d, 64)
@@ -394,6 +488,8 @@ class TinyPolicy(nn.Module):
 
     def forward(self, squares, state, history_from, history_to, masked_positions=None):
         d = self.r["d_model"]
+        if self.r["arch"] == "cnn2":
+            return self.encoder(squares, state, history_from, history_to)
         if self.r["arch"] == "cnn":
             tokens = self.encoder(squares, state, history_from, history_to)
             summary = tokens[:, 0]
@@ -425,7 +521,11 @@ class TinyPolicy(nn.Module):
         if self.r["input_residual"]:
             tokens = tokens + self.skip_scale * parts[:, :65]
         summary = tokens[:, 0]
-        if self.r["untied_readout"]:
+        if self.r["bilinear_head"]:
+            f = self.f_proj(tokens[:, 1:65])
+            t2 = self.t_proj(tokens[:, 1:65])
+            base = (f @ t2.transpose(1, 2) / 128 ** 0.5).flatten(1)
+        elif self.r["untied_readout"]:
             base = torch.einsum("bsd,sdt->bst", tokens[:, 1:65], self.to_square_bank).flatten(1)
         else:
             base = self.to_square(tokens[:, 1:65]).flatten(1)
@@ -566,8 +666,10 @@ def main():
             shard_list += ["shards/enriched-chunk3.parquet", "shards/enriched-chunk4.parquet"]
     assert not (r["flip"] and r["aux_next_move"]), "next-move aux not flip-aware"
     offset, parts = 0, []
+    local_dir = os.environ.get("LOCAL_SHARDS", "")
     for shard in shard_list:
-        merged, games = load_shard(hf_hub_download(DATASET, shard, repo_type="dataset"), offset)
+        path = os.path.join(local_dir, os.path.basename(shard)) if local_dir else hf_hub_download(DATASET, shard, repo_type="dataset")
+        merged, games = load_shard(path, offset)
         offset += games
         parts.append(merged)
     data = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}

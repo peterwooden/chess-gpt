@@ -308,6 +308,13 @@ test("arena constrains the board to eight equal columns and rows", async () => {
   assert.match(boardRule, /grid-template-rows:\s*repeat\(8,\s*minmax\(0,\s*1fr\)\)/);
 });
 
+test("arena uses standard chess square colours", async () => {
+  const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+
+  // A1 is dark, so an even file-index-plus-rank sum must select the dark class.
+  assert.match(arena, /const light = \(FILES\.indexOf\(file\) \+ rank\) % 2 === 0;/);
+});
+
 test("arena has a single-viewport laptop workspace", async () => {
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const laptopStyles = styles.split("/* Arena v2: board with a contextual setup / move pane */")[1] ?? "";

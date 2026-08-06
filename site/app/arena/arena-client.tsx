@@ -840,7 +840,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                 boardFiles.map((file) => {
                   const square = `${file}${rank}` as Square;
                   const piece = displayedGame.get(square);
-                  const light = (FILES.indexOf(file) + rank) % 2 === 1;
+                  const light = (FILES.indexOf(file) + rank) % 2 === 0;
                   const selected = square === selectedSquare;
                   const target = targetSquares.has(square);
                   const last = square === displayedMove?.from || square === displayedMove?.to;
