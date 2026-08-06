@@ -199,7 +199,7 @@ So three rankings, all true: **per step** the control wins and every tie costs s
 | control (untied) | 3,713,011 | 63,505 | 2459 | 1.4408 | 53.24% | 58.85% |
 | **K=V** | 3,188,723 | 74,653 | 2755 | **1.4335** | **53.42%** | **58.89%** |
 
-**K=V wins again: −0.0073 loss, +0.18 top-1, on 14% fewer parameters.** At 6.6e16 the gap was −0.0085 / +0.21, so the advantage persists at 1.5x scale with a mild shrink — watch for bilinear-style compression at full budget, but two scales × two horizons all agree on the sign (4 of 4 cells). Checkpoints saved (`results3/tie66-none.pt`, `results3/tie66-kv.pt`) for a match gate. Caveat unchanged: single seed throughout; the control here uses the split-projection code path (same architecture as cap64, different init stream than the fused layer).
+**K=V leads here by −0.0073 loss / +0.18 top-1 on 14% fewer parameters — but see Experiment 65b below, which retracts the inference drawn from this.** Both this pair and the Exp 65 pair used seed 20260730; at seed 20260807 the sign flips, so the honest reading is K=V ≈ control within seed noise. The claim originally written here ("4 of 4 cells agree on the sign") double-counted one seed. Checkpoints saved (`results3/tie66-none.pt`, `results3/tie66-kv.pt`) for a match gate. Caveat unchanged: single seed throughout; the control here uses the split-projection code path (same architecture as cap64, different init stream than the fused layer).
 
 ## Experiment 67 — training-data slicing screen, 9 arms (preregistered 2026-08-07)
 
@@ -232,6 +232,26 @@ Known caveats, accepted for a screen: single seed; arms sample different depths 
 **Learner predictions:** _open — required before results are revealed._ (1) ladder minimum and confidence; (2) nobullet direction; (3) noforfeit value-head effect (learner's mechanism: outcomes should reflect position strength, not clock).
 
 Result: pending.
+
+## Experiment 65b — seed replication, and a retraction (2026-08-07)
+
+**Why it ran:** Experiments 65 and 66 saved no checkpoints (`save_ckpt` defaults false; only tie66 had it set), so the arms could not be matched head-to-head. Rather than repeat them identically, the equal-FLOPs family was re-run at **seed 20260807** instead of 20260730 — same recipes, same a-priori step counts, same 66.1 PFLOPs — which buys checkpoints *and* the seed replication that had been the standing caveat.
+
+| arm | seed 20260730 loss (Δ) | seed 20260807 loss (Δ) | 2-seed mean Δ |
+|---|---|---|---|
+| none (control) | 1.4660 | 1.4618 | — |
+| K=V | 1.4574 (**−0.0085**) | 1.4639 (**+0.0021**) | −0.0032 |
+| Q=K | 1.4668 (+0.0008) | 1.4658 (+0.0040) | +0.0024 |
+| Q=V | 1.4670 (+0.0010) | 1.4677 (+0.0059) | +0.0035 |
+| Q=K=V | 1.4672 (+0.0012) | 1.4714 (+0.0096) | +0.0054 |
+
+**Retraction.** Experiment 66 recorded "K=V wins again … 4 of 4 cells agree on the sign." That claim was wrong in its central inference. All four of those cells shared seed 20260730 — Exp 65's K=V and Exp 66's K=V are different runs at different scales, but they draw from the same initialization stream, so they were never four independent confirmations. They were one seed, observed four times. At a second seed the sign flips: K=V is 0.0021 *worse* than its control. The correct summary is **K=V ≈ control, inside seed noise** — not a win.
+
+**What does survive, and it is the more useful half.** The damage ordering is monotone and identical at both seeds: **K=V < Q=K < Q=V < Q=K=V**, and Q=K=V is worst in both. That matches the per-step analysis in Exp 65 and the mechanism: what the output projection can absorb is cheap (K=V re-parameterizes the value path as W_out·W_K, and W_out is free), what it cannot is expensive (Q=K forces a symmetric score matrix). The ordering is the durable finding; the absolute offsets ride on the seed.
+
+**Methodological lesson, now the binding constraint on this lab.** The control alone moved 0.0042 loss / 0.11 top-1 between seeds — the same size as the effects being chased. Every single-seed comparison in the 0.002–0.010 loss band in this log, including cap64-vs-capstone-59 (+0.44 top-1 over a single pair of runs), is under-powered by this measure. Effects of that size need ≥3 seeds per arm, or a paired design, before they are called. Cheap and worth doing: seeds are ~$3 and 50 minutes each here.
+
+**Adoption call, revised:** do **not** adopt K=V for the per-FLOP win, because there isn't one. Adopt it, if at all, for the parameter cut — 14% fewer weights and ~25% of a wall-clock saving at statistically indistinguishable loss, which is a package-size and iteration-speed argument under a 100MB cap, not an accuracy argument. Q=K=V stays rejected on both seeds.
 
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
