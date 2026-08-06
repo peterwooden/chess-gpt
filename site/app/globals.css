@@ -1073,6 +1073,26 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .arena-page-v2 .move-record li { min-height: 1.8rem; }
   .game-controls { padding: 0.45rem; }
   .game-controls button { min-height: 2.25rem; }
+
+  /* On mobile, a completed/historical game needs scrolling room for the move
+     table. The base rule clamps the page to 100svh with overflow:hidden and
+     the move console to height:100% / min-height:0, which starves the move
+     table when fixed UI (header, nav, review, controls) eats the height.
+     Game-mode lets the workspace scroll vertically and grows the move
+     console tall enough (min-height) for the move list to be usable, while
+     height:100% keeps the move-record's internal scroll container working. */
+  .arena-workspace.game-mode {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .arena-workspace.game-mode .arena-sidebar {
+    overflow: visible;
+  }
+  .arena-workspace.game-mode .move-console {
+    min-height: 32rem;
+    height: 100%;
+  }
 }
 
 @media (min-width: 960px) and (min-height: 640px) {
