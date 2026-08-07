@@ -59,9 +59,7 @@ SHARD_SETS = {
     "elo1600": [f"shards/elo1600-{c}.parquet" for c in "abcd"],
     "elite2600": [f"shards/elite2600-{c}.parquet" for c in "ab"],
     "fullbudget-nobullet": [
-        f"shards/fullbudget-nobullet-{month}-{c}.parquet"
-        for month in ("jan", "feb", "mar")
-        for c in "ab"
+        f"shards/fullbudget-nobullet-{month}.parquet" for month in ("jan", "feb", "mar")
     ],
     **{
         f"slice67-{name}": [f"shards/slice67-{name}.parquet"]
