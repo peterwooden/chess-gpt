@@ -1044,6 +1044,9 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                   </ol>
                 </div>
               )}
+              {gameEnded && moves.length > 0 ? (
+                <PgnExport pgn={createSharePgn(game, players, mode, player1Color, humanColor, gameError)} />
+              ) : null}
               {gameEnded && shareMessage ? <p className="share-feedback" role="status">{shareMessage}</p> : null}
               {gameEnded && saveState.message ? (
                 <p className={`save-feedback ${saveState.phase}`} role="status">
@@ -1305,6 +1308,42 @@ function ModelNameWithCopy({ name, reference }: { name: string; reference: strin
         )}
       </button>
     </span>
+  );
+}
+
+function PgnExport({ pgn }: { pgn: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyPgn = async () => {
+    const done = () => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    };
+    try {
+      await navigator.clipboard.writeText(pgn);
+      done();
+    } catch {
+      const holder = document.createElement("textarea");
+      holder.value = pgn;
+      holder.style.position = "fixed";
+      holder.style.opacity = "0";
+      document.body.append(holder);
+      holder.select();
+      const copiedViaCommand = document.execCommand("copy");
+      holder.remove();
+      if (copiedViaCommand) done();
+      else setCopied(false);
+    }
+  };
+
+  return (
+    <section className="pgn-export" aria-label="Game PGN">
+      <header>
+        <span>PGN</span>
+        <button type="button" onClick={() => void copyPgn()}>{copied ? "Copied ✓" : "Copy PGN"}</button>
+      </header>
+      <pre>{pgn}</pre>
+    </section>
   );
 }
 
