@@ -231,7 +231,25 @@ Known caveats, accepted for a screen: single seed; arms sample different depths 
 
 **Learner predictions:** held privately by the learner's choice (see protocol change above).
 
-Result: pending.
+**Results (2026-08-07).** All nine arms exactly 42,000 steps, ~27 min each, ~$10 total. Frozen April both>1600 val shard throughout. Prep censuses worth keeping: both>1600 acceptance 54.8% (January), draws only ~4.6% of that pool, time-forfeit games ~35% of it, bullet ~44% of it; >2200 games run longer (78.5 pos/game vs 71.4 at control).
+
+| arm | val_loss | Δ | top-1 | value_top1 |
+|---|---|---|---|---|
+| decisive | **1.4797** | **−0.0032** | **52.22%** | 58.17% |
+| control (>1600) | 1.4829 | — | 52.10% | 58.47% |
+| elo1800 | 1.4848 | +0.0019 | 52.10% | 58.48% |
+| noforfeit | 1.4875 | +0.0046 | 52.16% | 58.47% |
+| dedup64 | 1.4914 | +0.0085 | 51.71% | 58.45% |
+| elo2000 | 1.4930 | +0.0101 | 51.92% | 58.47% |
+| nobullet | 1.4949 | +0.0120 | 52.10% | 58.54% |
+| unfiltered | 1.4950 | +0.0121 | 51.83% | 58.40% |
+| elo2200 | 1.5089 | +0.0260 | 51.55% | 58.44% |
+
+**Findings.** (1) The Elo ladder is monotone *downward* from 1600 — every elitism step hurts, and elo2200 is the worst arm in the screen, worse than no filter at all. On this evaluation the story is distribution-matching, not quality-mining: the champion's 1600 floor sits at or near the optimum, and "train on better players" is dominated by distribution shift beyond it. (2) The only arm to beat control is **decisive** — removing the ~4.6% of games that are draws buys −0.0032 loss / +0.12 top-1 on an all-games val set, at a value-head cost of only −0.30 (a head that cannot predict the draw class loses little because it rarely argmaxed draw anyway). A ~5% dose producing a visible effect makes draw moves unusually low-value training signal per game. (3) noforfeit is null where it was supposed to act: value_top1 58.47 vs control's 58.47, policy slightly worse — dropping 35% of the pool for outcome-label hygiene bought nothing measurable at this scale/metric. (4) nobullet: loss +0.0120 with top-1 exactly flat — it mispredicts (or is miscalibrated on) the bullet-styled moves that fill ~44% of the val population while matching control on argmax; its value head is the best of the nine (58.54), a whisper in the saturated-judge band. (5) All value heads sit in a 0.37-point band — judge saturation again, as in Fleet 3.
+
+**Teacher scorecard: 2 of 6.** Ladder-minimum-at-1800 MISS (minimum is control); unfiltered-worst-of-ladder MISS (elo2200 is, by 2×); nobullet-improves MISS (+0.0120 the wrong way); decisive DOUBLE MISS (predicted policy slightly worse and value −3 to −8, got best-in-screen policy and value −0.3 — the draw-rate census that invalidated the value prediction was measured *after* sealing); noforfeit value +0.2–0.8 MISS (exact null); dedup64-worse HIT (+0.0085, direction and near-band); no-arm-beats-control-by->0.010 headline HIT (best win is −0.0032).
+
+**Caveats and follow-ups.** Single seed everywhere, and Experiment 65b (below) makes that binding: the control alone moved 0.0042 loss between seeds, so **decisive's −0.0032 is inside single-seed noise and is a direction to confirm, not a win** — finding (2) above is provisional until ≥3 seeds or a paired design says otherwise. The same standard clears the ladder's large effects (unfiltered +0.012, elo2000 +0.010, nobullet +0.012, elo2200 +0.026) and leaves dedup64 (+0.0085) and everything smaller unproven. All conclusions are val-loss-on-elo1600-reference; checkpoints are saved (`results3/slice67-*.pt`), so two cheap diagnostics remain open: re-evaluate the ladder arms on an elo2200-band val shard to confirm the distribution-shift story directly, and gate decisive vs control at beam search. The decisive+noforfeit composition is untested.
 
 ## Experiment 65b — seed replication, and a retraction (2026-08-07)
 
