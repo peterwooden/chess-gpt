@@ -251,6 +251,28 @@ Known caveats, accepted for a screen: single seed; arms sample different depths 
 
 **Caveats and follow-ups.** Single seed everywhere, and Experiment 65b (below) makes that binding: the control alone moved 0.0042 loss between seeds, so **decisive's −0.0032 is inside single-seed noise and is a direction to confirm, not a win** — finding (2) above is provisional until ≥3 seeds or a paired design says otherwise. The same standard clears the ladder's large effects (unfiltered +0.012, elo2000 +0.010, nobullet +0.012, elo2200 +0.026) and leaves dedup64 (+0.0085) and everything smaller unproven. All conclusions are val-loss-on-elo1600-reference; checkpoints are saved (`results3/slice67-*.pt`), so two cheap diagnostics remain open: re-evaluate the ladder arms on an elo2200-band val shard to confirm the distribution-shift story directly, and gate decisive vs control at beam search. The decisive+noforfeit composition is untested.
 
+## Experiment 67b — round-robin strength ranking of the slicing arms (2026-08-07)
+
+All 36 pairs of the nine slice67 checkpoints, beam-4 both sides (depth 4, beam 6, root 8, contempt 0.15), color-reversed seeded openings, run as parallel t4-small cloud jobs (~$15; 20-game jobs hit the 30m timeout with the upload unreached, so pairs were re-fanned as two 10-game blocks — plus 27 straggler jobs from the first wave that finished under the wire and count as independent openings). **1,260 games, 93% decisive** — beam search fully bypasses the draw wall. Joint MLE Elo, mean-anchored at 0:
+
+| arm | Elo | points | (val-loss rank) |
+|---|---|---|---|
+| nobullet | +68.9 | 172/280 | 7th |
+| noforfeit | +44.9 | 149.5/260 | 4th |
+| control | +24.9 | 153/280 | 2nd |
+| dedup64 | +20.9 | 152.5/280 | 5th |
+| elo2200 | +20.9 | 148/280 | 9th |
+| unfiltered | +12.9 | 144/280 | 8th |
+| elo2000 | −47.1 | 128.5/300 | 6th |
+| elo1800 | −55.1 | 114/280 | 3rd |
+| decisive | −91.1 | 98.5/280 | 1st |
+
+**The match ranking near-inverts the val-loss ranking.** The screen's best imitation arm (decisive) is last at play by 116 Elo below control; the second-worst imitation arm (nobullet) is first. This is the lab's Fleet-2/3 lesson in its sharpest form yet: val loss on a fixed reference measures imitation of a population, and under a search decode the value head and move quality govern strength instead.
+
+Mechanisms, as the evidence supports them: **decisive**'s draw-blind value head (the only degraded judge in the screen, 58.17) is consulted at every beam backup, and a judge that cannot represent draws misprices exactly the positions contempt exists for — the val-loss "win" was an artifact of the ruler. **nobullet** had the best judge of the nine (58.54, a whisper in the saturated band that match play amplified) and its games carry real thinking time; its poor val loss was mispricing bullet-styled moves it was never trained to imitate. **noforfeit** — the learner's mechanism, an exact null on value_top1 — places second at play: clean outcome labels appear to matter to the judge's decision quality in ways aggregate value accuracy does not measure (echoing Exp 51's judge lesson). The Elo ladder is non-monotone at play: 1800/2000 clearly below control, 2200 ≈ control.
+
+**Statistics, honestly:** ~280 games per model gives roughly ±40 Elo at 95% per pairwise-ish comparison. Solid: decisive, elo1800, elo2000 are below control. Suggestive but not established: nobullet (+44 over control ≈ 2 SE) and noforfeit (+20) above control. Adoption call: **no data-policy change to the champion lineage yet** — nobullet and noforfeit earn a properly powered gate (and their composition is untested); decisive is rejected for play despite winning the screen; the Elo floor stays at 1600.
+
 ## Experiment 65b — seed replication, and a retraction (2026-08-07)
 
 **Why it ran:** Experiments 65 and 66 saved no checkpoints (`save_ckpt` defaults false; only tie66 had it set), so the arms could not be matched head-to-head. Rather than repeat them identically, the equal-FLOPs family was re-run at **seed 20260807** instead of 20260730 — same recipes, same a-priori step counts, same 66.1 PFLOPs — which buys checkpoints *and* the seed replication that had been the standing caveat.
