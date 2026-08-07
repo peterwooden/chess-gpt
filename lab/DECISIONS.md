@@ -317,3 +317,18 @@ Consolidated from Experiments 65 / 65b / 66. These are lessons about the *measur
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.
+
+## Hardware trial for the full-budget run (2026-08-07)
+
+Eight ~5-min steady-state jobs (~$2.50): {a100-large, h200, rtx-pro-6000, l40sx1} × {default compile, reduce-overhead}, all at the final run config (d384·12L, K=V tied, 9,708,819 params, batch 1024, bf16, slice67-nobullet shard, fwd 1,403,904,256 FLOPs/pos by the profiler on the instantiated model).
+
+| flavor | steps/s | $/exaFLOP | wall/exaFLOP | training sane? |
+|---|---|---|---|---|
+| rtx-pro-6000 | 20.14 | **$8.50** | 3.1 h | yes — best val loss, on the steps→loss trend |
+| h200 | 28.99 | $10.80 | 2.2 h | **no** — val 3.33 at 4,574 steps vs rtx 1.94 at 3,188 |
+| a100-large | 13.79 | $11.30 | 4.5 h | yes |
+| l40sx1 | 9.99 | $11.30 | 6.3 h | yes |
+
+Two catches, both by the smoke-with-metrics protocol rather than by crashes: (1) `torch.compile(mode="reduce-overhead")` trained at full speed with no errors while producing garbage models on h200 (val 10.66) and rtx-pro-6000 (val 27.23), and gained ≤1.6% on the flavors where it worked — rejected permanently. (2) h200 is silently degraded even at default compile — more steps, much worse loss, only flavor off the trend — disqualified on quality despite being fastest. The Exp 61 meta-lesson (every speed flag and every new silicon is itself an experiment; smoke with metrics, not just for NaNs) has now paid for itself twice.
+
+**Decision: rtx-pro-6000, default compile.** Budget run fixed at 224,929 steps = 230.3M positions = 0.97e18 profiler-FLOPs, ~3.3 h wall, ≈ $9. MFU note: 87 TFLOP/s achieved at 9.7M params (vs 60 on a100) — the 2.6× scale-up roughly doubled hardware utilization over cap64-size runs, as predicted.
