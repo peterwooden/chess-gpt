@@ -7,6 +7,7 @@
 import json
 import math
 import os
+import shutil
 import time
 import traceback
 
@@ -44,6 +45,7 @@ DEFAULTS = {
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
     "cnn_modern": False, "bilinear_head": False,
     "qkv_tie": "", "max_steps": 0, "time_budget_s": 0.0, "val_shard": "", "compile_mode": "",
+    "ckpt_every_frac": 0.0, "resume_from": "",
 }
 
 # Which projection each of q, k, v reads from. "" keeps the legacy fused qkv weight so
@@ -704,6 +706,34 @@ def load_shard(path, offset):
     return {k: np.concatenate([c[k] for c in chunks]) for k in chunks[0]}, len(seen)
 
 
+def upload_with_retry(api, path_or_fileobj, path_in_repo, attempts=3):
+    """Upload to the dataset repo, retrying with backoff; on final failure print a loud
+    json line and return False (training must survive a flaky upload, never except:pass).
+    LOCAL_CKPT_DIR redirects to local files for offline tests."""
+    local_dir = os.environ.get("LOCAL_CKPT_DIR", "")
+    if local_dir:
+        dest = os.path.join(local_dir, path_in_repo)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if isinstance(path_or_fileobj, (bytes, bytearray)):
+            with open(dest, "wb") as f:
+                f.write(path_or_fileobj)
+        else:
+            shutil.copyfile(path_or_fileobj, dest)
+        return True
+    for attempt in range(attempts):
+        try:
+            api.upload_file(path_or_fileobj=path_or_fileobj, path_in_repo=path_in_repo,
+                            repo_id=DATASET, repo_type="dataset")
+            return True
+        except Exception as exc:
+            if attempt + 1 < attempts:
+                time.sleep(5 * 2 ** attempt)
+            else:
+                print(json.dumps({"upload_failed": path_in_repo, "attempts": attempts,
+                                  "error": repr(exc)}), flush=True)
+    return False
+
+
 def main():
     r = {**DEFAULTS, **json.loads(os.environ.get("RECIPE", "{}"))}
     api = HfApi()
@@ -818,6 +848,26 @@ def main():
         teacher.load_state_dict(saved["model"], strict=False)
         teacher.eval()
     optimizers, opt_mode = build_optimizer(model, r)
+    # Full resume: restore model+optimizer+step+RNG, then replay the identical rng stream
+    # for the data order and skip already-completed steps. LR stays a pure function of step.
+    start_step, base_positions, base_flops, nonfinite_skips = 0, 0, 0, 0
+    if r["resume_from"]:
+        local_ckpt = os.environ.get("LOCAL_CKPT_DIR", "")
+        ck_path = (os.path.join(local_ckpt, r["resume_from"]) if local_ckpt
+                   else hf_hub_download(DATASET, r["resume_from"], repo_type="dataset"))
+        saved = torch.load(ck_path, map_location=device, weights_only=True)
+        model.load_state_dict(saved["model"])
+        for opt, sd in zip(optimizers, saved["optimizers"]):
+            opt.load_state_dict(sd)
+        start_step = saved["step"]
+        base_positions = saved["positions_seen"]
+        base_flops = saved["train_flops"]
+        nonfinite_skips = saved.get("nonfinite_skips", 0)
+        torch.set_rng_state(saved["torch_rng"].cpu())
+        if device.type == "cuda" and saved.get("cuda_rng") is not None:
+            torch.cuda.set_rng_state_all([s.cpu() for s in saved["cuda_rng"]])
+        print(json.dumps({"resumed_from": r["resume_from"], "start_step": start_step,
+                          "base_positions": base_positions, "base_flops": base_flops}), flush=True)
     stepper = (
         torch.compile(model, mode=r["compile_mode"] or None)
         if r["compile"] and device.type == "cuda" else model
@@ -846,6 +896,9 @@ def main():
             order_np = rng.permutation(n_train)
         order = torch.from_numpy(order_np).to(device)
         for start in range(0, len(order), r["batch"]):
+            if step < start_step:  # resume replay: rng stream already consumed identically
+                step += 1
+                continue
             batch = order[start : start + r["batch"]]
             scale = lr_scale(r, step, total_steps)
             if opt_mode != "sfree":
@@ -922,6 +975,7 @@ def main():
                         torch.log_softmax(out["policy"] / 2.0, dim=1),
                         torch.softmax(ref["policy"] / 2.0, dim=1), reduction="batchmean")
             if step % 500 == 0 and not bool(torch.isfinite(loss.detach())):
+                print(json.dumps({"tripwire": "non-finite loss", "step": step}), flush=True)
                 raise RuntimeError(f"DIVERGED: non-finite loss at step {step}/{total_steps}")
             for opt in optimizers:
                 opt.zero_grad()
@@ -932,12 +986,15 @@ def main():
                         if p.grad is not None:
                             p.grad.add_(torch.randn_like(p.grad), alpha=r["grad_noise"])
             skip_step = False
-            if r["clip"] > 0:
-                norm = torch.nn.utils.clip_grad_norm_(model.parameters(), r["clip"])
-                if not torch.isfinite(norm):  # one bad gradient must not poison every parameter
-                    skip_step = True
-                    for opt in optimizers:
-                        opt.zero_grad()
+            norm = torch.nn.utils.clip_grad_norm_(
+                model.parameters(), r["clip"] if r["clip"] > 0 else float("inf"))
+            if not torch.isfinite(norm):  # one bad gradient must not poison every parameter
+                skip_step = True
+                nonfinite_skips += 1
+                print(json.dumps({"nonfinite_grad_skip": True, "step": step,
+                                  "total_skips": nonfinite_skips}), flush=True)
+                for opt in optimizers:
+                    opt.zero_grad()
             if not skip_step:
                 for opt in optimizers:
                     opt.step()
@@ -945,14 +1002,11 @@ def main():
                 with torch.no_grad():
                     for k, v in model.state_dict().items():
                         ema_state[k].mul_(r["ema"]).add_(v.float(), alpha=1 - r["ema"])
-            if r["save_ckpt"] and not smoke_games and step > 0 and step % max(1, total_steps // 4) == 0:
-                try:
-                    mark = round(100 * step / total_steps)
-                    torch.save({"sweep_recipe": r, "config": {}, "model": model.state_dict()}, "/tmp/partial.pt")
-                    api.upload_file(path_or_fileobj="/tmp/partial.pt", path_in_repo=f"results3/{r['id']}.partial{mark}.pt",
-                                    repo_id=DATASET, repo_type="dataset")
-                except Exception:
-                    pass
+            if (r["save_ckpt"] and r["ckpt_every_frac"] == 0 and not smoke_games
+                    and step > 0 and step % max(1, total_steps // 4) == 0):
+                mark = round(100 * step / total_steps)
+                torch.save({"sweep_recipe": r, "config": {}, "model": model.state_dict()}, "/tmp/partial.pt")
+                upload_with_retry(api, "/tmp/partial.pt", f"results3/{r['id']}.partial{mark}.pt")
             if r["swa"] and step >= int(total_steps * 0.8):
                 with torch.no_grad():
                     if swa_state is None:
@@ -963,6 +1017,23 @@ def main():
                         for k, v in model.state_dict().items():
                             swa_state[k].add_((v.float() - swa_state[k]) / swa_count)
             step += 1
+            ckpt_every = int(total_steps * r["ckpt_every_frac"])
+            if ckpt_every > 0 and not smoke_games and step % ckpt_every == 0 and step < total_steps:
+                fwd = forward_flops(r)
+                torch.save({
+                    "sweep_recipe": r, "config": {}, "model": model.state_dict(),
+                    "optimizers": [opt.state_dict() for opt in optimizers],
+                    "step": step,
+                    "positions_seen": base_positions + (step - start_step) * r["batch"],
+                    "train_flops": base_flops + (3 * fwd * (step - start_step) * r["batch"] if fwd else 0),
+                    "nonfinite_skips": nonfinite_skips,
+                    "torch_rng": torch.get_rng_state(),
+                    "cuda_rng": torch.cuda.get_rng_state_all() if device.type == "cuda" else None,
+                }, "/tmp/resume.pt")
+                mark = round(100 * step / total_steps)
+                # per-mark file so nothing is ever overwritten, plus a rolling latest for resume
+                upload_with_retry(api, "/tmp/resume.pt", f"results3/{r['id']}.partial{mark}.pt")
+                upload_with_retry(api, "/tmp/resume.pt", f"results3/{r['id']}.resume.pt")
             if not calibrated:
                 if step == CALIB_FROM:
                     if device.type == "cuda":
@@ -1014,25 +1085,24 @@ def main():
         "parameters": sum(p.numel() for p in model.parameters()),
         "val_loss": loss_sum / count, "val_top1": correct / count, "value_top1": value_correct / count,
         "train_positions": n_train, "steps": step,
-        "positions_seen": step * r["batch"],
+        "positions_seen": base_positions + (step - start_step) * r["batch"],
+        "nonfinite_skips": nonfinite_skips,
         "wall_seconds": round(time.perf_counter() - started, 1),
         "train_seconds": round(train_elapsed, 1),
     }
+    if r["resume_from"]:
+        metrics["resumed_from_step"] = start_step
     fwd = forward_flops(r)
     if fwd is not None:
         metrics["forward_flops_per_position"] = fwd
-        metrics["train_flops"] = 3 * fwd * step * r["batch"]
+        metrics["train_flops"] = base_flops + 3 * fwd * (step - start_step) * r["batch"]
     print(json.dumps(metrics), flush=True)
     if smoke_games:
         return
-    api.upload_file(
-        path_or_fileobj=json.dumps(metrics, indent=2).encode(),
-        path_in_repo=f"results3/{r['id']}.json", repo_id=DATASET, repo_type="dataset",
-    )
+    upload_with_retry(api, json.dumps(metrics, indent=2).encode(), f"results3/{r['id']}.json")
     if r["save_ckpt"]:
         torch.save({"sweep_recipe": r, "config": {}, "model": model.state_dict()}, "/tmp/ckpt.pt")
-        api.upload_file(path_or_fileobj="/tmp/ckpt.pt", path_in_repo=f"results3/{r['id']}.pt",
-                        repo_id=DATASET, repo_type="dataset")
+        upload_with_retry(api, "/tmp/ckpt.pt", f"results3/{r['id']}.pt")
 
 
 if __name__ == "__main__":
@@ -1043,10 +1113,8 @@ if __name__ == "__main__":
         print(error, flush=True)
         try:
             rid = {**DEFAULTS, **json.loads(os.environ.get("RECIPE", "{}"))}["id"]
-            HfApi().upload_file(
-                path_or_fileobj=json.dumps({"id": rid, "error": error}).encode(),
-                path_in_repo=f"results3/{rid}.json", repo_id=DATASET, repo_type="dataset",
-            )
+            upload_with_retry(HfApi(), json.dumps({"id": rid, "error": error}).encode(),
+                              f"results3/{rid}.json", attempts=1)
         except Exception:
             pass
         raise
