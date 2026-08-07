@@ -293,6 +293,27 @@ Mechanisms, as the evidence supports them: **decisive**'s draw-blind value head 
 
 **Adoption call, revised:** do **not** adopt K=V for the per-FLOP win, because there isn't one. Adopt it, if at all, for the parameter cut — 14% fewer weights and ~25% of a wall-clock saving at statistically indistinguishable loss, which is a package-size and iteration-speed argument under a 100MB cap, not an accuracy argument. Q=K=V stays rejected on both seeds.
 
+## Lab practice — what the QKV week taught the instrument (2026-08-07)
+
+Consolidated from Experiments 65 / 65b / 66. These are lessons about the *measuring apparatus*, not about attention; they bind on everything measured here from now on.
+
+**1. The noise floor is 0.0042 loss / 0.11 top-1, and we had never measured it.** Two runs identical but for the seed differ by that much. Nearly every architecture verdict in this log sits in that band — bilinear's +0.44 top-1 at 129M, cap64's +0.44 over capstone-59, K=V's −0.0085. None of them were wrong on purpose; they were single-sample estimates of quantities smaller than the sampling noise. **Standing rule: nothing in the 0.002–0.010 loss band gets called from one run per arm.** Three seeds, or a paired design, or don't claim it. A seed costs ~$3 and 50 minutes here, which is far cheaper than a wrong architectural commitment carried into a full-budget run.
+
+**2. Replications that share a seed are one observation, not many.** Exp 65 and Exp 66 agreed that K=V wins — across two budgets, two scales, four cells. All four drew from initialization stream 20260730, and the effect evaporated at 20260807. Different runs are not independent evidence if they share the thing driving the variance. The diagnostic question is not "did it reproduce?" but "what did the reproductions hold fixed?"
+
+**3. Rank order survives noise; differences do not.** The tie damage ordering (K=V < Q=K < Q=V < Q=K=V) was identical at both seeds while every absolute margin moved. Prefer experiment designs that ask "which of these is least bad" over "is this better than baseline" when the expected effect is near the noise floor.
+
+**4. Analytic FLOPs overstate wall-clock savings by ~4x at this model size.** Only 22–25% of a projected FLOP reduction converted to throughput; Q=K=V uses 0.70x the FLOPs and runs 1.105x faster. What doesn't shrink when projections shrink — attention scores, norms, embeddings, optimizer, memory traffic — dominates. Never schedule from a FLOP-derived time estimate without the discount.
+
+**5. We are not FLOP-limited, so per-step efficiency is the wrong lever.** cap64 spent 1.985e17 of the 1e18 cap — **80% of the budget is unspent.** K=V's 17.6% step bonus at the cap is worth ~0.010 loss; spending the remaining budget is worth ~0.099. Architecture micro-optimization has been competing for attention against a lever 10x larger that requires no cleverness at all. The full-budget lineage run should outrank further ablations.
+
+**6. Match gates cannot resolve what we have been asking them.** 40 games carries a standard error of ±3.2 games; the arms being compared differ by ~0.005 validation loss. Gates are for "is this model behaviorally broken" and for final champion selection, not for ranking micro-architecture variants. Budget them accordingly — the 5-match batch that closed this week cost ~12 core-hours and could not, even in principle, have separated the arms.
+
+**Three tooling defects found the hard way, all now fixed:**
+- `save_ckpt` defaults false, so Experiment 65's ten runs left no models and could not be matched at all. Any run that might need behavioral evaluation must set it; 15MB is nothing.
+- Concurrent beam matches on one Metal device do not share it — they serialize, and five processes each fell to ~1% of a core (a ~30x per-process slowdown, not the 5x fair-share). `lab.match` gained `--device` so batches can run on CPU, which is 2x slower solo but scales across cores. Match throughput scales with *processes*, not threads: the beam search is bound by single-threaded python-chess move generation, so extra torch threads idle.
+- `lab.match` printed its tally only after the final game, so an interrupted series yielded nothing rather than partial results. It gained `--progress`, which emits the running tally after every game.
+
 ## Experiment 3 — value-head leakage (parked, 2026-07-30)
 
 Add a win/draw/loss value head; measure outcome-accuracy under both splits. Teacher's sealed prediction: position split inflates outcome accuracy by +8 to +20 points, 75%. Lab prepare now emits a `result` column, so this runs whenever unparked. Parked at learner's request to prioritize the end-to-end pipeline.

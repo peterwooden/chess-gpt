@@ -315,8 +315,13 @@ def play_series(
     rng: random.Random,
     opening_plies: int = 6,
     max_plies: int = 200,
+    progress: bool = False,
 ) -> dict[str, int]:
-    """Color-reversed opening pairs; returns the candidate's win/draw/loss tally."""
+    """Color-reversed opening pairs; returns the candidate's win/draw/loss tally.
+
+    With progress=True the running tally is emitted after every game, so a series
+    that is interrupted still leaves usable partial results behind.
+    """
     tally = {"win": 0, "draw": 0, "loss": 0}
     for _ in range((games + 1) // 2):
         opening = random_opening(rng, opening_plies)
@@ -329,6 +334,10 @@ def play_series(
                 tally["loss" if candidate_is_white else "win"] += 1
             else:
                 tally["draw"] += 1
+            if progress:
+                played = sum(tally.values())
+                print(json.dumps({**tally, "games": played, "of": games, "partial": True}),
+                      flush=True)
     return tally
 
 
@@ -349,7 +358,9 @@ def main() -> None:
     parser.add_argument("--opening-plies", type=int, default=6)
     parser.add_argument("--max-plies", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20260730)
-    parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto",
+    parser.add_argument("--progress", action="store_true",
+                        help="emit the running tally after each game so partial series stay usable")
+    parser.add_argument("--device", choices=("auto", "cpu", "mps", "cuda"), default="auto",
                         help="cpu avoids GPU thrashing when several matches run concurrently")
     args = parser.parse_args()
 
@@ -377,7 +388,8 @@ def main() -> None:
     else:
         opponent = random_player(rng)
     try:
-        tally = play_series(candidate, opponent, args.games, rng, args.opening_plies, args.max_plies)
+        tally = play_series(candidate, opponent, args.games, rng, args.opening_plies,
+                            args.max_plies, progress=args.progress)
     finally:
         if engine is not None:
             engine.quit()
