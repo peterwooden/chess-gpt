@@ -43,7 +43,7 @@ DEFAULTS = {
     "flip": False, "shard_set": "legacy", "init_from": "",
     "cnn_blocks": 8, "cnn_filters": 128, "cnn_rays": False, "cnn_fullrays": False, "cnn_knightmask": False,
     "cnn_modern": False, "bilinear_head": False,
-    "qkv_tie": "", "max_steps": 0, "time_budget_s": 0.0, "val_shard": "",
+    "qkv_tie": "", "max_steps": 0, "time_budget_s": 0.0, "val_shard": "", "compile_mode": "",
 }
 
 # Which projection each of q, k, v reads from. "" keeps the legacy fused qkv weight so
@@ -813,7 +813,10 @@ def main():
         teacher.load_state_dict(saved["model"], strict=False)
         teacher.eval()
     optimizers, opt_mode = build_optimizer(model, r)
-    stepper = torch.compile(model) if r["compile"] and device.type == "cuda" else model
+    stepper = (
+        torch.compile(model, mode=r["compile_mode"] or None)
+        if r["compile"] and device.type == "cuda" else model
+    )
     ema_state = {k: v.detach().clone().float() for k, v in model.state_dict().items()} if r["ema"] > 0 else None
     swa_state, swa_count = None, 0
 
