@@ -96,10 +96,14 @@ def make_player(
     depth: int = 4,
     beam: int = 6,
     root_beam: int = 8,
+    device: str = "auto",
 ) -> Player:
     model = load_model(checkpoint)
     if search == "beam":
-        device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+        # concurrent matches thrash a single GPU; --device cpu lets them run truly in parallel
+        if device == "auto":
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
+        device = torch.device(device)
         model.to(device)
         return _beam_player(model, device, depth, beam, root_beam, contempt)
     rng = random.Random(seed)
@@ -344,12 +348,14 @@ def main() -> None:
     parser.add_argument("--opening-plies", type=int, default=6)
     parser.add_argument("--max-plies", type=int, default=200)
     parser.add_argument("--seed", type=int, default=20260730)
+    parser.add_argument("--device", choices=("auto", "cpu", "mps"), default="auto",
+                        help="cpu avoids GPU thrashing when several matches run concurrently")
     args = parser.parse_args()
 
     rng = random.Random(args.seed)
     candidate = make_player(
         args.checkpoint, args.temperature, args.top_k, args.search, args.contempt, args.seed,
-        depth=args.depth, beam=args.beam, root_beam=args.root_beam,
+        depth=args.depth, beam=args.beam, root_beam=args.root_beam, device=args.device,
     )
     engine = None
     if args.stockfish_elo is not None:
@@ -365,6 +371,7 @@ def main() -> None:
             args.checkpoint_b,
             search=args.opponent_search,
             contempt=0.15 if args.opponent_search != "none" else 0.0,
+            device=args.device,
         )
     else:
         opponent = random_player(rng)
