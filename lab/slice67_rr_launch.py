@@ -12,8 +12,12 @@ ARMS = ("control", "unfiltered", "elo1800", "elo2000", "elo2200",
 def main() -> None:
     token = Path.home().joinpath(".cache/huggingface/token").read_text().strip()
     launched = []
-    for a, b in itertools.combinations(ARMS, 2):
-        pair = {"a": a, "b": b, "games": 20, "seed": 20260807}
+    blocks = [
+        {"a": a, "b": b, "games": 10, "seed": 20260807, "block": block}
+        for a, b in itertools.combinations(ARMS, 2)
+        for block in (0, 1)
+    ]
+    for pair in blocks:
         result = subprocess.run(
             [
                 "hf", "jobs", "uv", "run", "--flavor", "t4-small", "--timeout", "30m",
@@ -24,7 +28,7 @@ def main() -> None:
             capture_output=True, text=True,
         )
         status = "ok" if result.returncode == 0 else "LAUNCH-FAIL"
-        launched.append({"pair": f"{a}-vs-{b}", "status": status})
+        launched.append({"pair": f"{pair['a']}-vs-{pair['b']}-b{pair['block']}", "status": status})
         print(json.dumps(launched[-1]), flush=True)
     failures = sum(1 for item in launched if item["status"] != "ok")
     Path("runs/lab/slice67-rr-jobs.json").write_text(json.dumps(launched, indent=2))
