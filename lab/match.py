@@ -102,7 +102,8 @@ def make_player(
     if search == "beam":
         # concurrent matches thrash a single GPU; --device cpu lets them run truly in parallel
         if device == "auto":
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            device = ("cuda" if torch.cuda.is_available()
+                      else "mps" if torch.backends.mps.is_available() else "cpu")
         device = torch.device(device)
         model.to(device)
         return _beam_player(model, device, depth, beam, root_beam, contempt)
