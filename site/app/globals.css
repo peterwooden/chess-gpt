@@ -1236,7 +1236,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .tournament-live-board { width: 100%; max-width: none; height: auto; border: 0; box-shadow: none; }
 .tournament-live-board-wrap { --thinking-board-inset: 0; --thinking-board-border-total: 0; aspect-ratio: 1; }
 .tournament-live-board .board-square { cursor: default; }
-.tournament-live-card-details { min-width: 0; border: 0; border-left: 1px solid var(--green); background: rgb(255 253 247 / 0.86); }
+.tournament-live-card-details { overflow: hidden; min-width: 0; height: 0; min-height: 100%; border: 0; border-left: 1px solid var(--green); background: rgb(255 253 247 / 0.86); }
+.tournament-live-card-details .move-record { flex: 1; min-height: 0; max-height: none; }
 .tournament-live-card-details .tournament-watch-link { display: block; flex: none; padding: 0.8rem 0.9rem; border-top: 1px solid var(--green); text-align: center; }
 .tournament-live-empty { display: flex; gap: 1rem; min-height: 24rem; align-items: center; justify-content: center; border: 1px dashed var(--green); color: var(--muted); background: rgb(255 253 247 / 0.5); }
 .tournament-live-empty > span { color: var(--line); font-family: ui-monospace, monospace; font-size: 3rem; font-weight: 900; }
@@ -1278,7 +1279,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .live-scorecard { min-height: 24rem; max-height: 34rem; }
   .tournament-live-heading { align-items: flex-start; flex-direction: column; }
   .tournament-live-card-body { grid-template-columns: 1fr; }
-  .tournament-live-card-details { border-top: 1px solid var(--green); border-left: 0; }
+  .tournament-live-card-details { height: auto; min-height: 24rem; max-height: 34rem; border-top: 1px solid var(--green); border-left: 0; }
   .tournament-games-stage > header { align-items: start; flex-direction: column; }
   .tournament-games-stage > header small { text-align: left; }
 }

@@ -390,6 +390,19 @@ test("tournament creators can manage their own tournaments", async () => {
   assert.match(page, /\{manager \? \(/);
 });
 
+test("tournament game controls snap to the board stack height", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const detailsRule = styles.match(/\.tournament-live-card-details\s*\{[^}]*\}/)?.[0] ?? "";
+  const recordRule = styles.match(/\.tournament-live-card-details \.move-record\s*\{[^}]*\}/)?.[0] ?? "";
+
+  assert.match(detailsRule, /height:\s*0/);
+  assert.match(detailsRule, /min-height:\s*100%/);
+  assert.match(detailsRule, /overflow:\s*hidden/);
+  assert.match(recordRule, /flex:\s*1/);
+  assert.match(recordRule, /min-height:\s*0/);
+  assert.match(recordRule, /max-height:\s*none/);
+});
+
 test("arena has a single-viewport laptop workspace", async () => {
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const laptopStyles = styles.split("/* Arena v2: board with a contextual setup / move pane */")[1] ?? "";
