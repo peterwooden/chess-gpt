@@ -40,9 +40,45 @@ test("the live-game migration stores one recoverable snapshot per game", async (
   assert.ok(indexes.includes("live_games_expires_idx"));
 });
 
+test("live event batches are ordered per game and expire after one hour", async () => {
+  const initial = await readFile(
+    new URL("../drizzle/0006_futuristic_wonder_man.sql", import.meta.url),
+    "utf8",
+  );
+  const events = await readFile(
+    new URL("../drizzle/0007_wandering_bedlam.sql", import.meta.url),
+    "utf8",
+  );
+  const liveGames = await readFile(new URL("../lib/live-games.ts", import.meta.url), "utf8");
+  const db = new DatabaseSync(":memory:");
+  db.exec("PRAGMA foreign_keys = ON");
+  db.exec("CREATE TABLE tournaments (id TEXT PRIMARY KEY)");
+  db.exec(initial);
+  db.exec(events);
+  db.prepare(`INSERT INTO live_games (
+      id, publisher_token_hash, source, white_name, black_name, phase, status,
+      moves, revision, started_at, updated_at, expires_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      "game-1", "secret-hash", "arena", "White", "Black", "playing",
+      "White to move", "[]", 1, 1, 2, 3,
+    );
+  db.prepare(`INSERT INTO live_game_event_batches (
+      game_id, batch_index, first_seq, last_seq, events, expires_at
+    ) VALUES (?, ?, ?, ?, ?, ?)`).run("game-1", 1, 1, 2, "[]", 3);
+
+  assert.deepEqual(
+    { ...db.prepare("SELECT event_seq FROM live_games WHERE id = 'game-1'").get() },
+    { event_seq: 0 },
+  );
+  assert.match(liveGames, /LIVE_GAME_TTL_MS = 60 \* 60 \* 1_000/);
+  db.prepare("DELETE FROM live_games WHERE id = ?").run("game-1");
+  assert.equal(db.prepare("SELECT COUNT(*) AS count FROM live_game_event_batches").get().count, 0);
+});
+
 test("regular arena games make streaming opt-in and unlisted", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
   const publisher = await readFile(new URL("../app/arena/live-game-publisher.ts", import.meta.url), "utf8");
+  const viewer = await readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8");
 
   assert.match(arena, /useState\(false\)/);
   assert.match(arena, /Create an unlisted live link/);
@@ -50,6 +86,7 @@ test("regular arena games make streaming opt-in and unlisted", async () => {
   assert.match(arena, /Open spectator view/);
   assert.match(publisher, /publisherToken/);
   assert.match(publisher, /\/watch\//);
+  assert.match(viewer, /if \(!livePhase \|\| livePhase === "finished"\) return/);
 });
 
 test("tournament games broadcast automatically without affecting permanent scoring", async () => {
@@ -68,4 +105,3 @@ test("tournament games broadcast automatically without affecting permanent scori
   assert.match(results, /getTournamentLiveGame/);
   assert.match(results, /scheduledCount/);
 });
-

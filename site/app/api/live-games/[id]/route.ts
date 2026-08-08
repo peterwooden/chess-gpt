@@ -6,11 +6,16 @@ import {
 } from "../../../../lib/live-games";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const response = await getLiveGameResponse(id);
+  const rawAfter = new URL(request.url).searchParams.get("after");
+  const parsedAfter = rawAfter === null ? undefined : Number(rawAfter);
+  const after = parsedAfter !== undefined && Number.isFinite(parsedAfter)
+    ? Math.max(0, Math.floor(parsedAfter))
+    : undefined;
+  const response = await getLiveGameResponse(id, after);
   if (!response.live && !response.completed) {
     return Response.json({ error: "Live game not found." }, { status: 404 });
   }

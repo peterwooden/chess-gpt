@@ -5,6 +5,7 @@ import { loadBrowserModel, type BrowserChessModel } from "../../../arena/model";
 import { playGame } from "../../../arena/play-game.mjs";
 import type { GameOutcome } from "../../../arena/play-game";
 import { openLiveGamePublisher } from "../../../arena/live-game-publisher";
+import type { ThinkingSample } from "../../../../lib/thinking-events.mjs";
 import { openingForSlot, parseOpenings } from "../../../../lib/opening-book.mjs";
 import { formatDuration, formatScore } from "../../tournament-nav";
 import {
@@ -254,11 +255,18 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
             openingMoves: opening?.moves ?? [],
             openingName: opening?.name,
             now: () => performance.now(),
+            onTurn: (turn) => {
+              broadcaster?.startTurn(turn.ply, turn.color, turn.turnId);
+            },
+            onThinking: (sample, turn) => {
+              broadcaster?.thinking(turn.turnId, sample);
+            },
             onMove: async (move, game) => {
               setPly(move.ply);
               setLastMoveMs(Math.round(move.elapsedMs));
               if (!broadcaster) return;
               try {
+                broadcaster.movePlayed(move.turnId, move);
                 await broadcaster.publish({
                   phase: "playing",
                   status: `${game.turn() === "w" ? white.displayName : black.displayName} to move`,
@@ -457,8 +465,12 @@ function adapt(name: string, model: BrowserChessModel) {
   return {
     name,
     newGame: (seed: number) => model.newGame(seed),
-    predict: (history: string[], legalMoves: string[], limit: number) =>
-      model.predict(history, legalMoves, limit),
+    predict: (
+      history: string[],
+      legalMoves: string[],
+      limit: number,
+      onThinking?: (sample: ThinkingSample) => void,
+    ) => model.predict(history, legalMoves, limit, onThinking),
   };
 }
 

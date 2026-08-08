@@ -127,6 +127,40 @@ test("the move time limit is passed through to the package", async () => {
   assert.deepEqual(seen, [250, 250, 250, 250]);
 });
 
+test("thinking samples are associated with their turn before its move", async () => {
+  const events = [];
+  const player = (name) => ({
+    name,
+    async predict(history, legalMoves, _moveTimeLimitMs, onThinking) {
+      if (history.length >= 1) throw new Error("test complete");
+      onThinking?.({
+        elapsedMs: 12,
+        command: { type: "highlightSquare", square: "e4", intensity: 1, fadeMs: 500 },
+      });
+      return { san: legalMoves[0] };
+    },
+  });
+
+  await playGame(player("white"), player("black"), {
+    ...OPTIONS,
+    onTurn(turn) {
+      events.push(["turn", turn.turnId, turn.ply, turn.color]);
+    },
+    onThinking(sample, turn) {
+      events.push(["thinking", turn.turnId, sample.elapsedMs]);
+    },
+    onMove(move) {
+      events.push(["move", move.turnId, move.ply]);
+    },
+  });
+
+  assert.deepEqual(events.slice(0, 3), [
+    ["turn", "1-w", 1, "w"],
+    ["thinking", "1-w", 12],
+    ["move", "1-w", 1],
+  ]);
+});
+
 test("per-move elapsed time is measured from the injected clock", async () => {
   let clock = 0;
   const player = (name) => ({

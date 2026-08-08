@@ -1,3 +1,5 @@
+import type { LiveGameEventBatch } from "./live-game-events.mjs";
+
 export type LiveGamePhase = "starting" | "playing" | "paused" | "finished";
 export type LiveGameSource = "arena" | "tournament";
 export type LiveGameResult = "1-0" | "0-1" | "1/2-1/2";
@@ -19,6 +21,7 @@ export type LiveGame = {
   lastMoveMs: number | null;
   result: LiveGameResult | null;
   revision: number;
+  eventSeq: number;
   startedAt: number;
   updatedAt: number;
 };
@@ -36,5 +39,5 @@ export type CompletedLiveGame = {
 export type LiveGameResponse = {
   live: LiveGame | null;
   completed: CompletedLiveGame | null;
+  batches: LiveGameEventBatch[];
 };
-

@@ -1,5 +1,9 @@
 import * as ort from "onnxruntime-web/webgpu";
 import runtimeWasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url";
+import {
+  createThinkingCommandLimiter,
+  normalizeThinkingCommand,
+} from "../../lib/thinking-events.mjs";
 import { provisionOnnxRuntime } from "./onnx-runtime-provisioning.mjs";
 
 type PackageGame = {
@@ -7,6 +11,7 @@ type PackageGame = {
     history: readonly string[];
     legalMoves: readonly string[];
     moveTimeLimitMs: number;
+    thinking: { emit(command: unknown): void };
   }): Promise<string>;
   dispose(): Promise<void>;
 };
@@ -30,6 +35,7 @@ type WorkerRequest = {
 
 let loadedPackage: LoadedPackage | null = null;
 let currentGame: PackageGame | null = null;
+const monotonicNow = performance.now.bind(performance);
 
 self.addEventListener("message", (event: MessageEvent<WorkerRequest>) => {
   void handleRequest(event.data);
@@ -110,11 +116,36 @@ async function chooseMove(request: WorkerRequest): Promise<string> {
   if (!Number.isFinite(request.moveTimeLimitMs) || (request.moveTimeLimitMs ?? 0) <= 0) {
     throw new Error("The runner did not supply a per-move time limit.");
   }
-  return currentGame.chooseMove({
-    history: Object.freeze([...request.history]),
-    legalMoves: Object.freeze([...request.legalMoves]),
-    moveTimeLimitMs: request.moveTimeLimitMs as number,
+  const startedAt = monotonicNow();
+  const limiter = createThinkingCommandLimiter(monotonicNow);
+  let active = true;
+  const thinking = Object.freeze({
+    emit(candidate: unknown) {
+      if (!active) return;
+      try {
+        const command = normalizeThinkingCommand(candidate);
+        if (!command || !limiter.accept()) return;
+        self.postMessage({
+          type: "thinking",
+          id: request.id,
+          elapsedMs: Math.max(0, monotonicNow() - startedAt),
+          command,
+        });
+      } catch {
+        // Cosmetic telemetry is deliberately non-throwing.
+      }
+    },
   });
+  try {
+    return await currentGame.chooseMove({
+      history: Object.freeze([...request.history]),
+      legalMoves: Object.freeze([...request.legalMoves]),
+      moveTimeLimitMs: request.moveTimeLimitMs as number,
+      thinking,
+    });
+  } finally {
+    active = false;
+  }
 }
 
 async function dispose(): Promise<void> {

@@ -3,6 +3,10 @@ import "server-only";
 import { Chess } from "chess.js";
 import { getD1 } from "../db";
 import { HistoryError, getPublicGame } from "./history";
+import {
+  normalizeLiveGameEventBatch,
+  type LiveGameEventBatch,
+} from "./live-game-events.mjs";
 import type {
   LiveGame,
   LiveGamePhase,
@@ -10,7 +14,7 @@ import type {
   LiveGameSource,
 } from "./live-game-types";
 
-const LIVE_GAME_TTL_MS = 24 * 60 * 60 * 1_000;
+const LIVE_GAME_TTL_MS = 60 * 60 * 1_000;
 const MAX_LIVE_PLIES = 1_000;
 
 type StoredLiveGame = Omit<LiveGame, "moves"> & {
@@ -42,6 +46,7 @@ export type PublishLiveGameInput = {
   moves: string[];
   lastMoveMs?: number | null;
   result?: LiveGameResult | null;
+  eventBatch?: unknown;
 };
 
 export async function openLiveGame(input: OpenLiveGameInput): Promise<LiveGame> {
@@ -67,6 +72,7 @@ export async function openLiveGame(input: OpenLiveGameInput): Promise<LiveGame> 
   const tokenHash = await sha256(input.publisherToken);
   const db = await getD1();
   const statements = [
+    db.prepare("DELETE FROM live_game_event_batches WHERE expires_at < ?").bind(now),
     db.prepare("DELETE FROM live_games WHERE expires_at < ?").bind(now),
   ];
   if (tournamentId) {
@@ -82,9 +88,9 @@ export async function openLiveGame(input: OpenLiveGameInput): Promise<LiveGame> 
         id, publisher_token_hash, source, tournament_id, tournament_pair_key,
         tournament_game_index, white_name, black_name, white_model_reference,
         black_model_reference, opening_name, phase, status, moves, last_move_ms,
-        result, revision, started_at, updated_at, expires_at
+        result, revision, event_seq, started_at, updated_at, expires_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'starting', 'Preparing game…', '[]',
-        NULL, NULL, 0, ?, ?, ?)
+        NULL, NULL, 0, 0, ?, ?, ?)
       ON CONFLICT(id) DO NOTHING`).bind(
       input.id,
       tokenHash,
@@ -125,42 +131,88 @@ export async function publishLiveGame(
   const phase = assertPhase(input.phase);
   const moves = validateMoves(input.moves);
   const result = assertResult(input.result ?? null);
+  const status = cleanRequired(input.status, "Broadcast status", 240);
   const lastMoveMs = input.lastMoveMs ?? null;
   if (lastMoveMs !== null && (!Number.isFinite(lastMoveMs) || lastMoveMs < 0)) {
     throw new HistoryError(400, "Last-move time must be non-negative.");
   }
 
-  const now = Date.now();
   const tokenHash = await sha256(input.publisherToken);
-  const update = await (await getD1()).prepare(`UPDATE live_games SET
+  const stored = await getStoredLiveGame(id);
+  if (!stored || stored.publisherTokenHash !== tokenHash) {
+    throw new HistoryError(403, "This browser cannot update that live game.");
+  }
+  if (stored.revision >= input.revision) return toPublicLiveGame(stored);
+
+  const eventBatch = input.eventBatch === undefined
+    ? null
+    : normalizeLiveGameEventBatch(input.eventBatch);
+  if (input.eventBatch !== undefined && !eventBatch) {
+    throw new HistoryError(400, "The live-game event batch is invalid.");
+  }
+  if (eventBatch && eventBatch.firstSeq !== stored.eventSeq + 1) {
+    if (eventBatch.lastSeq <= stored.eventSeq) return toPublicLiveGame(stored);
+    throw new HistoryError(409, "The live-game event stream has a sequence gap.");
+  }
+
+  const normalizedUpdate = {
+    phase,
+    status,
+    moves,
+    lastMoveMs: lastMoveMs === null ? null : Math.round(lastMoveMs),
+    result,
+  };
+  if (eventBatch) {
+    for (const event of eventBatch.events) {
+      if (event.payload.type === "game.updated") event.payload.update = normalizedUpdate;
+    }
+  }
+
+  const now = Date.now();
+  const expiresAt = now + LIVE_GAME_TTL_MS;
+  const nextEventSeq = eventBatch?.lastSeq ?? stored.eventSeq;
+  const db = await getD1();
+  const statements = [];
+  if (eventBatch) {
+    statements.push(db.prepare(`INSERT INTO live_game_event_batches (
+        game_id, batch_index, first_seq, last_seq, events, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(game_id, batch_index) DO NOTHING`).bind(
+      id,
+      eventBatch.batchIndex,
+      eventBatch.firstSeq,
+      eventBatch.lastSeq,
+      JSON.stringify(eventBatch),
+      expiresAt,
+    ));
+  }
+  statements.push(db.prepare(`UPDATE live_games SET
       phase = ?, status = ?, moves = ?, last_move_ms = ?, result = ?, revision = ?,
-      updated_at = ?, expires_at = ?
-    WHERE id = ? AND publisher_token_hash = ? AND revision < ?`)
+      event_seq = ?, updated_at = ?, expires_at = ?
+    WHERE id = ? AND publisher_token_hash = ? AND revision < ? AND event_seq = ?`)
     .bind(
       phase,
-      cleanRequired(input.status, "Broadcast status", 240),
+      status,
       JSON.stringify(moves),
-      lastMoveMs === null ? null : Math.round(lastMoveMs),
+      normalizedUpdate.lastMoveMs,
       result,
       input.revision,
+      nextEventSeq,
       now,
-      now + LIVE_GAME_TTL_MS,
+      expiresAt,
       id,
       tokenHash,
       input.revision,
-    )
-    .run();
-  if ((update.meta?.changes ?? 0) === 0) {
-    const stored = await getStoredLiveGame(id);
-    if (!stored || stored.publisherTokenHash !== tokenHash) {
-      throw new HistoryError(403, "This browser cannot update that live game.");
-    }
-    if (stored.revision >= input.revision) return toPublicLiveGame(stored);
+      stored.eventSeq,
+    ));
+  await db.batch(statements);
+
+  const published = await getStoredLiveGame(id);
+  if (!published) throw new HistoryError(404, "That live game no longer exists.");
+  if (published.revision < input.revision || published.eventSeq < nextEventSeq) {
     throw new HistoryError(409, "The live game could not be updated.");
   }
-  const published = await getLiveGame(id);
-  if (!published) throw new HistoryError(404, "That live game no longer exists.");
-  return published;
+  return toPublicLiveGame(published);
 }
 
 export async function getLiveGame(id: string): Promise<LiveGame | null> {
@@ -178,8 +230,35 @@ export async function getTournamentLiveGame(tournamentId: string): Promise<LiveG
   return stored ? toPublicLiveGame(stored) : null;
 }
 
-export async function getLiveGameResponse(id: string) {
-  const [live, completed] = await Promise.all([getLiveGame(id), getPublicGame(id)]);
+export async function getLiveGameEventBatches(
+  id: string,
+  afterSeq: number,
+): Promise<LiveGameEventBatch[]> {
+  assertGameId(id);
+  const { results } = await (await getD1()).prepare(`SELECT events
+      FROM live_game_event_batches
+      WHERE game_id = ? AND last_seq > ? AND expires_at > ?
+      ORDER BY batch_index LIMIT 32`)
+    .bind(id, Math.max(0, Math.floor(afterSeq)), Date.now())
+    .all<{ events: string }>();
+  const batches: LiveGameEventBatch[] = [];
+  for (const row of results) {
+    try {
+      const batch = normalizeLiveGameEventBatch(JSON.parse(row.events));
+      if (batch) batches.push(batch);
+    } catch {
+      // Malformed ephemeral telemetry must not break the permanent game record.
+    }
+  }
+  return batches;
+}
+
+export async function getLiveGameResponse(id: string, afterSeq?: number) {
+  const [live, completed, batches] = await Promise.all([
+    getLiveGame(id),
+    getPublicGame(id),
+    afterSeq === undefined ? Promise.resolve([]) : getLiveGameEventBatches(id, afterSeq),
+  ]);
   return {
     live,
     completed: completed ? {
@@ -191,6 +270,7 @@ export async function getLiveGameResponse(id: string) {
       termination: completed.termination,
       recordedAt: completed.recordedAt,
     } : null,
+    batches,
   };
 }
 
@@ -202,7 +282,7 @@ const LIVE_GAME_SELECT = `SELECT
     white_model_reference AS whiteModelReference,
     black_model_reference AS blackModelReference,
     opening_name AS openingName, phase, status, moves,
-    last_move_ms AS lastMoveMs, result, revision,
+    last_move_ms AS lastMoveMs, result, revision, event_seq AS eventSeq,
     started_at AS startedAt, updated_at AS updatedAt, expires_at AS expiresAt
   FROM live_games`;
 
@@ -238,6 +318,7 @@ function toPublicLiveGame(stored: StoredLiveGame): LiveGame {
     lastMoveMs: stored.lastMoveMs,
     result: stored.result,
     revision: stored.revision,
+    eventSeq: stored.eventSeq,
     startedAt: stored.startedAt,
     updatedAt: stored.updatedAt,
   };

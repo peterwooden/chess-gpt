@@ -124,12 +124,26 @@ export const liveGames = sqliteTable("live_games", {
   lastMoveMs: integer("last_move_ms"),
   result: text("result", { enum: ["1-0", "0-1", "1/2-1/2"] }),
   revision: integer("revision").notNull(),
+  eventSeq: integer("event_seq").notNull().default(0),
   startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
 }, (table) => [
   index("live_games_tournament_updated_idx").on(table.tournamentId, table.updatedAt),
   index("live_games_expires_idx").on(table.expiresAt),
+]);
+
+export const liveGameEventBatches = sqliteTable("live_game_event_batches", {
+  gameId: text("game_id").notNull().references(() => liveGames.id, { onDelete: "cascade" }),
+  batchIndex: integer("batch_index").notNull(),
+  firstSeq: integer("first_seq").notNull(),
+  lastSeq: integer("last_seq").notNull(),
+  events: text("events").notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  uniqueIndex("live_game_event_batches_game_batch_unique").on(table.gameId, table.batchIndex),
+  index("live_game_event_batches_game_seq_idx").on(table.gameId, table.lastSeq),
+  index("live_game_event_batches_expires_idx").on(table.expiresAt),
 ]);
 
 export const games = sqliteTable("games", {

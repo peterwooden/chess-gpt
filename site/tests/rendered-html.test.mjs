@@ -147,7 +147,7 @@ test("arena setup exposes a per-player thinking cap defaulting to 10000 ms", asy
   assert.match(arena, /Per-move budget passed to the package/);
   assert.match(arena, /moveTimeLimitMs=\{moveTimeLimitMsA\}/);
   assert.match(arena, /moveTimeLimitMs=\{moveTimeLimitMsB\}/);
-  assert.match(arena, /model\.predict\(activeGame\.history\(\), activeGame\.moves\(\), moveTimeLimitMs\)/);
+  assert.match(arena, /model\.predict\([\s\S]*?activeGame\.history\(\),[\s\S]*?activeGame\.moves\(\),[\s\S]*?moveTimeLimitMs,/);
   assert.doesNotMatch(arena, /chess-gpt:arena-move-time/);
   assert.doesNotMatch(arena, /searchParams\.(get|set)\(["']t(?:ime)?/);
 });

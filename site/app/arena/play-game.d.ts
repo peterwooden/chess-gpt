@@ -1,4 +1,5 @@
 import type { Chess, Color, PieceSymbol, Square } from "chess.js";
+import type { ThinkingSample } from "../../lib/thinking-events.mjs";
 
 export type GameResult = "1-0" | "0-1" | "1/2-1/2";
 
@@ -9,6 +10,7 @@ export type GamePlayer = {
     history: string[],
     legalMoves: string[],
     moveTimeLimitMs: number,
+    onThinking?: (sample: ThinkingSample) => void,
   ): Promise<{ san: string }>;
 };
 
@@ -21,13 +23,18 @@ export type PlayedMove = {
   captured: PieceSymbol | null;
   elapsedMs: number;
   actor: string;
+  turnId: string | null;
 };
+
+export type GameTurn = { turnId: string; ply: number; color: Color };
 
 export type PlayGameOptions = {
   moveTimeLimitMs: number;
   seed?: number;
   now?: () => number;
   onMove?: (move: PlayedMove, game: Chess) => void | Promise<void>;
+  onTurn?: (turn: GameTurn) => void | Promise<void>;
+  onThinking?: (sample: ThinkingSample, turn: GameTurn) => void;
   signal?: AbortSignal;
   /**
    * Book moves the runner plays before either package moves. They cost no

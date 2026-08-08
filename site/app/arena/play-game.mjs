@@ -25,6 +25,8 @@ export async function playGame(white, black, options) {
     signal,
     openingMoves = [],
     openingName,
+    onTurn,
+    onThinking,
   } = options;
 
   if (!Number.isFinite(moveTimeLimitMs) || moveTimeLimitMs <= 0) {
@@ -65,6 +67,7 @@ export async function playGame(white, black, options) {
       captured: move.captured ?? null,
       elapsedMs: 0,
       actor: "book",
+      turnId: null,
     };
     moves.push(played);
     await onMove?.(played, game);
@@ -76,10 +79,17 @@ export async function playGame(white, black, options) {
 
     const color = game.turn();
     const player = playerFor(color);
+    const turn = { turnId: `${moves.length + 1}-${color}`, ply: moves.length + 1, color };
+    await onTurn?.(turn);
     const startedAt = now();
     let san;
     try {
-      const prediction = await player.predict(game.history(), game.moves(), moveTimeLimitMs);
+      const prediction = await player.predict(
+        game.history(),
+        game.moves(),
+        moveTimeLimitMs,
+        (sample) => onThinking?.(sample, turn),
+      );
       san = prediction?.san;
     } catch (error) {
       return finish(game, moves, color, describe(error), openingName);
@@ -105,6 +115,7 @@ export async function playGame(white, black, options) {
       captured: move.captured ?? null,
       elapsedMs: Math.max(0, now() - startedAt),
       actor: player.name,
+      turnId: turn.turnId,
     };
     moves.push(played);
     await onMove?.(played, game);

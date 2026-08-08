@@ -6,6 +6,7 @@ import {
   parsePackageManifest,
   type ArtifactDescriptor,
 } from "./package-manifest.mjs";
+import type { ThinkingCommand, ThinkingSample } from "../../lib/thinking-events.mjs";
 
 const HF_HOSTS = new Set(["huggingface.co", "www.huggingface.co"]);
 const immutableDownloadCache = createImmutableDownloadCache();
@@ -62,15 +63,24 @@ export type BrowserChessModel = {
     history: string[],
     legalMoves: string[],
     moveTimeLimitMs?: number,
+    onThinking?: (sample: ThinkingSample) => void,
   ): Promise<ModelPrediction>;
   dispose(): Promise<void>;
 };
 
 type WorkerResponse = {
+  type?: "response";
   id: number;
   ok: boolean;
   value?: unknown;
   error?: string;
+};
+
+type WorkerThinking = {
+  type: "thinking";
+  id: number;
+  elapsedMs: number;
+  command: ThinkingCommand;
 };
 
 export async function loadBrowserModel(
@@ -163,12 +173,13 @@ export async function loadBrowserModel(
     async newGame(seed) {
       await client.request("newGame", { seed: seed >>> 0 });
     },
-    async predict(history, legalMoves, moveTimeLimitMs = DEFAULT_MOVE_TIME_LIMIT_MS) {
+    async predict(history, legalMoves, moveTimeLimitMs = DEFAULT_MOVE_TIME_LIMIT_MS, onThinking) {
       const san = await client.request(
         "chooseMove",
         { history, legalMoves, moveTimeLimitMs },
         [],
         hardMoveLimitMs(moveTimeLimitMs),
+        onThinking,
       );
       if (typeof san !== "string") throw new Error("The package returned a non-string move.");
       if (!legalMoves.includes(san)) throw new Error(`The package returned illegal SAN move “${san}”.`);
@@ -192,7 +203,11 @@ function createWorkerClient(worker: Worker) {
   let terminated = false;
   const pending = new Map<
     number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      onThinking?: (sample: ThinkingSample) => void;
+    }
   >();
 
   function rejectPending(message: string) {
@@ -207,10 +222,18 @@ function createWorkerClient(worker: Worker) {
     rejectPending(message);
   }
 
-  worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
+  worker.addEventListener("message", (event: MessageEvent<WorkerResponse | WorkerThinking>) => {
     const response = event.data;
     const request = pending.get(response.id);
     if (!request) return;
+    if (response.type === "thinking") {
+      try {
+        request.onThinking?.({ elapsedMs: response.elapsedMs, command: response.command });
+      } catch {
+        // UI and broadcast listeners cannot fail a package move.
+      }
+      return;
+    }
     pending.delete(response.id);
     if (response.ok) {
       request.resolve(response.value);
@@ -236,6 +259,7 @@ function createWorkerClient(worker: Worker) {
       payload: Record<string, unknown>,
       transfer: Transferable[] = [],
       timeoutMs?: number,
+      onThinking?: (sample: ThinkingSample) => void,
     ) {
       if (terminated) return Promise.reject(new Error("The package worker has stopped."));
       const id = nextId;
@@ -259,6 +283,7 @@ function createWorkerClient(worker: Worker) {
         pending.set(id, {
           resolve: (value) => settle(() => resolve(value)),
           reject: (error) => settle(() => reject(error)),
+          onThinking,
         });
         try {
           worker.postMessage({ id, type, ...payload }, transfer);

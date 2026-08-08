@@ -28,6 +28,7 @@ import {
   openLiveGamePublisher,
   type LiveGamePublisher,
 } from "./live-game-publisher";
+import { ThinkingOverlay, useThinkingDisplay } from "./thinking-overlay";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
 const MODEL_AUTOPLAY_DELAY_MS = 650;
@@ -169,6 +170,13 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const [streamEnabled, setStreamEnabled] = useState(false);
   const [liveWatchPath, setLiveWatchPath] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [showThinking, setShowThinking] = useState(false);
+  const {
+    squares: thinkingSquares,
+    arrows: thinkingArrows,
+    apply: applyThinking,
+    clear: clearThinking,
+  } = useThinkingDisplay();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -582,6 +590,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     setSelectedSquare(null);
     setPromotion(null);
     setThinking(null);
+    clearThinking();
     setGameError(null);
     setFinishedStatus(null);
     setShareOpen(false);
@@ -598,14 +607,36 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       const epoch = gameEpoch.current;
       const activeGame = gameRef.current;
       if (activeGame.isGameOver()) return;
+      clearThinking();
+      const publisher = livePublisher.current;
+      const turnId = publisher?.startTurn(activeGame.history().length + 1, activeGame.turn()) ?? null;
       setThinking(actor);
       setGameError(null);
       const started = performance.now();
       try {
-        const prediction = await model.predict(activeGame.history(), activeGame.moves(), moveTimeLimitMs);
+        const prediction = await model.predict(
+          activeGame.history(),
+          activeGame.moves(),
+          moveTimeLimitMs,
+          (sample) => {
+            if (gameEpoch.current !== epoch) return;
+            applyThinking(sample.command);
+            if (publisher && turnId) publisher.thinking(turnId, sample);
+          },
+        );
         if (gameEpoch.current !== epoch) return;
         const move = activeGame.move(prediction.san);
         const elapsedMs = performance.now() - started;
+        clearThinking();
+        publisher?.movePlayed(turnId, {
+          ply: activeGame.history().length,
+          san: move.san,
+          actor,
+          elapsedMs,
+          from: move.from,
+          to: move.to,
+          color: move.color,
+        });
         setMoves((current) => [
           ...current,
           {
@@ -629,10 +660,13 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         setFinishedStatus(`${activeGame.turn() === "w" ? "Black" : "White"} wins by forfeit`);
         setGameError(`${actor} loses: ${detail}`);
       } finally {
-        if (gameEpoch.current === epoch) setThinking(null);
+        if (gameEpoch.current === epoch) {
+          clearThinking();
+          setThinking(null);
+        }
       }
     },
-    [],
+    [applyThinking, clearThinking],
   );
 
   const activeModel = (() => {
@@ -703,6 +737,16 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   function playHumanMove(from: Square, to: Square, promotionPiece?: PieceSymbol) {
     try {
       const move = game.move({ from, to, promotion: promotionPiece });
+      clearThinking();
+      livePublisher.current?.movePlayed(null, {
+        ply: game.history().length,
+        san: move.san,
+        actor: "Human",
+        elapsedMs: 0,
+        from: move.from,
+        to: move.to,
+        color: move.color,
+      });
       setMoves((current) => [
         ...current,
         {
@@ -791,6 +835,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         lastMoveMs: moves.at(-1)?.elapsedMs ?? null,
       }).catch(() => {});
     }
+    publisher?.dispose();
     livePublisher.current = null;
     gameEpoch.current += 1;
     reviewAbort.current?.abort();
@@ -808,6 +853,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     );
     setRunning(false);
     setThinking(null);
+    clearThinking();
     setMoves([]);
     setViewedPly(null);
     setHistoryPlaying(false);
@@ -895,9 +941,10 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         <div className="board-stage">
           <div className={`board-frame${gameStarted ? " with-players" : ""}`}>
             {gameStarted ? <PlayerStrip {...topPlayerSummary} /> : null}
-            <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
-              {boardRanks.flatMap((rank) =>
-                boardFiles.map((file) => {
+            <div className="thinking-board-wrap">
+              <div className={`chessboard orientation-${orientation}`} role="grid" aria-label="Chess board">
+                {boardRanks.flatMap((rank) =>
+                  boardFiles.map((file) => {
                   const square = `${file}${rank}` as Square;
                   const piece = displayedGame.get(square);
                   const light = (FILES.indexOf(file) + rank) % 2 === 0;
@@ -919,8 +966,15 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                       {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
                     </button>
                   );
-                }),
-              )}
+                  }),
+                )}
+              </div>
+              <ThinkingOverlay
+                enabled={showThinking && isLiveView}
+                orientation={orientation}
+                squares={thinkingSquares}
+                arrows={thinkingArrows}
+              />
             </div>
             {gameStarted ? <PlayerStrip {...bottomPlayerSummary} /> : null}
           </div>
@@ -1037,6 +1091,14 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                   <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
                 </div>
               </header>
+              <label className="thinking-display-option">
+                <input
+                  type="checkbox"
+                  checked={showThinking}
+                  onChange={(event) => setShowThinking(event.target.checked)}
+                />
+                <span>Show model thinking</span>
+              </label>
               <nav className="history-navigation" aria-label="Move history navigation">
                 <button
                   type="button"

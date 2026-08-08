@@ -614,7 +614,32 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 }
 .player-strip.white { color: var(--ink); background: var(--white); }
 .player-strip.black { color: var(--white); background: #1b3027; }
-.board-frame .chessboard + .player-strip { border-top: 0; border-bottom: 1px solid var(--green); }
+.board-frame .thinking-board-wrap + .player-strip { border-top: 0; border-bottom: 1px solid var(--green); }
+.thinking-board-wrap { position: relative; width: 100%; min-width: 0; }
+.thinking-overlay { position: absolute; z-index: 4; inset: 0; overflow: hidden; pointer-events: none; }
+.thinking-square, .thinking-arrow {
+  --thinking-opacity: 0.5;
+  --thinking-fade-ms: 500ms;
+  position: absolute;
+  display: block;
+  opacity: var(--thinking-opacity);
+  background: #f4a340;
+  animation: thinking-mark-fade var(--thinking-fade-ms) linear forwards;
+}
+.thinking-square { width: 12.5%; height: 12.5%; transform: translate(-50%, -50%); }
+.thinking-arrow { height: clamp(0.28rem, 1.15%, 0.5rem); border-radius: 999px; transform-origin: left center; }
+.thinking-arrow::after {
+  position: absolute;
+  top: 50%;
+  right: -0.42rem;
+  width: 0;
+  height: 0;
+  border-block: 0.38rem solid transparent;
+  border-left: 0.58rem solid #f4a340;
+  content: "";
+  transform: translateY(-50%);
+}
+@keyframes thinking-mark-fade { from { opacity: var(--thinking-opacity); } to { opacity: 0; } }
 .player-identity { display: flex; gap: 0.55rem; align-items: baseline; min-width: 0; }
 .player-identity > .player-color { flex: none; color: var(--muted); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
 .player-strip.black .player-identity > .player-color { color: #b8d5c7; }
@@ -748,6 +773,8 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 }
 .arena-page-v2 .move-console > header { min-height: 3.6rem; padding: 0.55rem 0.75rem; }
 .arena-page-v2 .move-header-meta { display: flex; gap: 0.55rem; align-items: center; justify-content: flex-end; }
+.thinking-display-option { display: flex; flex: none; gap: 0.45rem; align-items: center; min-height: 2.15rem; padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 0.67rem; }
+.thinking-display-option input { width: 0.95rem; height: 0.95rem; accent-color: var(--green); }
 .move-header-meta small { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.58rem; white-space: nowrap; }
 .move-header-meta .history-view-label { padding: 0.22rem 0.35rem; border: 1px solid var(--amber); color: var(--amber); font-size: 0.5rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
 .history-navigation {
@@ -1183,8 +1210,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .live-watch-hero > p:last-child { margin: 0; color: var(--muted); font-size: 0.82rem; }
 .live-watch-layout { display: grid; grid-template-columns: minmax(18rem, 42rem) minmax(18rem, 30rem); gap: 1.25rem; width: min(74rem, calc(100% - 2rem)); margin: 0 auto; align-items: stretch; }
 .live-board-stack { display: grid; align-content: start; }
+.live-board-stack .thinking-board-wrap { justify-self: center; width: 100%; max-width: 44rem; aspect-ratio: 1; }
+.live-board-stack .chessboard { width: 100%; height: 100%; max-height: none; }
 .live-watch-board .board-square { cursor: default; }
-.live-scorecard { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; max-height: calc(42rem + 6.6rem); overflow: hidden; border: 1px solid var(--green); background: rgb(255 253 247 / 0.86); }
+.live-scorecard { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; min-height: 0; max-height: calc(42rem + 6.6rem); overflow: hidden; border: 1px solid var(--green); background: rgb(255 253 247 / 0.86); }
 .live-scorecard > header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; min-height: 4.15rem; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--green); }
 .live-scorecard > header div { display: grid; gap: 0.2rem; }
 .live-scorecard > header span { color: var(--muted); font-size: 0.61rem; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
