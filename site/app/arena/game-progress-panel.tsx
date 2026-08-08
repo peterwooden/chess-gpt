@@ -24,6 +24,7 @@ export type ProgressMove = {
 export type GameTimeline = {
   displayPly: number;
   isLive: boolean;
+  gameIsOngoing: boolean;
   behind: number;
   playing: boolean;
   showPosition(ply: number | null): void;
@@ -31,7 +32,7 @@ export type GameTimeline = {
   reset(): void;
 };
 
-export function useGameTimeline(moveCount: number, onNavigate?: () => void): GameTimeline {
+export function useGameTimeline(moveCount: number, gameIsOngoing: boolean, onNavigate?: () => void): GameTimeline {
   const [viewedPly, setViewedPly] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const displayPly = viewedPly === null ? moveCount : Math.min(viewedPly, moveCount);
@@ -59,6 +60,11 @@ export function useGameTimeline(moveCount: number, onNavigate?: () => void): Gam
 
   function togglePlayback() {
     onNavigate?.();
+    if (gameIsOngoing) {
+      setViewedPly(null);
+      setPlaying(false);
+      return;
+    }
     if (playing) {
       setPlaying(false);
       return;
@@ -76,6 +82,7 @@ export function useGameTimeline(moveCount: number, onNavigate?: () => void): Gam
   return {
     displayPly,
     isLive,
+    gameIsOngoing,
     behind: isLive ? 0 : moveCount - displayPly,
     playing,
     showPosition,
@@ -196,7 +203,7 @@ function HistoryNavigation({ timeline, moveCount }: { timeline: GameTimeline; mo
       <button type="button" aria-label="Go to previous position" onClick={() => timeline.showPosition(timeline.displayPly - 1)} disabled={moveCount === 0 || timeline.displayPly === 0}>
         <span aria-hidden="true">‹</span>
       </button>
-      <button className="history-playback" type="button" aria-label={timeline.playing ? "Pause move history" : "Play move history to live"} aria-pressed={timeline.playing} onClick={timeline.togglePlayback} disabled={moveCount === 0}>
+      <button className="history-playback" type="button" aria-label={timeline.gameIsOngoing ? "Go to live position" : timeline.playing ? "Pause move history" : "Play move history to live"} aria-pressed={timeline.playing} onClick={timeline.togglePlayback} disabled={moveCount === 0}>
         <span aria-hidden="true">{timeline.playing ? "Ⅱ" : "▶"}</span>
       </button>
       <button type="button" aria-label="Go to next position" onClick={() => timeline.showPosition(timeline.displayPly + 1)} disabled={timeline.isLive || moveCount === 0}>

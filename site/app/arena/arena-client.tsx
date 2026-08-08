@@ -168,7 +168,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     apply: applyThinking,
     clear: clearThinking,
   } = useThinkingDisplay();
-  const timeline = useGameTimeline(moves.length, () => {
+  const timeline = useGameTimeline(moves.length, gameStarted && !gameRef.current.isGameOver() && finishedStatus === null, () => {
     setSelectedSquare(null);
     setPromotion(null);
   });

@@ -282,3 +282,26 @@ test("arena and spectator surfaces share one rewindable progress panel", async (
   assert.doesNotMatch(viewer, /className=\{?['"`]game-controls/);
   assert.doesNotMatch(broadcast, /className=\{?['"`]game-controls/);
 });
+
+test("the play button catches up immediately during an ongoing game", async () => {
+  const [arena, viewer, broadcast, progressPanel] = await Promise.all([
+    readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(progressPanel, /useGameTimeline\(moveCount: number, gameIsOngoing: boolean/);
+  assert.match(
+    progressPanel,
+    /function togglePlayback\(\) \{[\s\S]*?if \(gameIsOngoing\) \{[\s\S]*?setViewedPly\(null\);[\s\S]*?setPlaying\(false\);[\s\S]*?return;/,
+  );
+  assert.match(
+    progressPanel,
+    /if \(playing\) \{[\s\S]*?setPlaying\(false\);[\s\S]*?if \(moveCount === 0\) return;[\s\S]*?setViewedPly\(\(current\) => current === null \? 0 : current\);[\s\S]*?setPlaying\(true\);/,
+  );
+  assert.match(progressPanel, /gameIsOngoing \? "Go to live position"/);
+  assert.match(arena, /useGameTimeline\(moves\.length, gameStarted && !gameRef\.current\.isGameOver\(\) && finishedStatus === null/);
+  assert.match(viewer, /useGameTimeline\(progressMoves\.length, gameIsOngoing\)/);
+  assert.match(broadcast, /useGameTimeline\(progressMoves\.length, live\.phase !== "finished"\)/);
+});

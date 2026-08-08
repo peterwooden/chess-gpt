@@ -145,7 +145,8 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
     san: move.san,
     color: move.color,
   }));
-  const timeline = useGameTimeline(progressMoves.length);
+  const gameIsOngoing = Boolean(response.live && response.live.phase !== "finished");
+  const timeline = useGameTimeline(progressMoves.length, gameIsOngoing);
   const stale = Boolean(
     response.live
     && response.live.phase !== "finished"

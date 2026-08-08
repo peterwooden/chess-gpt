@@ -297,7 +297,7 @@ function TournamentLiveCard({
     san: move.san,
     color: move.color,
   }));
-  const timeline = useGameTimeline(progressMoves.length);
+  const timeline = useGameTimeline(progressMoves.length, live.phase !== "finished");
   const position = timeline.isLive
     ? currentPosition
     : gameFromMoves(live.moves.slice(0, timeline.displayPly));
