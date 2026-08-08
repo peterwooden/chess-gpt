@@ -332,3 +332,13 @@ Eight ~5-min steady-state jobs (~$2.50): {a100-large, h200, rtx-pro-6000, l40sx1
 Two catches, both by the smoke-with-metrics protocol rather than by crashes: (1) `torch.compile(mode="reduce-overhead")` trained at full speed with no errors while producing garbage models on h200 (val 10.66) and rtx-pro-6000 (val 27.23), and gained ≤1.6% on the flavors where it worked — rejected permanently. (2) h200 is silently degraded even at default compile — more steps, much worse loss, only flavor off the trend — disqualified on quality despite being fastest. The Exp 61 meta-lesson (every speed flag and every new silicon is itself an experiment; smoke with metrics, not just for NaNs) has now paid for itself twice.
 
 **Decision: rtx-pro-6000, default compile.** Budget run fixed at 224,929 steps = 230.3M positions = 0.97e18 profiler-FLOPs, ~3.3 h wall, ≈ $9. MFU note: 87 TFLOP/s achieved at 9.7M params (vs 60 on a100) — the 2.6× scale-up roughly doubled hardware utilization over cap64-size runs, as predicted.
+
+## Run 68 — the full-budget model (2026-08-08)
+
+Fresh lineage per lab/PROPOSAL_FULL_BUDGET.md: transformer 12L·d384·8h·FFN1×, K=V tied, attention bias, bilinear head, flip, 9,708,819 params; Jan+Feb+Mar both>1600+nobullet game-record corpus (293.5M positions available), single pass, 224,929 steps × batch 1024 = 230,327,296 positions; AdamW lr 1.2e-3, cosine + 5% warmup, dropout 0.1, value CE weight 1.0; seed 20260730; rtx-pro-6000, default compile. **Profiler FLOPs 9.70072e17 (97.0% of cap), lineage fresh, zero non-finite skips, 3.4 h, ≈$9.40.**
+
+**Final (full April-nobullet ruler, 2.19M positions): val_loss 1.3169, top-1 56.15%, value_top1 60.47%** — the first judge past the 57.8–59.0 saturation band that has held since Fleet 3. Mid-run probe deltas flattened near 56% (1.3845) then the cosine tail recovered −0.063 more; the saturation-vs-schedule ambiguity resolved in favor of the schedule.
+
+Data pipeline for this run was rebuilt mid-flight at the learner's direction: Rust extractor (pgn-reader/shakmaty) → u16-move game-record parquets (~150MB/month, 38s/month vs 91min for materialized prep) → vectorized numpy decode on-job (6.2M pos/s). Verification: selection parity exact vs the old pipeline (Jan/Feb), 6.4M sampled rows + full-shard aggregates bit-identical, cross-implementation April byte-equality. Two preflight smokes on the launch hardware gated the run. Checkpoints every 2% with full resume state; none were needed.
+
+Checkpoint: results3/fullbudget-68.pt (+ 49 partial marks). Next: continuity-ruler eval, package, publish, arena round per the amended plan.
