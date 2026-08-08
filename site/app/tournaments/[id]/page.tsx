@@ -3,11 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { ensureHumanPlayer } from "../../../lib/history";
+import { getTournamentLiveGame } from "../../../lib/live-games";
 import { getTournament, getTournamentResults, isAdministrator, isTournamentManager } from "../../../lib/tournaments";
 import { HistoryNav } from "../../history/history-components";
-import { formatDateTime, formatScore } from "../tournament-nav";
+import { formatDateTime } from "../tournament-nav";
 import { TournamentAdminControls } from "./admin-controls";
 import { RegisterEntryPanel } from "./register-entry-panel";
+import { TournamentBroadcast } from "./tournament-broadcast";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +35,9 @@ export default async function TournamentPage(
   if (!tournament) notFound();
 
   const user = await getChatGPTUser();
-  const [results, administrator, manager] = await Promise.all([
+  const [results, liveGame, administrator, manager] = await Promise.all([
     getTournamentResults(id),
+    getTournamentLiveGame(id),
     isAdministrator(user),
     isTournamentManager(tournament, user),
   ]);
@@ -91,66 +94,35 @@ export default async function TournamentPage(
         </section>
       ) : null}
 
-      {games.length > 0 ? (
-        <section className="tournament-panel" aria-labelledby="standings-title">
-          <h2 id="standings-title">Standings</h2>
-          {shared ? (
-            <p className="tournament-note">
-              The leaders are level on points and share the title. No further games are
-              played to separate them.
-            </p>
-          ) : null}
-          <table className="tournament-table">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Model</th>
-                <th scope="col">Points</th>
-                <th scope="col">W</th>
-                <th scope="col">D</th>
-                <th scope="col">L</th>
-                <th scope="col">Games</th>
-                <th scope="col">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {table.map((row) => (
-                <tr key={row.entryId}>
-                  <td>{row.rank}</td>
-                  <td>{row.displayName}</td>
-                  <td><strong>{formatScore(row.points)}</strong></td>
-                  <td>{row.wins}</td>
-                  <td>{row.draws}</td>
-                  <td>{row.losses}</td>
-                  <td>{row.games}</td>
-                  <td>{row.games > 0 ? `${Math.round((row.points / row.games) * 100)}%` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <TournamentBroadcast
+        tournamentId={tournament.id}
+        initial={{
+          table,
+          shared,
+          playedCount: games.length,
+          scheduledCount: scheduled,
+          status: tournament.status,
+          liveGame,
+        }}
+      />
 
-          {Object.keys(distinctGamesByPair).length > 0 ? (
-            <details className="tournament-details">
-              <summary>Distinct games per pairing</summary>
-              <p className="tournament-note">
-                Standings count every game. A pairing that produced few distinct games
-                replayed the same moves, which is what happens when both packages are
-                deterministic.
-              </p>
-              <ul>
-                {Object.entries(distinctGamesByPair).map(([key, count]) => {
-                  const played = games.filter((game) => game.pairKey === key).length;
-                  const names = key.split(":")
-                    .map((entryId) => entries.find((entry) => entry.id === entryId)?.displayName ?? "unknown");
-                  return (
-                    <li key={key}>
-                      {names.join(" v ")}: <strong>{count}</strong> distinct of {played} played
-                    </li>
-                  );
-                })}
-              </ul>
-            </details>
-          ) : null}
+      {Object.keys(distinctGamesByPair).length > 0 ? (
+        <section className="tournament-panel">
+          <details className="tournament-details">
+            <summary>Distinct games per pairing</summary>
+            <p className="tournament-note">
+              Standings count every game. A pairing that produced few distinct games
+              replayed the same moves, which is what happens when both packages are deterministic.
+            </p>
+            <ul>
+              {Object.entries(distinctGamesByPair).map(([key, count]) => {
+                const played = games.filter((game) => game.pairKey === key).length;
+                const names = key.split(":")
+                  .map((entryId) => entries.find((entry) => entry.id === entryId)?.displayName ?? "unknown");
+                return <li key={key}>{names.join(" v ")}: <strong>{Number(count)}</strong> distinct of {played} played</li>;
+              })}
+            </ul>
+          </details>
         </section>
       ) : null}
 

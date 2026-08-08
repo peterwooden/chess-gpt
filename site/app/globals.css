@@ -1164,6 +1164,40 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .tournament-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.8rem; margin: 0; }
 .tournament-stats dt { color: var(--muted); font-size: 0.56rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
 .tournament-stats dd { margin: 0.2rem 0 0; font-size: 0.9rem; }
+.tournament-live-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 0.9rem; }
+.tournament-live-heading h2 { margin-bottom: 0.25rem; }
+.tournament-live-heading p { margin: 0; }
+.tournament-watch-link { flex: 0 0 auto; padding: 0.6rem 0.75rem; border: 1px solid var(--green); color: var(--green); font-size: 0.72rem; font-weight: 850; text-decoration: none; }
+.tournament-watch-link:hover { color: var(--white); background: var(--green); }
+.tournament-progress-copy { margin: -0.35rem 0 1rem; color: var(--muted); font-size: 0.7rem; }
+
+/* Public live-game viewer */
+.live-watch-page { min-height: 100vh; padding-bottom: 3rem; background: var(--paper); }
+.live-watch-hero { width: min(74rem, calc(100% - 2rem)); margin: 2.2rem auto 1.2rem; }
+.live-watch-hero h1 { margin: 0.2rem 0 0.35rem; color: var(--green); font: 500 clamp(1.8rem, 4vw, 3.5rem)/1.02 Iowan Old Style, Baskerville, Georgia, serif; }
+.live-watch-hero h1 span { color: var(--muted); font-style: italic; }
+.live-watch-hero > p:last-child { margin: 0; color: var(--muted); font-size: 0.82rem; }
+.live-watch-layout { display: grid; grid-template-columns: minmax(18rem, 42rem) minmax(18rem, 30rem); gap: 1.25rem; width: min(74rem, calc(100% - 2rem)); margin: 0 auto; align-items: stretch; }
+.live-board-stack { display: grid; align-content: start; }
+.live-watch-board .board-square { cursor: default; }
+.live-scorecard { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; max-height: calc(42rem + 6.6rem); overflow: hidden; border: 1px solid var(--green); background: rgb(255 253 247 / 0.86); }
+.live-scorecard > header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; min-height: 4.15rem; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--green); }
+.live-scorecard > header div { display: grid; gap: 0.2rem; }
+.live-scorecard > header span { color: var(--muted); font-size: 0.61rem; font-weight: 850; letter-spacing: 0.08em; text-transform: uppercase; }
+.live-scorecard > header strong { font-family: Iowan Old Style, Baskerville, Georgia, serif; font-weight: 500; }
+.live-scorecard .move-record strong { display: block; min-width: 0; padding: 0.45rem 0.55rem; overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.live-scorecard > footer { padding: 0.8rem 0.9rem; border-top: 1px solid var(--green); color: var(--muted); font-size: 0.72rem; }
+.live-scorecard > footer a { color: var(--green); font-weight: 800; }
+.arena-stream-option { display: flex; gap: 0.55rem; align-items: flex-start; margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+.arena-stream-option input { width: 1rem; height: 1rem; margin-top: 0.05rem; accent-color: var(--green); }
+.live-share-banner { display: flex; justify-content: space-between; gap: 0.8rem; align-items: center; margin: 0; padding: 0.55rem 0.75rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.65rem; }
+.live-share-banner a { color: var(--green); font-weight: 850; }
+
+@media (max-width: 800px) {
+  .live-watch-layout { grid-template-columns: 1fr; }
+  .live-scorecard { min-height: 24rem; max-height: 34rem; }
+  .tournament-live-heading { align-items: flex-start; flex-direction: column; }
+}
 .tournament-recent { margin: 0; padding-left: 1.1rem; font-size: 0.8rem; line-height: 1.7; }
 .tournament-override { display: flex; gap: 0.5rem; align-items: start; margin-top: 0.8rem; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
 .tournament-row, .tournament-game-row { grid-template-columns: minmax(0, 1.6fr) minmax(9rem, 0.5fr) 10rem 1rem; }

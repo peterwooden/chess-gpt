@@ -24,6 +24,10 @@ import {
   type ReviewJudgement,
   type ReviewProgress,
 } from "./stockfish-review.mjs";
+import {
+  openLiveGamePublisher,
+  type LiveGamePublisher,
+} from "./live-game-publisher";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
 const MODEL_AUTOPLAY_DELAY_MS = 650;
@@ -128,6 +132,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const loadEpoch = useRef({ a: 0, b: 0 });
   const activeGameId = useRef("");
   const activeGameStartedAt = useRef("");
+  const livePublisher = useRef<LiveGamePublisher | null>(null);
   const loadedModels = useRef<{ a: BrowserChessModel | null; b: BrowserChessModel | null }>({
     a: null,
     b: null,
@@ -161,6 +166,9 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const [gameError, setGameError] = useState<string | null>(null);
   const [review, setReview] = useState<ReviewState>(emptyReview);
   const [reviewAttempt, setReviewAttempt] = useState(0);
+  const [streamEnabled, setStreamEnabled] = useState(false);
+  const [liveWatchPath, setLiveWatchPath] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -306,6 +314,21 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     }, 700);
     return () => window.clearTimeout(timer);
   }, [historyPlaying, moves.length, viewedPly]);
+
+  useEffect(() => {
+    const publisher = livePublisher.current;
+    if (!publisher || !gameStarted || !liveWatchPath) return;
+    const current = gameRef.current;
+    const ended = current.isGameOver() || finishedStatus !== null;
+    void publisher.publish({
+      phase: ended ? "finished" : running ? "playing" : "paused",
+      status: finishedStatus ?? describeGame(current, running, thinking),
+      moves: moves.map((move) => move.san),
+      lastMoveMs: moves.at(-1)?.elapsedMs ?? null,
+    }).then(() => setStreamError(null)).catch((error) => {
+      setStreamError(error instanceof Error ? error.message : "The live link stopped updating.");
+    });
+  }, [finishedStatus, gameStarted, liveWatchPath, moves, running, thinking]);
 
   useEffect(() => () => {
     loadEpoch.current.a += 1;
@@ -507,15 +530,40 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     gameEpoch.current += 1;
     reviewAbort.current?.abort();
     gameRef.current = new Chess();
-    activeGameId.current = crypto.randomUUID();
+    const nextGameId = crypto.randomUUID();
+    activeGameId.current = nextGameId;
     activeGameStartedAt.current = new Date().toISOString();
+    const nextPlayers = {
+      [resolvedPlayer1Color]: nextPlayer1Name,
+      [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Name,
+    } as Players;
+    livePublisher.current = null;
+    setLiveWatchPath(null);
+    setStreamError(null);
+    if (streamEnabled) {
+      try {
+        const publisher = await openLiveGamePublisher({
+          id: nextGameId,
+          source: "arena",
+          whiteName: nextPlayers.w,
+          blackName: nextPlayers.b,
+          whiteModelReference: resolvedPlayer1Color === "w"
+            ? modelA.model?.info.reference ?? null
+            : modelB.model?.info.reference ?? null,
+          blackModelReference: resolvedPlayer1Color === "b"
+            ? modelA.model?.info.reference ?? null
+            : modelB.model?.info.reference ?? null,
+        });
+        livePublisher.current = publisher;
+        setLiveWatchPath(publisher.watchPath);
+      } catch (error) {
+        setStreamError(error instanceof Error ? error.message : "The live link could not be created.");
+      }
+    }
     setMode(nextMode);
     setPlayer1Color(resolvedPlayer1Color);
     setHumanColor(modelA.model ? oppositeColor(resolvedPlayer1Color) : resolvedPlayer1Color);
-    setPlayers({
-      [resolvedPlayer1Color]: nextPlayer1Name,
-      [oppositeColor(resolvedPlayer1Color)]: nextPlayer2Name,
-    } as Players);
+    setPlayers(nextPlayers);
     const nextPlayer1Profile = modelA.model ? modelA.profileId : viewer.profileId;
     const nextPlayer2Profile = modelB.model ? modelB.profileId : viewer.profileId;
     setPlayerProfiles({
@@ -734,6 +782,16 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   }
 
   function returnToSetup() {
+    const publisher = livePublisher.current;
+    if (publisher && !gameRef.current.isGameOver()) {
+      void publisher.publish({
+        phase: "finished",
+        status: "Broadcast ended before the game finished.",
+        moves: moves.map((move) => move.san),
+        lastMoveMs: moves.at(-1)?.elapsedMs ?? null,
+      }).catch(() => {});
+    }
+    livePublisher.current = null;
     gameEpoch.current += 1;
     reviewAbort.current?.abort();
     gameRef.current = new Chess();
@@ -765,6 +823,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     setPlayerModelReferences({ w: null, b: null });
     setRecordingEnabled(false);
     setSaveState({ phase: "idle", gameId: null, message: "" });
+    setLiveWatchPath(null);
+    setStreamError(null);
     setGameStarted(false);
     setGameVersion((value) => value + 1);
   }
@@ -943,6 +1003,14 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                     : <><Link href="/signin-with-chatgpt?return_to=%2Farena">Sign in with ChatGPT</Link> to attach human games to your history.</>}
                 </p>
                 <p>{modelA.model && modelB.model ? "Model versus model" : modelA.model || modelB.model ? "The empty player slot will be Human" : "Load at least one model"}</p>
+                <label className="arena-stream-option">
+                  <input
+                    type="checkbox"
+                    checked={streamEnabled}
+                    onChange={(event) => setStreamEnabled(event.target.checked)}
+                  />
+                  <span>Create an unlisted live link so other people can watch this game.</span>
+                </label>
                 <button type="button" onClick={() => void beginGame()} disabled={starting || (!modelA.model && !modelB.model) || modelA.phase === "loading" || modelB.phase === "loading"}>
                   {starting ? "Starting…" : "Start game"}
                 </button>
@@ -1054,6 +1122,14 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                   {saveState.phase === "saved" && saveState.gameId ? <Link href={`/arena?game=${saveState.gameId}`}>Recorded game</Link> : null}
                   {saveState.phase === "error" ? <button type="button" onClick={() => setSaveState({ phase: "idle", gameId: null, message: "" })}>Retry</button> : null}
                 </p>
+              ) : null}
+              {liveWatchPath ? (
+                <p className="live-share-banner" role="status">
+                  <span>{streamError ? "Live updates are reconnecting." : "Unlisted live link is ready."}</span>
+                  <Link href={liveWatchPath} target="_blank">Open spectator view ↗</Link>
+                </p>
+              ) : streamError ? (
+                <p className="live-share-banner" role="status"><span>{streamError}</span></p>
               ) : null}
               {gameEnded && shareOpen ? (
                 <div className="share-options" id="arena-share-options" role="menu" aria-label="Share game">

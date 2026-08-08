@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadBrowserModel, type BrowserChessModel } from "../../../arena/model";
 import { playGame } from "../../../arena/play-game.mjs";
 import type { GameOutcome } from "../../../arena/play-game";
+import { openLiveGamePublisher } from "../../../arena/live-game-publisher";
 import { openingForSlot, parseOpenings } from "../../../../lib/opening-book.mjs";
 import { formatDuration, formatScore } from "../../tournament-nav";
 import {
@@ -47,6 +48,7 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
   // Mirrored into state because the machine identity is rendered, and a ref
   // read during render would not update the pinning notice when it changes.
   const [runnerId, setRunnerId] = useState<string | null>(null);
+  const [broadcastError, setBroadcastError] = useState<string | null>(null);
 
   const running = useRef(false);
   const models = useRef(new Map<string, BrowserChessModel>());
@@ -221,6 +223,27 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
         ];
         if (!running.current) return;
 
+        const gameId = crypto.randomUUID();
+        let broadcaster: Awaited<ReturnType<typeof openLiveGamePublisher>> | null = null;
+        try {
+          broadcaster = await openLiveGamePublisher({
+            id: gameId,
+            source: "tournament",
+            tournamentId,
+            tournamentPairKey: next.pairKey,
+            tournamentGameIndex: next.gameIndex,
+            runnerId: identity.current?.id,
+            whiteName: white.displayName,
+            blackName: black.displayName,
+            whiteModelReference: white.reference,
+            blackModelReference: black.reference,
+            openingName: opening?.name ?? null,
+          });
+          setBroadcastError(null);
+        } catch (caught) {
+          setBroadcastError(caught instanceof Error ? caught.message : "Live spectators cannot connect.");
+        }
+
         setStatus("Playing…");
         const outcome: GameOutcome = await playGame(
           adapt(white.displayName, whiteModel),
@@ -231,15 +254,36 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
             openingMoves: opening?.moves ?? [],
             openingName: opening?.name,
             now: () => performance.now(),
-            onMove: (move) => {
+            onMove: async (move, game) => {
               setPly(move.ply);
               setLastMoveMs(Math.round(move.elapsedMs));
+              if (!broadcaster) return;
+              try {
+                await broadcaster.publish({
+                  phase: "playing",
+                  status: `${game.turn() === "w" ? white.displayName : black.displayName} to move`,
+                  moves: game.history(),
+                  lastMoveMs: move.elapsedMs,
+                });
+                setBroadcastError(null);
+              } catch (caught) {
+                setBroadcastError(caught instanceof Error ? caught.message : "Live updates are delayed.");
+              }
             },
           },
         );
 
         setStatus("Saving…");
-        await save(next, white.reference, black.reference, outcome);
+        await save(gameId, next, white.reference, black.reference, outcome);
+        if (broadcaster) {
+          void broadcaster.publish({
+            phase: "finished",
+            status: `${outcome.result} · ${outcome.termination}`,
+            moves: outcome.moves.map((move) => move.san),
+            lastMoveMs: outcome.moves.at(-1)?.elapsedMs ?? null,
+            result: outcome.result,
+          }).catch(() => {});
+        }
 
         setRecentGames((history) => [
           `${white.displayName} v ${black.displayName} — ${outcome.result} (${outcome.termination})`,
@@ -262,6 +306,7 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
    * recorded is worse than stopping and being told why.
    */
   async function save(
+    gameId: string,
     slot: ScheduledGame,
     whiteReference: string,
     blackReference: string,
@@ -271,7 +316,7 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: crypto.randomUUID(),
+        id: gameId,
         pgn: outcome.pgn,
         playedAt: new Date(currentTime()).toISOString(),
         white: { kind: "model", reference: whiteReference },
@@ -367,7 +412,9 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
           {plan ? (
             <div><dt>Abandoned</dt><dd>{plan.abandonedCount}</dd></div>
           ) : null}
+          <div><dt>Live broadcast</dt><dd>{broadcastError ? "Updates delayed" : phase === "playing" ? "Online" : "—"}</dd></div>
         </dl>
+        {broadcastError ? <p className="tournament-note">The tournament is continuing; spectator updates will retry on the next move.</p> : null}
       </section>
 
       {standings.length > 0 ? (

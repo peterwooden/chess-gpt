@@ -27,7 +27,7 @@ export type PlayGameOptions = {
   moveTimeLimitMs: number;
   seed?: number;
   now?: () => number;
-  onMove?: (move: PlayedMove, game: Chess) => void;
+  onMove?: (move: PlayedMove, game: Chess) => void | Promise<void>;
   signal?: AbortSignal;
   /**
    * Book moves the runner plays before either package moves. They cost no

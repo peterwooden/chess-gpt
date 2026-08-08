@@ -167,6 +167,21 @@ Stockfish plays no part in the tournament pipeline. It would consume more comput
 tournament itself and, if run concurrently, would steal CPU from a package that is on the
 clock. Existing behaviour is unchanged: opening a finished game analyses it on demand.
 
+### Spectator broadcasts
+
+Every tournament game opens an ephemeral public live-game record before its first move.
+After a move's wall-clock measurement has ended, the runner awaits a bounded snapshot write
+before starting the opponent's clock. Spectator work therefore never overlaps package
+inference, and a failed broadcast write degrades the spectator view without changing or
+stopping the game. Completed rows in `games` remain the only source for standings.
+
+The same live-game interface supports ordinary arena games when their player opts into an
+unlisted watch link. Both paths publish a full, revisioned SAN history rather than an event
+delta, so a spectator can recover after missing any number of polls. Spectators poll public
+read-only state and reconstruct the position locally; they never connect to the pinned runner
+or claim its lease. A finished broadcast resolves to the permanent recorded game under the
+same game id.
+
 ## Code structure
 
 The game loop is extracted from `site/app/arena/arena-client.tsx` into a React-free function:
@@ -197,6 +212,10 @@ owner only while the tournament is in registration.
 `games` gains `tournament_id`, pairing, and game index, with a unique index across them.
 Tournament games are ordinary games: they appear in history, on player pages, and can be
 opened and analysed like any other.
+
+`live_games` stores one short-lived, revisioned snapshot per broadcast game, including its
+players, SAN history, phase, and optional tournament slot. Publisher credentials are stored
+only as hashes, snapshots expire after one day, and no live row contributes to a result.
 
 ## Permissions
 

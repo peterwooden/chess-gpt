@@ -146,6 +146,28 @@ test("per-move elapsed time is measured from the injected clock", async () => {
   assert.deepEqual(outcome.moves.map((move) => move.elapsedMs), [40, 40]);
 });
 
+test("an asynchronous move observer finishes before the next prediction starts", async () => {
+  const events = [];
+  const player = (name) => ({
+    name,
+    async predict(history, legalMoves) {
+      events.push(`predict-${history.length + 1}`);
+      if (history.length >= 2) throw new Error("test complete");
+      return { san: legalMoves[0] };
+    },
+  });
+
+  await playGame(player("white"), player("black"), {
+    ...OPTIONS,
+    async onMove(move) {
+      await Promise.resolve();
+      events.push(`publish-${move.ply}`);
+    },
+  });
+
+  assert.deepEqual(events.slice(0, 4), ["predict-1", "publish-1", "predict-2", "publish-2"]);
+});
+
 test("a stalemate is a draw", async () => {
   // 1. e3 a5 2. Qh5 Ra6 3. Qxa5 h5 4. Qxc7 Rah6 5. h4 f6 6. Qxd7+ Kf7
   // 7. Qxb7 Qd3 8. Qxb8 Qh7 9. Qxc8 Kg6 10. Qe6 — black is stalemated.

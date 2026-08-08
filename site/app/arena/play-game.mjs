@@ -67,7 +67,7 @@ export async function playGame(white, black, options) {
       actor: "book",
     };
     moves.push(played);
-    onMove?.(played, game);
+    await onMove?.(played, game);
   }
 
   while (true) {
@@ -107,7 +107,7 @@ export async function playGame(white, black, options) {
       actor: player.name,
     };
     moves.push(played);
-    onMove?.(played, game);
+    await onMove?.(played, game);
   }
 
   const termination = terminationForPosition(game);

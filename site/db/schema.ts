@@ -102,6 +102,36 @@ export const tournamentGameAttempts = sqliteTable("tournament_game_attempts", {
   uniqueIndex("tournament_game_attempts_key").on(table.tournamentId, table.pairKey, table.gameIndex),
 ]);
 
+/**
+ * Ephemeral, public snapshots for games that are still being played. The
+ * permanent `games` row remains authoritative once a game finishes.
+ */
+export const liveGames = sqliteTable("live_games", {
+  id: text("id").primaryKey(),
+  publisherTokenHash: text("publisher_token_hash").notNull(),
+  source: text("source", { enum: ["arena", "tournament"] }).notNull(),
+  tournamentId: text("tournament_id").references(() => tournaments.id),
+  tournamentPairKey: text("tournament_pair_key"),
+  tournamentGameIndex: integer("tournament_game_index"),
+  whiteName: text("white_name").notNull(),
+  blackName: text("black_name").notNull(),
+  whiteModelReference: text("white_model_reference"),
+  blackModelReference: text("black_model_reference"),
+  openingName: text("opening_name"),
+  phase: text("phase", { enum: ["starting", "playing", "paused", "finished"] }).notNull(),
+  status: text("status").notNull(),
+  moves: text("moves").notNull(),
+  lastMoveMs: integer("last_move_ms"),
+  result: text("result", { enum: ["1-0", "0-1", "1/2-1/2"] }),
+  revision: integer("revision").notNull(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  index("live_games_tournament_updated_idx").on(table.tournamentId, table.updatedAt),
+  index("live_games_expires_idx").on(table.expiresAt),
+]);
+
 export const games = sqliteTable("games", {
   id: text("id").primaryKey(),
   whitePlayerId: text("white_player_id").references(() => players.id),
