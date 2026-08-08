@@ -174,23 +174,26 @@ test("arena renders filled pieces, player strips, captures, and material advanta
 
 test("arena consolidates match status in the move pane", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const progressPanel = await readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8");
 
   assert.doesNotMatch(arena, /className="game-status"/);
   assert.match(arena, /mode === "human" \? "Human match" : "Model match"/);
-  assert.match(arena, /live at move \$\{Math\.ceil\(moves\.length \/ 2\)\}/);
-  assert.match(arena, /<strong aria-live="polite">\{displayedStatus\}<\/strong>/);
-  assert.match(arena, /className="move-header-meta"/);
-  assert.match(arena, /\{history\.length\} plies/);
+  assert.match(arena, /<GameProgressPanel/);
+  assert.match(progressPanel, /<strong aria-live="polite">\{status\}<\/strong>/);
+  assert.match(progressPanel, /className="move-header-meta"/);
+  assert.match(progressPanel, /\{moves\.length\} plies/);
+  assert.match(progressPanel, /timeline\.behind/);
 });
 
 test("arena uses a compact score sheet and shares completed games as PGN", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const progressPanel = await readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
-  assert.match(arena, /className="move-score-heading"/);
-  assert.match(arena, /<span>Move<\/span><b>White<\/b><b>Black<\/b>/);
-  assert.match(arena, /moveRows\.map/);
-  assert.match(arena, /record\.scrollTop = record\.scrollHeight/);
+  assert.match(progressPanel, /className="move-score-heading"/);
+  assert.match(progressPanel, /<span>Move<\/span><b>White<\/b><b>Black<\/b>/);
+  assert.match(progressPanel, /rows\.map/);
+  assert.match(progressPanel, /record\.scrollTop = record\.scrollHeight/);
   assert.match(arena, /className="share-toggle"/);
   assert.match(arena, /Models \+ game/);
   assert.match(arena, /readSharedPgn/);
@@ -205,19 +208,20 @@ test("arena uses a compact score sheet and shares completed games as PGN", async
 
 test("arena can review every played position without leaving the live game", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
+  const progressPanel = await readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
-  assert.match(arena, /const \[viewedPly, setViewedPly\] = useState<number \| null>\(null\)/);
+  assert.match(progressPanel, /const \[viewedPly, setViewedPly\] = useState<number \| null>\(null\)/);
   assert.match(arena, /const displayedGame = isLiveView \? game : gameAtPly\(moves, displayPly\)/);
-  assert.match(arena, /aria-label="Move history navigation"/);
-  assert.match(arena, /aria-label="Go to starting position"/);
-  assert.match(arena, /aria-label=\{historyPlaying \? "Pause move history" : "Play move history"\}/);
-  assert.match(arena, /historyPlaying \? "Ⅱ" : "▶"/);
-  assert.match(arena, /window\.setTimeout/);
+  assert.match(progressPanel, /aria-label="Move history navigation"/);
+  assert.match(progressPanel, /aria-label="Go to starting position"/);
+  assert.match(progressPanel, /timeline\.playing \? "Pause move history" : "Play move history to live"/);
+  assert.match(progressPanel, /timeline\.playing \? "Ⅱ" : "▶"/);
+  assert.match(progressPanel, /window\.setTimeout/);
   assert.doesNotMatch(arena, /\{gameEnded \? "Final" : "Live"\}/);
-  assert.match(arena, /data-ply=\{move\.ply\}/);
-  assert.match(arena, /onClick=\{\(\) => onSelect\(move\.ply\)\}/);
-  assert.match(arena, /record\.querySelector<HTMLElement>/);
+  assert.match(progressPanel, /data-ply=\{move\.ply\}/);
+  assert.match(progressPanel, /onClick=\{\(\) => timeline\.showPosition\(move\.ply\)\}/);
+  assert.match(progressPanel, /record\.querySelector<HTMLElement>/);
   assert.match(styles, /\.history-navigation\s*\{[^}]*border-bottom:\s*1px solid var\(--green\)/s);
   assert.match(styles, /\.move-record\s*\{[^}]*position:\s*relative/s);
   assert.match(styles, /@media \(max-width:\s*959px\)[\s\S]*\.arena-sidebar\s*\{[^}]*flex:\s*1/s);

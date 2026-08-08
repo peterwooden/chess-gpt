@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveGameEventBatch, LiveGameEventPayload } from "../../../lib/live-game-events.mjs";
 import type { LiveGame, LiveGameResponse } from "../../../lib/live-game-types";
+import { GameProgressPanel, useGameTimeline } from "../../arena/game-progress-panel";
 import { PlayerStrip, type PlayerClock } from "../../arena/player-strip";
 import { ThinkingOverlay, useThinkingDisplay } from "../../arena/thinking-overlay";
 
@@ -139,30 +140,38 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
   }, [clearThinking, consumeBatch, gameId, livePhase]);
 
   const presentation = useMemo(() => present(response), [response]);
+  const progressMoves = presentation.game.history({ verbose: true }).map((move, index) => ({
+    ply: index + 1,
+    san: move.san,
+    color: move.color,
+  }));
+  const timeline = useGameTimeline(progressMoves.length);
   const stale = Boolean(
     response.live
     && response.live.phase !== "finished"
     && now - response.live.updatedAt > STALE_AFTER_MS,
   );
   const finished = response.live?.phase === "finished" || (!response.live && Boolean(response.completed));
-  const lastMove = presentation.game.history({ verbose: true }).at(-1);
-  const moveRows = pairMoves(presentation.moves);
+  const displayedGame = timeline.isLive
+    ? presentation.game
+    : gameFromMoves(presentation.moves.slice(0, timeline.displayPly));
+  const lastMove = displayedGame.history({ verbose: true }).at(-1);
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
-  const stripMoves = presentation.game.history({ verbose: true });
+  const stripMoves = displayedGame.history({ verbose: true });
   const whiteSummary = {
     color: "w" as const,
     name: presentation.whiteName,
     modelReference: response.live?.whiteModelReference ?? null,
     moves: stripMoves,
-    clock: playerClock(response.live, clockAnchor, "w"),
+    clock: timeline.isLive ? playerClock(response.live, clockAnchor, "w") : null,
   };
   const blackSummary = {
     color: "b" as const,
     name: presentation.blackName,
     modelReference: response.live?.blackModelReference ?? null,
     moves: stripMoves,
-    clock: playerClock(response.live, clockAnchor, "b"),
+    clock: timeline.isLive ? playerClock(response.live, clockAnchor, "b") : null,
   };
   const topSummary = orientation === "w" ? blackSummary : whiteSummary;
   const bottomSummary = orientation === "w" ? whiteSummary : blackSummary;
@@ -189,7 +198,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
             <div className={`chessboard live-watch-board orientation-${orientation}`} role="grid" aria-label="Chess board">
               {boardRanks.flatMap((rank) => boardFiles.map((file) => {
                 const square = `${file}${rank}` as const;
-                const piece = presentation.game.get(square);
+                const piece = displayedGame.get(square);
                 const light = (FILES.indexOf(file) + rank) % 2 === 0;
                 const last = square === lastMove?.from || square === lastMove?.to;
                 return (
@@ -201,33 +210,22 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
                 );
               }))}
             </div>
-            <ThinkingOverlay enabled={showThinking} orientation={orientation} sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
+            <ThinkingOverlay enabled={showThinking && timeline.isLive} orientation={orientation} sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
           </div>
           <PlayerStrip {...bottomSummary} onFlip={() => setOrientation((color) => color === "w" ? "b" : "w")} />
         </div>
 
-        <aside className="live-scorecard">
-          <header>
-            <div>
-              <span>{presentation.openingName ?? "Game score"}</span>
-              <strong>{presentation.moves.length} plies · {Math.ceil(presentation.moves.length / 2)} moves</strong>
-            </div>
-            <i className={!finished && !stale ? "pulse active" : "pulse"} aria-hidden="true" />
-          </header>
-          <label className="thinking-display-option">
-            <input type="checkbox" checked={showThinking} onChange={(event) => setShowThinking(event.target.checked)} />
-            <span>Show model thinking</span>
-          </label>
-          {moveRows.length === 0 ? (
-            <div className="empty-record"><span>01</span><p>Waiting for the first move…</p></div>
-          ) : (
-            <div className="move-score">
-              <div className="move-score-heading" aria-hidden="true"><span>Move</span><b>White</b><b>Black</b></div>
-              <ol className="move-record" aria-label="Move history">
-                {moveRows.map((row) => <li key={row.number}><span>{row.number}.</span><strong>{row.white ?? "—"}</strong><strong>{row.black ?? "—"}</strong></li>)}
-              </ol>
-            </div>
-          )}
+        <GameProgressPanel
+          className="live-scorecard"
+          label={presentation.openingName ?? "Game score"}
+          liveStatus={presentation.status}
+          moves={progressMoves}
+          timeline={timeline}
+          pulse={!finished && !stale}
+          showThinking={showThinking}
+          onShowThinkingChange={setShowThinking}
+          emptyMessage="Waiting for the first move…"
+        >
           <footer>
             {finished ? (
               <Link href={`/arena?game=${encodeURIComponent(gameId)}`}>Open the recorded game and review →</Link>
@@ -237,7 +235,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
               <span>Live updates · 500 ms polling</span>
             )}
           </footer>
-        </aside>
+        </GameProgressPanel>
       </section>
     </main>
   );
@@ -258,18 +256,6 @@ function gameFromMoves(moves: readonly string[]): Chess {
   const game = new Chess();
   for (const san of moves) game.move(san);
   return game;
-}
-
-function pairMoves(moves: readonly string[]) {
-  const rows: Array<{ number: number; white?: string; black?: string }> = [];
-  moves.forEach((move, index) => {
-    const rowIndex = Math.floor(index / 2);
-    const row = rows[rowIndex] ?? { number: rowIndex + 1 };
-    if (index % 2 === 0) row.white = move;
-    else row.black = move;
-    rows[rowIndex] = row;
-  });
-  return rows;
 }
 
 function activeClockAnchor(snapshot: {

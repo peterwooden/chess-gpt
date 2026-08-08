@@ -20,7 +20,6 @@ import {
 import {
   analyzeGameWithStockfish,
   type GameReview,
-  type MoveReview,
   type PlayerReview,
   type ReviewJudgement,
   type ReviewProgress,
@@ -29,6 +28,7 @@ import {
   openLiveGamePublisher,
   type LiveGamePublisher,
 } from "./live-game-publisher";
+import { GameProgressPanel, useGameTimeline } from "./game-progress-panel";
 import { ModelNameWithCopy, PlayerStrip, type PlayerClock } from "./player-strip";
 import { ThinkingOverlay, useThinkingDisplay } from "./thinking-overlay";
 
@@ -118,7 +118,6 @@ function emptyReview(): ReviewState {
 
 export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; name: string | null; profileId: string | null } }) {
   const gameRef = useRef(new Chess());
-  const moveRecordRef = useRef<HTMLOListElement>(null);
   const gameEpoch = useRef(0);
   const reviewAbort = useRef<AbortController | null>(null);
   const loadEpoch = useRef({ a: 0, b: 0 });
@@ -151,8 +150,6 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const [shareMessage, setShareMessage] = useState("");
   const [, setGameVersion] = useState(0);
   const [moves, setMoves] = useState<MoveRecord[]>([]);
-  const [viewedPly, setViewedPly] = useState<number | null>(null);
-  const [historyPlaying, setHistoryPlaying] = useState(false);
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [promotion, setPromotion] = useState<PromotionChoice | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
@@ -171,6 +168,10 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     apply: applyThinking,
     clear: clearThinking,
   } = useThinkingDisplay();
+  const timeline = useGameTimeline(moves.length, () => {
+    setSelectedSquare(null);
+    setPromotion(null);
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -279,45 +280,6 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   }, [modelA.model, modelB.model]);
 
   useEffect(() => {
-    const record = moveRecordRef.current;
-    if (!record) return;
-    if (viewedPly === null) {
-      record.scrollTop = record.scrollHeight;
-      return;
-    }
-    if (viewedPly === 0) {
-      record.scrollTop = 0;
-      return;
-    }
-    const selectedMove = record.querySelector<HTMLElement>(`[data-ply="${viewedPly}"]`);
-    const selectedRow = selectedMove?.closest("li");
-    if (!selectedRow) return;
-    const rowTop = selectedRow.offsetTop;
-    const rowBottom = rowTop + selectedRow.offsetHeight;
-    if (rowTop < record.scrollTop) record.scrollTop = rowTop;
-    else if (rowBottom > record.scrollTop + record.clientHeight) {
-      record.scrollTop = rowBottom - record.clientHeight;
-    }
-  }, [moves.length, viewedPly]);
-
-  useEffect(() => {
-    if (!historyPlaying) return;
-    if (moves.length === 0) {
-      setHistoryPlaying(false);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      if (viewedPly === null || viewedPly >= moves.length - 1) {
-        setViewedPly(null);
-        setHistoryPlaying(false);
-      } else {
-        setViewedPly(viewedPly + 1);
-      }
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [historyPlaying, moves.length, viewedPly]);
-
-  useEffect(() => {
     const publisher = livePublisher.current;
     if (!publisher || !gameStarted || !liveWatchPath) return;
     const current = gameRef.current;
@@ -341,25 +303,33 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   }, []);
 
   const game = gameRef.current;
-  const history = game.history();
-  const isLiveView = viewedPly === null;
-  const displayPly = viewedPly ?? moves.length;
+  const isLiveView = timeline.isLive;
+  const displayPly = timeline.displayPly;
   const displayedGame = isLiveView ? game : gameAtPly(moves, displayPly);
+  const displayedMove = displayPly > 0 ? moves[displayPly - 1] : undefined;
   const targetSquares = isLiveView && selectedSquare
     ? new Set(game.moves({ square: selectedSquare, verbose: true }).map((move) => move.to))
     : new Set<Square>();
-  const displayedMove = displayPly > 0 ? moves[displayPly - 1] : undefined;
   const naturalOrientation: Color = gameStarted && mode === "human" ? humanColor : "w";
   const orientation: Color = boardFlipped ? oppositeColor(naturalOrientation) : naturalOrientation;
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
   const status = finishedStatus ?? describeGame(game, running, thinking);
-  const displayedStatus = isLiveView
-    ? status
-    : describeHistoryPosition(displayPly, displayedMove);
   const gameEnded = game.isGameOver() || finishedStatus !== null;
-  const moveRows = pairMoves(moves);
   const reviewByPly = new Map(review.result?.moves.map((move) => [move.ply, move]) ?? []);
+  const progressMoves = moves.map((move) => {
+    const moveReview = reviewByPly.get(move.ply);
+    return {
+      ...move,
+      review: moveReview?.judgement ? {
+        judgement: moveReview.judgement,
+        label: JUDGEMENT_META[moveReview.judgement].label,
+        glyph: JUDGEMENT_META[moveReview.judgement].glyph,
+        winningChanceLoss: moveReview.winningChanceLoss,
+        bestMoveSan: moveReview.bestMoveSan,
+      } : undefined,
+    };
+  });
 
   useEffect(() => {
     if (!recordingEnabled || !gameStarted || !gameEnded || moves.length === 0 || saveState.phase !== "idle") return;
@@ -589,8 +559,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     setRecordingEnabled(true);
     setSaveState({ phase: "idle", gameId: null, message: "" });
     setMoves([]);
-    setViewedPly(null);
-    setHistoryPlaying(false);
+    timeline.reset();
     setSelectedSquare(null);
     setPromotion(null);
     setThinking(null);
@@ -819,25 +788,6 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     }
   }
 
-  function showPosition(ply: number | null) {
-    setHistoryPlaying(false);
-    setSelectedSquare(null);
-    setPromotion(null);
-    setViewedPly(ply === null || ply >= moves.length ? null : Math.max(0, ply));
-  }
-
-  function toggleHistoryPlayback() {
-    if (historyPlaying) {
-      setHistoryPlaying(false);
-      return;
-    }
-    if (moves.length === 0) return;
-    setSelectedSquare(null);
-    setPromotion(null);
-    setViewedPly((current) => current === null ? 0 : current);
-    setHistoryPlaying(true);
-  }
-
   function returnToSetup() {
     const publisher = livePublisher.current;
     if (publisher && !gameRef.current.isGameOver()) {
@@ -870,8 +820,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     setBoardFlipped(false);
     clearThinking();
     setMoves([]);
-    setViewedPly(null);
-    setHistoryPlaying(false);
+    timeline.reset();
     setSelectedSquare(null);
     setPromotion(null);
     setGameError(null);
@@ -1082,78 +1031,18 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
               </div>
             </section>
           ) : (
-            <section className="move-console" aria-label="Game progress">
-              <header>
-                <div>
-                  <span>
-                    {gameEnded && review.phase === "complete"
-                      ? `Game review · ${review.result?.engine}`
-                      : mode === "human" ? "Human match" : "Model match"}
-                    {!isLiveView && moves.length > 0 ? ` · live at move ${Math.ceil(moves.length / 2)}` : ""}
-                  </span>
-                  <strong aria-live="polite">{displayedStatus}</strong>
-                </div>
-                <div className="move-header-meta">
-                  {isLiveView ? (
-                    <small>{history.length} plies · {Math.ceil(history.length / 2)} moves</small>
-                  ) : (
-                    <small className="history-view-label">History</small>
-                  )}
-                  <i className={thinking ? "pulse active" : "pulse"} aria-hidden="true" />
-                </div>
-              </header>
-              <label className="thinking-display-option">
-                <input
-                  type="checkbox"
-                  checked={showThinking}
-                  onChange={(event) => setShowThinking(event.target.checked)}
-                />
-                <span>Show model thinking</span>
-              </label>
-              <nav className="history-navigation" aria-label="Move history navigation">
-                <button
-                  type="button"
-                  aria-label="Go to starting position"
-                  onClick={() => showPosition(0)}
-                  disabled={moves.length === 0 || displayPly === 0}
-                >
-                  <span aria-hidden="true">|‹</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Go to previous position"
-                  onClick={() => showPosition(displayPly - 1)}
-                  disabled={moves.length === 0 || displayPly === 0}
-                >
-                  <span aria-hidden="true">‹</span>
-                </button>
-                <button
-                  className="history-playback"
-                  type="button"
-                  aria-label={historyPlaying ? "Pause move history" : "Play move history"}
-                  aria-pressed={historyPlaying}
-                  onClick={toggleHistoryPlayback}
-                  disabled={moves.length === 0}
-                >
-                  <span aria-hidden="true">{historyPlaying ? "Ⅱ" : "▶"}</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Go to next position"
-                  onClick={() => showPosition(displayPly + 1)}
-                  disabled={isLiveView || moves.length === 0}
-                >
-                  <span aria-hidden="true">›</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Go to live position"
-                  onClick={() => showPosition(null)}
-                  disabled={isLiveView || moves.length === 0}
-                >
-                  <span aria-hidden="true">›|</span>
-                </button>
-              </nav>
+            <GameProgressPanel
+              label={gameEnded && review.phase === "complete"
+                ? `Game review · ${review.result?.engine}`
+                : mode === "human" ? "Human match" : "Model match"}
+              liveStatus={status}
+              moves={progressMoves}
+              timeline={timeline}
+              pulse={Boolean(thinking)}
+              showThinking={showThinking}
+              onShowThinkingChange={setShowThinking}
+              emptyMessage="The game is ready. The first SAN move will appear here."
+            >
               {gameEnded && review.phase !== "idle" ? (
                 <GameReviewSummary
                   review={review}
@@ -1164,27 +1053,6 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                 />
               ) : null}
               {gameError ? <p className="arena-error" role="alert">{gameError}</p> : null}
-              {moves.length === 0 ? (
-                <div className="empty-record">
-                  <span>01</span>
-                  <p>The game is ready. The first SAN move will appear here.</p>
-                </div>
-              ) : (
-                <div className="move-score">
-                  <div className="move-score-heading" aria-hidden="true">
-                    <span>Move</span><b>White</b><b>Black</b>
-                  </div>
-                  <ol className="move-record" aria-label="Move history" ref={moveRecordRef}>
-                    {moveRows.map((row) => (
-                      <li key={row.number}>
-                        <span>{row.number}.</span>
-                        <MoveCell move={row.white} review={row.white ? reviewByPly.get(row.white.ply) : undefined} currentPly={displayPly} onSelect={showPosition} />
-                        <MoveCell move={row.black} review={row.black ? reviewByPly.get(row.black.ply) : undefined} currentPly={displayPly} onSelect={showPosition} />
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
               {gameEnded && moves.length > 0 ? (
                 <PgnExport pgn={createSharePgn(game, players, mode, player1Color, humanColor, gameError)} />
               ) : null}
@@ -1247,50 +1115,11 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                 )}
                 <button className="new-game-button" type="button" onClick={returnToSetup}>New game</button>
               </div>
-            </section>
+            </GameProgressPanel>
           )}
         </aside>
       </section>
     </main>
-  );
-}
-
-function MoveCell({
-  move,
-  review,
-  currentPly,
-  onSelect,
-}: {
-  move?: MoveRecord;
-  review?: MoveReview;
-  currentPly: number;
-  onSelect: (ply: number) => void;
-}) {
-  if (!move) return <span className="score-move empty" aria-hidden="true">—</span>;
-  const reviewDetail = review?.judgement
-    ? ` · ${judgementName(review.judgement)} · ${Math.round(review.winningChanceLoss)}% winning chance lost${review.bestMoveSan ? ` · best was ${review.bestMoveSan}` : ""}`
-    : "";
-  const detail = `${move.actor} · ${move.source}${move.elapsedMs === null ? "" : ` · ${Math.round(move.elapsedMs)} ms`}${reviewDetail}`;
-  return (
-    <button
-      type="button"
-      className={`score-move${review?.judgement ? ` ${review.judgement}` : ""}${move.ply === currentPly ? " current" : ""}`}
-      aria-label={`${move.color === "w" ? "White" : "Black"} played ${move.san}. ${detail}`}
-      aria-pressed={move.ply === currentPly}
-      data-ply={move.ply}
-      onClick={() => onSelect(move.ply)}
-      title={detail}
-    >
-      <strong>{move.san}</strong>
-      {review?.judgement ? (
-        <>
-          <ReviewPill judgement={review.judgement} />
-          {review.winningChanceLoss >= 0.5 ? (
-            <small className="review-loss">−{Math.round(review.winningChanceLoss)}%</small>
-          ) : null}
-        </>
-      ) : null}
-    </button>
   );
 }
 
@@ -1406,10 +1235,6 @@ function ReviewPill({ judgement, inactive = false }: { judgement: ReviewJudgemen
       {meta.glyph}
     </span>
   );
-}
-
-function judgementName(judgement: ReviewJudgement): string {
-  return JUDGEMENT_META[judgement].label;
 }
 
 function PgnExport({ pgn }: { pgn: string }) {
@@ -1549,12 +1374,6 @@ function gameAtPly(moves: MoveRecord[], ply: number): Chess {
   return game;
 }
 
-function describeHistoryPosition(ply: number, move?: MoveRecord): string {
-  if (ply === 0 || !move) return "Reviewing starting position";
-  const moveNumber = Math.ceil(ply / 2);
-  return `Reviewing move ${moveNumber}${move.color === "w" ? "." : "…"} ${move.san}`;
-}
-
 function describeGame(game: Chess, running: boolean, thinking: string | null): string {
   if (game.isCheckmate()) return `${game.turn() === "w" ? "Black" : "White"} wins by checkmate`;
   if (game.isDraw()) return "Draw";
@@ -1562,18 +1381,6 @@ function describeGame(game: Chess, running: boolean, thinking: string | null): s
   const side = game.turn() === "w" ? "White" : "Black";
   if (thinking) return `${side} to move · calculating`;
   return `${side} to move${game.isCheck() ? " · check" : ""}${running ? "" : " · paused"}`;
-}
-
-function pairMoves(moves: MoveRecord[]) {
-  const rows: Array<{ number: number; white?: MoveRecord; black?: MoveRecord }> = [];
-  for (const move of moves) {
-    const index = Math.floor((move.ply - 1) / 2);
-    const row = rows[index] ?? { number: index + 1 };
-    if (move.color === "w") row.white = move;
-    else row.black = move;
-    rows[index] = row;
-  }
-  return rows;
 }
 
 function recordsFromGame(game: Chess, white: string, black: string): MoveRecord[] {

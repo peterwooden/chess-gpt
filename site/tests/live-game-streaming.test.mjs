@@ -188,18 +188,19 @@ test("the tournament page only renders controls for its current phase", async ()
 });
 
 test("the tournament spectator follows each game with optional thinking", async () => {
-  const broadcast = await readFile(
-    new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url),
-    "utf8",
-  );
+  const [broadcast, progressPanel] = await Promise.all([
+    readFile(new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8"),
+  ]);
 
   assert.match(broadcast, /key=\{state\.liveGame\.id\}/);
   assert.match(
     broadcast,
     /fetch\(\s*`\/api\/live-games\/\$\{encodeURIComponent\(game\.id\)\}\?after=\$\{cursor\.current\}`/,
   );
-  assert.match(broadcast, /<ThinkingOverlay enabled=\{showThinking\}/);
-  assert.match(broadcast, /type="checkbox"\s+checked=\{showThinking\}/);
+  assert.match(broadcast, /<ThinkingOverlay enabled=\{showThinking && timeline\.isLive\}/);
+  assert.match(broadcast, /<GameProgressPanel/);
+  assert.match(progressPanel, /type="checkbox"[\s\S]*?checked=\{showThinking\}/);
   assert.match(broadcast, /const POLL_INTERVAL_MS = 500/);
   const liveGames = await readFile(new URL("../lib/live-games.ts", import.meta.url), "utf8");
   assert.match(
@@ -255,4 +256,29 @@ test("arena and spectator boards share player material, flip, and move-clock chr
   assert.match(runner, /whiteMoveTimeLimitMs:\s*current\.tournament\.moveTimeLimitMs/);
   assert.match(viewer, /orientation === "w" \? blackSummary : whiteSummary/);
   assert.match(broadcast, /orientation === "w" \? blackSummary : whiteSummary/);
+});
+
+test("arena and spectator surfaces share one rewindable progress panel", async () => {
+  const [arena, viewer, broadcast, progressPanel] = await Promise.all([
+    readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8"),
+  ]);
+
+  for (const surface of [arena, viewer, broadcast]) {
+    assert.match(surface, /GameProgressPanel/);
+    assert.match(surface, /useGameTimeline/);
+  }
+  assert.match(progressPanel, /aria-label="Move history navigation"/);
+  assert.match(progressPanel, /Play move history to live/);
+  assert.match(progressPanel, /moveCount - displayPly/);
+  assert.match(arena, /enabled=\{showThinking && isLiveView\}/);
+  assert.match(viewer, /enabled=\{showThinking && timeline\.isLive\}/);
+  assert.match(broadcast, /enabled=\{showThinking && timeline\.isLive\}/);
+  assert.match(viewer, /clock:\s*timeline\.isLive \? playerClock/);
+  assert.match(broadcast, /clock:\s*timeline\.isLive \? playerClock/);
+  assert.match(arena, /className=\{`game-controls/);
+  assert.doesNotMatch(viewer, /className=\{?['"`]game-controls/);
+  assert.doesNotMatch(broadcast, /className=\{?['"`]game-controls/);
 });

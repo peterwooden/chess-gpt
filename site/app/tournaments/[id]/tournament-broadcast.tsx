@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LiveGameEventBatch, LiveGameEventPayload } from "../../../lib/live-game-events.mjs";
 import type { LiveGame } from "../../../lib/live-game-types";
+import { GameProgressPanel, useGameTimeline } from "../../arena/game-progress-panel";
 import { PlayerStrip, type PlayerClock } from "../../arena/player-strip";
 import { ThinkingOverlay, useThinkingDisplay } from "../../arena/thinking-overlay";
 import { formatScore } from "../tournament-nav";
@@ -290,9 +291,17 @@ function TournamentLiveCard({
     };
   }, [clearThinking, consumeBatch, game.id, live.phase]);
 
-  const position = gameFromMoves(live.moves);
+  const currentPosition = gameFromMoves(live.moves);
+  const progressMoves = currentPosition.history({ verbose: true }).map((move, index) => ({
+    ply: index + 1,
+    san: move.san,
+    color: move.color,
+  }));
+  const timeline = useGameTimeline(progressMoves.length);
+  const position = timeline.isLive
+    ? currentPosition
+    : gameFromMoves(live.moves.slice(0, timeline.displayPly));
   const lastMove = position.history({ verbose: true }).at(-1);
-  const recentMoves = position.history().slice(-8);
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
   const stripMoves = position.history({ verbose: true });
@@ -301,14 +310,14 @@ function TournamentLiveCard({
     name: live.whiteName,
     modelReference: live.whiteModelReference,
     moves: stripMoves,
-    clock: playerClock(live, clockAnchor, "w"),
+    clock: timeline.isLive ? playerClock(live, clockAnchor, "w") : null,
   };
   const blackSummary = {
     color: "b" as const,
     name: live.blackName,
     modelReference: live.blackModelReference,
     moves: stripMoves,
-    clock: playerClock(live, clockAnchor, "b"),
+    clock: timeline.isLive ? playerClock(live, clockAnchor, "b") : null,
   };
   const topSummary = orientation === "w" ? blackSummary : whiteSummary;
   const bottomSummary = orientation === "w" ? whiteSummary : blackSummary;
@@ -345,30 +354,25 @@ function TournamentLiveCard({
                 );
               }))}
             </div>
-            <ThinkingOverlay enabled={showThinking} orientation={orientation} sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
+            <ThinkingOverlay enabled={showThinking && timeline.isLive} orientation={orientation} sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
           </div>
           <PlayerStrip {...bottomSummary} onFlip={() => setOrientation((color) => color === "w" ? "b" : "w")} />
         </div>
-        <div className="tournament-live-card-details">
-          <label className="thinking-display-option tournament-thinking-option">
-            <input
-              type="checkbox"
-              checked={showThinking}
-              onChange={(event) => onShowThinkingChange(event.target.checked)}
-            />
-            <span>Show model thinking</span>
-          </label>
-          <dl>
-            <div><dt>Status</dt><dd>{connectionError ? "Reconnecting" : stale ? "Runner paused" : live.status}</dd></div>
-            <div><dt>Opening</dt><dd>{live.openingName ?? "Standard position"}</dd></div>
-            <div><dt>Last move</dt><dd>{lastMove?.san ?? "Waiting…"}</dd></div>
-            <div><dt>Move time</dt><dd>{live.lastMoveMs === null ? "—" : `${Math.round(live.lastMoveMs)} ms`}</dd></div>
-          </dl>
-          <p className="tournament-recent-moves">{recentMoves.length > 0 ? recentMoves.join("  ") : "Waiting for the first move…"}</p>
+        <GameProgressPanel
+          className="tournament-live-card-details"
+          label={live.openingName ?? "Game score"}
+          liveStatus={connectionError ? "Reconnecting" : stale ? "Runner paused" : live.status}
+          moves={progressMoves}
+          timeline={timeline}
+          pulse={!connectionError && !stale && live.phase !== "finished"}
+          showThinking={showThinking}
+          onShowThinkingChange={onShowThinkingChange}
+          emptyMessage="Waiting for the first move…"
+        >
           <Link className="tournament-watch-link" href={`/watch/${game.id}`}>
             Open live player + thinking →
           </Link>
-        </div>
+        </GameProgressPanel>
       </div>
     </article>
   );
