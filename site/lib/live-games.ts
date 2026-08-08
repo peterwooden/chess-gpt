@@ -223,8 +223,9 @@ export async function getLiveGame(id: string): Promise<LiveGame | null> {
 
 export async function getTournamentLiveGame(tournamentId: string): Promise<LiveGame | null> {
   const stored = await (await getD1()).prepare(`${LIVE_GAME_SELECT}
-      WHERE tournament_id = ? AND phase != 'finished' AND expires_at > ?
-      ORDER BY updated_at DESC LIMIT 1`)
+      WHERE tournament_id = ? AND expires_at > ?
+      ORDER BY CASE WHEN phase != 'finished' THEN 0 ELSE 1 END,
+        updated_at DESC LIMIT 1`)
     .bind(tournamentId, Date.now())
     .first<StoredLiveGame>();
   return stored ? toPublicLiveGame(stored) : null;

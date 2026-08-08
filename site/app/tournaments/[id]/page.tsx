@@ -10,6 +10,7 @@ import { formatDateTime } from "../tournament-nav";
 import { TournamentAdminControls } from "./admin-controls";
 import { RegisterEntryPanel } from "./register-entry-panel";
 import { TournamentBroadcast } from "./tournament-broadcast";
+import { TournamentPhaseWatcher } from "./tournament-phase-watcher";
 
 export const dynamic = "force-dynamic";
 
@@ -41,13 +42,21 @@ export default async function TournamentPage(
     isAdministrator(user),
     isTournamentManager(tournament, user),
   ]);
-  const viewer = user ? await ensureHumanPlayer(user) : null;
+  const viewer = user && tournament.status === "registration"
+    ? await ensureHumanPlayer(user)
+    : null;
   const { entries, games, table, shared, distinctGamesByPair, runnerChanges } = results;
   const scheduled = (entries.length * (entries.length - 1) / 2) * tournament.gamesPerPair;
 
   return (
     <main className="history-page">
       <HistoryNav active="tournaments" />
+      {tournament.status === "registration" ? (
+        <TournamentPhaseWatcher
+          tournamentId={tournament.id}
+          status={tournament.status}
+        />
+      ) : null}
       <header className="history-hero">
         <p className="eyebrow">{STATUS_LABEL[tournament.status]}</p>
         <h1>{tournament.name}</h1>
@@ -94,17 +103,19 @@ export default async function TournamentPage(
         </section>
       ) : null}
 
-      <TournamentBroadcast
-        tournamentId={tournament.id}
-        initial={{
-          table,
-          shared,
-          playedCount: games.length,
-          scheduledCount: scheduled,
-          status: tournament.status,
-          liveGame,
-        }}
-      />
+      {tournament.status !== "registration" && (
+        <TournamentBroadcast
+          tournamentId={tournament.id}
+          initial={{
+            table,
+            shared,
+            playedCount: games.length,
+            scheduledCount: scheduled,
+            status: tournament.status,
+            liveGame,
+          }}
+        />
+      )}
 
       {Object.keys(distinctGamesByPair).length > 0 ? (
         <section className="tournament-panel">
@@ -126,22 +137,24 @@ export default async function TournamentPage(
         </section>
       ) : null}
 
-      <RegisterEntryPanel
-        tournamentId={tournament.id}
-        status={tournament.status}
-        entries={entries.map((entry) => ({
-          id: entry.id,
-          displayName: entry.displayName,
-          reference: entry.reference,
-          ownerPlayerId: entry.ownerPlayerId,
-          verifiedAt: entry.verifiedAt,
-          smokeMedianMs: entry.smokeMedianMs,
-          packageBytes: entry.packageBytes,
-        }))}
-        viewerPlayerId={viewer?.id ?? null}
-        administrator={administrator}
-        signedIn={Boolean(user)}
-      />
+      {tournament.status === "registration" && (
+        <RegisterEntryPanel
+          tournamentId={tournament.id}
+          status={tournament.status}
+          entries={entries.map((entry) => ({
+            id: entry.id,
+            displayName: entry.displayName,
+            reference: entry.reference,
+            ownerPlayerId: entry.ownerPlayerId,
+            verifiedAt: entry.verifiedAt,
+            smokeMedianMs: entry.smokeMedianMs,
+            packageBytes: entry.packageBytes,
+          }))}
+          viewerPlayerId={viewer?.id ?? null}
+          administrator={administrator}
+          signedIn={Boolean(user)}
+        />
+      )}
 
       {games.length > 0 ? (
         <section className="tournament-panel" aria-labelledby="games-title">

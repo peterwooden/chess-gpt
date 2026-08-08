@@ -133,3 +133,63 @@ test("the tournament broadcast puts ranked progress beside active game tiles", a
   assert.match(styles, /\.tournament-broadcast-dashboard\s*\{[^}]*grid-template-columns:\s*minmax\(18rem,\s*22rem\) minmax\(0,\s*1fr\)/s);
   assert.match(styles, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.tournament-broadcast-dashboard\s*\{[^}]*grid-template-columns:\s*1fr/s);
 });
+
+test("the tournament page only renders controls for its current phase", async () => {
+  const [page, watcher] = await Promise.all([
+    readFile(new URL("../app/tournaments/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/tournaments/[id]/tournament-phase-watcher.tsx", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    page,
+    /tournament\.status === "registration"\s*&&\s*\([\s\S]*?<RegisterEntryPanel/,
+  );
+  assert.match(
+    page,
+    /tournament\.status !== "registration"\s*&&\s*\([\s\S]*?<TournamentBroadcast/,
+  );
+  assert.match(page, /<TournamentPhaseWatcher[\s\S]*?status=\{tournament\.status\}/);
+  assert.match(watcher, /next\.status !== status/);
+  assert.match(watcher, /window\.location\.reload\(\)/);
+});
+
+test("the tournament spectator follows each game with optional thinking", async () => {
+  const broadcast = await readFile(
+    new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(broadcast, /key=\{state\.liveGame\.id\}/);
+  assert.match(
+    broadcast,
+    /fetch\(\s*`\/api\/live-games\/\$\{encodeURIComponent\(game\.id\)\}\?after=\$\{cursor\.current\}`/,
+  );
+  assert.match(broadcast, /<ThinkingOverlay enabled=\{showThinking\}/);
+  assert.match(broadcast, /type="checkbox"\s+checked=\{showThinking\}/);
+  assert.match(broadcast, /const POLL_INTERVAL_MS = 500/);
+  const liveGames = await readFile(new URL("../lib/live-games.ts", import.meta.url), "utf8");
+  assert.match(
+    liveGames,
+    /getTournamentLiveGame[\s\S]*?ORDER BY CASE WHEN phase != 'finished' THEN 0 ELSE 1 END,[\s\S]*?LIMIT 1/,
+  );
+});
+
+test("tournament spectator reads are public across computers", async () => {
+  const [resultsRoute, liveRoute] = await Promise.all([
+    readFile(
+      new URL("../app/api/tournaments/[id]/results/route.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../app/api/live-games/[id]/route.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(resultsRoute, /export async function GET/);
+  assert.match(resultsRoute, /getTournamentLiveGame\(id\)/);
+  assert.doesNotMatch(resultsRoute, /getChatGPTUser|Authorization/);
+  assert.match(liveRoute, /export async function GET/);
+  assert.match(liveRoute, /getLiveGameResponse\(id, after\)/);
+  assert.doesNotMatch(liveRoute, /getChatGPTUser|Authorization/);
+});

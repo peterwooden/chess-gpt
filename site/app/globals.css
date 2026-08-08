@@ -1221,6 +1221,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .tournament-live-card > header > b { flex: 0 0 auto; font-family: ui-monospace, monospace; font-size: 0.62rem; }
 .tournament-live-card-body { display: grid; grid-template-columns: minmax(16rem, 34rem) minmax(12rem, 1fr); }
 .tournament-live-board { width: 100%; max-width: none; height: auto; border: 0; box-shadow: none; }
+.tournament-live-board-wrap { --thinking-board-inset: 0; --thinking-board-border-total: 0; aspect-ratio: 1; }
 .tournament-live-board .board-square { cursor: default; }
 .tournament-live-board .piece { font-size: clamp(1.55rem, 5vw, 4.2rem); }
 .tournament-live-card-details { display: grid; grid-template-rows: auto auto minmax(3rem, 1fr) auto; align-content: start; min-width: 0; padding: 0.9rem; border-left: 1px solid var(--green); }
@@ -1229,6 +1230,7 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .tournament-live-players i { width: 0.8rem; height: 0.8rem; border: 1px solid var(--ink); border-radius: 50%; }
 .tournament-live-players i.white { background: var(--white); }
 .tournament-live-players i.black { background: var(--ink); }
+.tournament-thinking-option { margin: 0 -0.9rem 0.45rem; border-top: 1px solid var(--line); }
 .tournament-live-card-details dl { display: grid; gap: 0; margin: 0; }
 .tournament-live-card-details dl div { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0.5rem; padding: 0.45rem 0; border-top: 1px solid var(--line); }
 .tournament-live-card-details dt { color: var(--muted); font-size: 0.55rem; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
