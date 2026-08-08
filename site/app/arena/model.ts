@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import { init, parse, type ImportSpecifier } from "es-module-lexer";
-import ModelPackageWorker from "./model-worker.ts?worker&inline";
+import modelPackageWorkerUrl from "./model-worker.ts?worker&url";
 import { createImmutableDownloadCache } from "./immutable-download-cache.mjs";
 import { resolveHuggingFaceReference } from "./hugging-face-reference.mjs";
 import {
@@ -129,11 +129,27 @@ export async function loadBrowserModel(
     artifacts.push({ name, bytes });
   }
 
-  // An inline worker inherits the page's cross-origin-isolated policy. Sites
+  // A blob worker inherits the page's cross-origin-isolated policy. Sites
   // serves static assets ahead of the application Worker and does not retain
-  // COEP on a standalone worker script, which makes Chrome reject it before
-  // any package code can run.
-  const worker = new ModelPackageWorker({ name: "chess-gpt-package" });
+  // COEP on a standalone worker script, which makes Chrome reject a Worker
+  // constructed directly from that asset before any package code can run.
+  const workerScriptResponse = await fetch(modelPackageWorkerUrl, {
+    cache: "force-cache",
+    credentials: "omit",
+  });
+  if (!workerScriptResponse.ok) {
+    throw new Error(`The arena could not load its package worker (${workerScriptResponse.status}).`);
+  }
+  const workerBlobUrl = URL.createObjectURL(new Blob(
+    [await workerScriptResponse.arrayBuffer()],
+    { type: "text/javascript" },
+  ));
+  let worker: Worker;
+  try {
+    worker = new Worker(workerBlobUrl, { type: "module", name: "chess-gpt-package" });
+  } finally {
+    URL.revokeObjectURL(workerBlobUrl);
+  }
   const client = createWorkerClient(worker);
   try {
     const artifactPayload = artifacts.map(({ name, bytes }) => ({ name, bytes: bytes.buffer }));

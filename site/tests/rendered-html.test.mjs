@@ -260,8 +260,10 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelLoader, /sha256/i);
   assert.match(packageManifest, /100_000_000/);
   assert.match(modelLoader, /legalMoves/);
-  assert.match(modelLoader, /model-worker\.ts\?worker&inline/);
-  assert.match(modelLoader, /new ModelPackageWorker/);
+  assert.match(modelLoader, /model-worker\.ts\?worker&url/);
+  assert.match(modelLoader, /workerScriptResponse\.arrayBuffer/);
+  assert.match(modelLoader, /new Blob/);
+  assert.match(modelLoader, /new Worker\(workerBlobUrl/);
   assert.match(modelLoader, /es-module-lexer/);
   assert.match(modelWorker, /loadPackage/);
   assert.match(modelWorker, /newGame/);
@@ -272,10 +274,10 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelWorker, /globalThis\.fetch = \(\) => Promise\.reject/);
 });
 
-test("production bundles the model worker inline instead of as a static worker script", async () => {
+test("production keeps the model worker out of the size-limited server bundle", async () => {
   const assets = await readdir(new URL("../dist/client/assets/", import.meta.url));
 
-  assert.equal(assets.some((name) => name.startsWith("model-worker-")), false);
+  assert.equal(assets.some((name) => name.startsWith("model-worker-") && name.endsWith(".js")), true);
   assert.equal(assets.some((name) => name.startsWith("ort-wasm-") && name.endsWith(".wasm")), true);
 });
 
