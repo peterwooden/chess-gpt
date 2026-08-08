@@ -36,7 +36,7 @@ registered. Only tournament configuration distinguishes them.
 
 ### Sampled openings
 
-Proposed 2026-08-08 as a per-tournament option beside the standard-start protocol of
+Agreed 2026-08-08 as a per-tournament option beside the standard-start protocol of
 2026-07-31: each tournament chooses at creation whether to use the opening book, and the
 choice is displayed with its configuration. The standard-start protocol
 accepted a known cost: both published candidates select moves deterministically (`argmax`,
