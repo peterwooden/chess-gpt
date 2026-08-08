@@ -305,3 +305,39 @@ test("the play button catches up immediately during an ongoing game", async () =
   assert.match(viewer, /useGameTimeline\(progressMoves\.length, gameIsOngoing\)/);
   assert.match(broadcast, /useGameTimeline\(progressMoves\.length, live\.phase !== "finished"\)/);
 });
+
+test("non-arena progress panels use a compact opening-only header", async () => {
+  const [arena, viewer, broadcast, progressPanel] = await Promise.all([
+    readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/game-progress-panel.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(progressPanel, /openingOnlyHeader\?: boolean/);
+  assert.match(progressPanel, /openingOnlyHeader \? \(/);
+  assert.match(viewer, /openingOnlyHeader/);
+  assert.match(broadcast, /openingOnlyHeader/);
+  assert.doesNotMatch(arena, /openingOnlyHeader/);
+  assert.match(broadcast, /Open live player →/);
+  assert.doesNotMatch(broadcast, /Open live player \+ thinking/);
+});
+
+test("AI clock rings stay visible for both sides and the active side counts down", async () => {
+  const [arena, viewer, broadcast, playerStrip] = await Promise.all([
+    readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/player-strip.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(playerStrip, /startedAtMs: number \| null/);
+  assert.match(playerStrip, /clock\.startedAtMs === null \? clock\.limitMs/);
+  assert.match(arena, /clock: arenaPlayerClock\("w", playerModelReferences\.w\)/);
+  assert.match(arena, /clock: arenaPlayerClock\("b", playerModelReferences\.b\)/);
+  assert.match(viewer, /activeColor: presentation\.game\.turn\(\)/);
+  assert.match(broadcast, /activeColor: currentPosition\.turn\(\)/);
+  for (const surface of [viewer, broadcast]) {
+    assert.match(surface, /startedAtMs: active \? anchor\?\.color === color \? anchor\.startedAtMs : live\.updatedAt : null/);
+  }
+});

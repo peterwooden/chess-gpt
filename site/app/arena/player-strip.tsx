@@ -18,7 +18,7 @@ export type PlayerStripMove = {
 };
 
 export type PlayerClock = {
-  startedAtMs: number;
+  startedAtMs: number | null;
   limitMs: number;
 };
 
@@ -84,11 +84,12 @@ function MoveClock({ clock }: { clock: PlayerClock }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
+    if (clock.startedAtMs === null) return;
     const timer = window.setInterval(() => setNow(Date.now()), 100);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [clock.startedAtMs]);
 
-  const remainingMs = Math.max(0, clock.limitMs - (now - clock.startedAtMs));
+  const remainingMs = clock.startedAtMs === null ? clock.limitMs : Math.max(0, clock.limitMs - (now - clock.startedAtMs));
   const progress = clock.limitMs > 0 ? remainingMs / clock.limitMs : 0;
   const label = remainingMs < 10_000
     ? (remainingMs / 1_000).toFixed(1)

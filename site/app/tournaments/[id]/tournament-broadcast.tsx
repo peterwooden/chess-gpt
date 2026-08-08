@@ -310,14 +310,22 @@ function TournamentLiveCard({
     name: live.whiteName,
     modelReference: live.whiteModelReference,
     moves: stripMoves,
-    clock: timeline.isLive ? playerClock(live, clockAnchor, "w") : null,
+    clock: timeline.isLive ? playerClock(live, {
+      color: "w",
+      activeColor: currentPosition.turn(),
+      anchor: clockAnchor,
+    }) : null,
   };
   const blackSummary = {
     color: "b" as const,
     name: live.blackName,
     modelReference: live.blackModelReference,
     moves: stripMoves,
-    clock: timeline.isLive ? playerClock(live, clockAnchor, "b") : null,
+    clock: timeline.isLive ? playerClock(live, {
+      color: "b",
+      activeColor: currentPosition.turn(),
+      anchor: clockAnchor,
+    }) : null,
   };
   const topSummary = orientation === "w" ? blackSummary : whiteSummary;
   const bottomSummary = orientation === "w" ? whiteSummary : blackSummary;
@@ -360,7 +368,7 @@ function TournamentLiveCard({
         </div>
         <GameProgressPanel
           className="tournament-live-card-details"
-          label={live.openingName ?? "Game score"}
+          label={live.openingName}
           liveStatus={connectionError ? "Reconnecting" : stale ? "Runner paused" : live.status}
           moves={progressMoves}
           timeline={timeline}
@@ -368,9 +376,10 @@ function TournamentLiveCard({
           showThinking={showThinking}
           onShowThinkingChange={onShowThinkingChange}
           emptyMessage="Waiting for the first move…"
+          openingOnlyHeader
         >
           <Link className="tournament-watch-link" href={`/watch/${game.id}`}>
-            Open live player + thinking →
+            Open live player →
           </Link>
         </GameProgressPanel>
       </div>
@@ -407,13 +416,21 @@ function activeClockAnchor(snapshot: {
 
 function playerClock(
   live: LiveGame,
-  anchor: { color: Color; startedAtMs: number } | null,
-  color: Color,
+  { color, activeColor, anchor }: {
+    color: Color;
+    activeColor: Color;
+    anchor: { color: Color; startedAtMs: number } | null;
+  },
 ): PlayerClock | null {
-  if (live.phase !== "playing" || anchor?.color !== color) return null;
+  if (live.phase !== "playing") return null;
   const modelReference = color === "w" ? live.whiteModelReference : live.blackModelReference;
   const limitMs = color === "w" ? live.whiteMoveTimeLimitMs : live.blackMoveTimeLimitMs;
-  return modelReference && limitMs ? { startedAtMs: anchor.startedAtMs, limitMs } : null;
+  if (!modelReference || !limitMs) return null;
+  const active = activeColor === color;
+  return {
+    startedAtMs: active ? anchor?.color === color ? anchor.startedAtMs : live.updatedAt : null,
+    limitMs,
+  };
 }
 
 function wait(ms: number): Promise<void> {

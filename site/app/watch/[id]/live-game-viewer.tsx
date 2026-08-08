@@ -165,14 +165,22 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
     name: presentation.whiteName,
     modelReference: response.live?.whiteModelReference ?? null,
     moves: stripMoves,
-    clock: timeline.isLive ? playerClock(response.live, clockAnchor, "w") : null,
+    clock: timeline.isLive ? playerClock(response.live, {
+      color: "w",
+      activeColor: presentation.game.turn(),
+      anchor: clockAnchor,
+    }) : null,
   };
   const blackSummary = {
     color: "b" as const,
     name: presentation.blackName,
     modelReference: response.live?.blackModelReference ?? null,
     moves: stripMoves,
-    clock: timeline.isLive ? playerClock(response.live, clockAnchor, "b") : null,
+    clock: timeline.isLive ? playerClock(response.live, {
+      color: "b",
+      activeColor: presentation.game.turn(),
+      anchor: clockAnchor,
+    }) : null,
   };
   const topSummary = orientation === "w" ? blackSummary : whiteSummary;
   const bottomSummary = orientation === "w" ? whiteSummary : blackSummary;
@@ -218,7 +226,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
 
         <GameProgressPanel
           className="live-scorecard"
-          label={presentation.openingName ?? "Game score"}
+          label={presentation.openingName}
           liveStatus={presentation.status}
           moves={progressMoves}
           timeline={timeline}
@@ -226,6 +234,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
           showThinking={showThinking}
           onShowThinkingChange={setShowThinking}
           emptyMessage="Waiting for the first move…"
+          openingOnlyHeader
         >
           <footer>
             {finished ? (
@@ -273,13 +282,21 @@ function activeClockAnchor(snapshot: {
 
 function playerClock(
   live: LiveGame | null,
-  anchor: { color: Color; startedAtMs: number } | null,
-  color: Color,
+  { color, activeColor, anchor }: {
+    color: Color;
+    activeColor: Color;
+    anchor: { color: Color; startedAtMs: number } | null;
+  },
 ): PlayerClock | null {
-  if (!live || live.phase !== "playing" || anchor?.color !== color) return null;
+  if (!live || live.phase !== "playing") return null;
   const modelReference = color === "w" ? live.whiteModelReference : live.blackModelReference;
   const limitMs = color === "w" ? live.whiteMoveTimeLimitMs : live.blackMoveTimeLimitMs;
-  return modelReference && limitMs ? { startedAtMs: anchor.startedAtMs, limitMs } : null;
+  if (!modelReference || !limitMs) return null;
+  const active = activeColor === color;
+  return {
+    startedAtMs: active ? anchor?.color === color ? anchor.startedAtMs : live.updatedAt : null,
+    limitMs,
+  };
 }
 
 function wait(ms: number): Promise<void> {

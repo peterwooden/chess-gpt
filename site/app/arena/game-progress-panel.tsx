@@ -101,10 +101,11 @@ export function GameProgressPanel({
   showThinking,
   onShowThinkingChange,
   emptyMessage,
+  openingOnlyHeader = false,
   children,
 }: {
   className?: string;
-  label: string;
+  label: string | null;
   liveStatus: string;
   moves: readonly ProgressMove[];
   timeline: GameTimeline;
@@ -112,6 +113,7 @@ export function GameProgressPanel({
   showThinking: boolean;
   onShowThinkingChange(enabled: boolean): void;
   emptyMessage: string;
+  openingOnlyHeader?: boolean;
   children?: ReactNode;
 }) {
   const moveRecordRef = useRef<HTMLOListElement>(null);
@@ -146,22 +148,26 @@ export function GameProgressPanel({
 
   return (
     <section className={`move-console game-progress-panel${className ? ` ${className}` : ""}`} aria-label="Game progress">
-      <header>
-        <div>
-          <span>{label}</span>
-          <strong aria-live="polite">{status}</strong>
-        </div>
-        <div className="move-header-meta">
-          {timeline.isLive ? (
-            <small>{moves.length} plies · {Math.ceil(moves.length / 2)} moves</small>
-          ) : (
-            <small className="history-view-label">
-              History{timeline.behind > 0 ? ` · ${timeline.behind} ${timeline.behind === 1 ? "ply" : "plies"} behind` : ""}
-            </small>
-          )}
-          <i className={pulse && timeline.isLive ? "pulse active" : "pulse"} aria-hidden="true" />
-        </div>
-      </header>
+      {openingOnlyHeader ? (
+        label ? <header className="opening-only-progress-header"><strong>{label}</strong></header> : null
+      ) : (
+        <header>
+          <div>
+            <span>{label}</span>
+            <strong aria-live="polite">{status}</strong>
+          </div>
+          <div className="move-header-meta">
+            {timeline.isLive ? (
+              <small>{moves.length} plies · {Math.ceil(moves.length / 2)} moves</small>
+            ) : (
+              <small className="history-view-label">
+                History{timeline.behind > 0 ? ` · ${timeline.behind} ${timeline.behind === 1 ? "ply" : "plies"} behind` : ""}
+              </small>
+            )}
+            <i className={pulse && timeline.isLive ? "pulse active" : "pulse"} aria-hidden="true" />
+          </div>
+        </header>
+      )}
       <label className="thinking-display-option">
         <input
           type="checkbox"

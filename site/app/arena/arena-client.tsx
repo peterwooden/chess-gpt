@@ -840,13 +840,21 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   }
 
   const displayedMoves = moves.slice(0, displayPly);
+  const arenaPlayerClock = (color: Color, modelReference: string | null): PlayerClock | null => {
+    if (!isLiveView || gameEnded || !modelReference) return null;
+    if (activeTurnClock?.color === color) return activeTurnClock;
+    return {
+      startedAtMs: null,
+      limitMs: color === player1Color ? moveTimeLimitMsA : moveTimeLimitMsB,
+    };
+  };
   const whitePlayerSummary = {
     color: "w",
     name: players.w,
     profileId: playerProfiles.w,
     modelReference: playerModelReferences.w,
     moves: displayedMoves,
-    clock: isLiveView && activeTurnClock?.color === "w" ? activeTurnClock : null,
+    clock: arenaPlayerClock("w", playerModelReferences.w),
   } as const;
   const blackPlayerSummary = {
     color: "b",
@@ -854,7 +862,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     profileId: playerProfiles.b,
     modelReference: playerModelReferences.b,
     moves: displayedMoves,
-    clock: isLiveView && activeTurnClock?.color === "b" ? activeTurnClock : null,
+    clock: arenaPlayerClock("b", playerModelReferences.b),
   } as const;
   const topPlayerSummary = orientation === "w" ? blackPlayerSummary : whitePlayerSummary;
   const bottomPlayerSummary = orientation === "w" ? whitePlayerSummary : blackPlayerSummary;

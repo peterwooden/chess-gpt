@@ -264,6 +264,8 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .move-console > header strong { font-family: Iowan Old Style, Baskerville, Georgia, serif; font-weight: 500; }
 .game-progress-panel { display: flex; flex-direction: column; min-height: 0; }
 .game-progress-panel > header .move-header-meta { display: flex; gap: 0.55rem; align-items: center; justify-content: flex-end; }
+.game-progress-panel > .opening-only-progress-header { min-height: 2.8rem; padding: 0.55rem 0.8rem; }
+.game-progress-panel > .opening-only-progress-header strong { overflow: hidden; font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; }
 .game-progress-panel .move-score { flex: 1; }
 .pulse { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--line); }
 .pulse.active { background: var(--amber); animation: arena-pulse 1s ease-in-out infinite; }
