@@ -69,6 +69,24 @@ The author MAY maintain any source layout, but the submitted entrypoint MUST be 
 The entrypoint MUST export `loadPackage` with this interface:
 
 ```ts
+type Square = `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h"}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`;
+
+type DrawingOptions = {
+  intensity?: number;
+  fadeMs?: number;
+};
+
+type ThinkingCommand =
+  | ({ type: "highlightSquare"; square: Square } & DrawingOptions)
+  | ({ type: "drawArrow"; from: Square; to: Square } & DrawingOptions)
+  | { type: "clearSquare"; square: Square }
+  | { type: "clearArrow"; from: Square; to: Square }
+  | { type: "clearAll" };
+
+type ThinkingDisplay = {
+  emit(command: ThinkingCommand): void;
+};
+
 export async function loadPackage(context: {
   artifacts: ReadonlyMap<string, Uint8Array>;
   config: unknown;
@@ -79,6 +97,7 @@ export async function loadPackage(context: {
       history: readonly string[];
       legalMoves: readonly string[];
       moveTimeLimitMs: number;
+      thinking?: ThinkingDisplay;
     }): Promise<string>;
     dispose(): Promise<void>;
   }>;
@@ -87,6 +106,8 @@ export async function loadPackage(context: {
 ```
 
 The runner calls `loadPackage` once per loaded package, `newGame` once per game, and `chooseMove` once whenever that package is to move. `history` contains the complete game history as canonical SAN strings and `legalMoves` contains every legal canonical SAN output for the current position. `chooseMove` MUST return exactly one string that is an exact member of `legalMoves`; resignation, draw offers, annotations, and additional text are not moves.
+
+Submissions define what `intensity` represents; it MUST be finite from 0 to 1, defaults to 1, and renders at no more than 0.5 opacity, while `fadeMs` MUST be finite and non-negative, defaults to 500, and begins fading immediately; clear commands act immediately. The tournament runner MUST always supply a synchronous, non-throwing emitter independent of display or viewer state, clear thinking at every turn boundary, and drop invalid commands; emitting is optional, its cost remains inside the move clock, and telemetry failures never invalidate an otherwise valid returned move.
 
 `moveTimeLimitMs` was added on 2026-07-31 and is the wall-clock budget in milliseconds for this move. A submission MAY use it to decide how much search to perform, and MAY ignore it. Because it is an additional input property, packages published before this revision remain valid and unchanged. The budget is advisory to the submission but enforced by the runner, so a submission that overruns forfeits the game as described below.
 
