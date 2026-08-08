@@ -178,6 +178,48 @@ test("an aborted game rejects rather than recording a result", async () => {
   );
 });
 
+test("opening moves are played by the book before either package moves", async () => {
+  const historiesSeen = [];
+  const player = (name) => ({
+    name,
+    async predict(history, legalMoves) {
+      historiesSeen.push([...history]);
+      if (history.length >= 8) throw new Error("test complete");
+      return { san: legalMoves[0] };
+    },
+  });
+
+  const opening = ["e4", "c5", "Nf3", "d6", "d4", "cxd4"];
+  const outcome = await playGame(player("white"), player("black"), {
+    ...OPTIONS,
+    openingMoves: opening,
+    openingName: "Sicilian, Open",
+  });
+
+  assert.deepEqual(historiesSeen[0], opening, "the first prediction sees the full book line");
+  assert.deepEqual(
+    outcome.moves.slice(0, 6).map((move) => move.san),
+    opening,
+  );
+  for (const move of outcome.moves.slice(0, 6)) {
+    assert.equal(move.actor, "book");
+    assert.equal(move.elapsedMs, 0);
+  }
+  assert.notEqual(outcome.moves[6]?.actor, "book");
+  assert.match(outcome.pgn, /\[Opening "Sicilian, Open"\]/);
+  assert.match(outcome.pgn, /1\. e4 c5 2\. Nf3 d6 3\. d4 cxd4/);
+});
+
+test("an illegal opening move throws instead of forfeiting a package", async () => {
+  await assert.rejects(
+    playGame(firstLegal("white"), firstLegal("black"), {
+      ...OPTIONS,
+      openingMoves: ["e4", "e4"],
+    }),
+    /opening move/,
+  );
+});
+
 test("playGame rejects a nonsensical move budget", async () => {
   await assert.rejects(
     playGame(firstLegal("a"), firstLegal("b"), { moveTimeLimitMs: 0 }),

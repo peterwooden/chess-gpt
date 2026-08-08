@@ -53,6 +53,13 @@ export const tournaments = sqliteTable("tournaments", {
   runnerMetadata: text("runner_metadata"),
   runnerHeartbeatAt: integer("runner_heartbeat_at", { mode: "timestamp_ms" }),
   runnerChanges: text("runner_changes").notNull().default("[]"),
+  // Whether this tournament samples openings from the arena book. Off means
+  // every game starts from the standard position, as under the 2026-07-31
+  // protocol.
+  openingBook: integer("opening_book", { mode: "boolean" }).notNull().default(false),
+  // JSON array of sampled openings, set when an opening-book tournament leaves
+  // registration. NULL when the book is off or the tournament predates it.
+  openings: text("openings"),
 }, (table) => [
   index("tournaments_status_created_idx").on(table.status, table.createdAt, table.id),
   index("tournaments_created_idx").on(table.createdAt, table.id),

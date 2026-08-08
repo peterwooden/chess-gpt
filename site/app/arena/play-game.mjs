@@ -23,6 +23,8 @@ export async function playGame(white, black, options) {
     now = () => Date.now(),
     onMove,
     signal,
+    openingMoves = [],
+    openingName,
   } = options;
 
   if (!Number.isFinite(moveTimeLimitMs) || moveTimeLimitMs <= 0) {
@@ -39,8 +41,33 @@ export async function playGame(white, black, options) {
     try {
       await player.newGame((color === "w" ? seed : seed ^ BLACK_SEED_OFFSET) >>> 0);
     } catch (error) {
-      return finish(game, moves, color, `failed to start: ${describe(error)}`);
+      return finish(game, moves, color, `failed to start: ${describe(error)}`, openingName);
     }
+  }
+
+  // Book moves are the runner's, not either package's: they cost no thinking
+  // time and a bad book line is a harness bug, so it throws instead of
+  // forfeiting a competitor.
+  for (const san of openingMoves) {
+    let move;
+    try {
+      move = game.move(san);
+    } catch {
+      move = null;
+    }
+    if (!move) throw new Error(`The opening move “${san}” is not legal from its position.`);
+    const played = {
+      ply: moves.length + 1,
+      san: move.san,
+      color: move.color,
+      from: move.from,
+      to: move.to,
+      captured: move.captured ?? null,
+      elapsedMs: 0,
+      actor: "book",
+    };
+    moves.push(played);
+    onMove?.(played, game);
   }
 
   while (true) {
@@ -55,10 +82,10 @@ export async function playGame(white, black, options) {
       const prediction = await player.predict(game.history(), game.moves(), moveTimeLimitMs);
       san = prediction?.san;
     } catch (error) {
-      return finish(game, moves, color, describe(error));
+      return finish(game, moves, color, describe(error), openingName);
     }
     if (typeof san !== "string") {
-      return finish(game, moves, color, "returned a non-string move");
+      return finish(game, moves, color, "returned a non-string move", openingName);
     }
 
     let move;
@@ -67,7 +94,7 @@ export async function playGame(white, black, options) {
     } catch {
       move = null;
     }
-    if (!move) return finish(game, moves, color, `returned illegal SAN move “${san}”`);
+    if (!move) return finish(game, moves, color, `returned illegal SAN move “${san}”`, openingName);
 
     const played = {
       ply: moves.length + 1,
@@ -87,21 +114,21 @@ export async function playGame(white, black, options) {
   const result = game.isCheckmate()
     ? (game.turn() === "w" ? "0-1" : "1-0")
     : "1/2-1/2";
-  return { result, termination, moves, pgn: buildPgn(game, result, termination), failure: null };
+  return { result, termination, moves, pgn: buildPgn(game, result, termination, openingName), failure: null };
 }
 
 /**
  * The side to move at the moment of failure loses, which matches how the arena
  * has always attributed a forfeit.
  */
-function finish(game, moves, color, reason) {
+function finish(game, moves, color, reason, openingName) {
   const result = color === "w" ? "0-1" : "1-0";
   const termination = `forfeit: ${reason}`;
   return {
     result,
     termination,
     moves,
-    pgn: buildPgn(game, result, termination),
+    pgn: buildPgn(game, result, termination, openingName),
     failure: { color, reason },
   };
 }
@@ -115,11 +142,12 @@ function terminationForPosition(game) {
   return "draw";
 }
 
-function buildPgn(game, result, termination) {
+function buildPgn(game, result, termination, openingName) {
   const canonical = new Chess();
   for (const san of game.history()) canonical.move(san);
   canonical.setHeader("Result", result);
   canonical.setHeader("Termination", termination);
+  if (openingName) canonical.setHeader("Opening", openingName);
   return canonical.pgn({ maxWidth: 0 });
 }
 

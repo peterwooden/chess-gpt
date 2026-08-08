@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { loadBrowserModel, type BrowserChessModel } from "../../../arena/model";
 import { playGame } from "../../../arena/play-game.mjs";
 import type { GameOutcome } from "../../../arena/play-game";
+import { openingForSlot, parseOpenings } from "../../../../lib/opening-book.mjs";
 import { formatDuration, formatScore } from "../../tournament-nav";
 import {
   loadRunnerIdentity,
@@ -207,7 +208,11 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
           continue;
         }
 
-        setCurrentGame(`${white.displayName} (white) v ${black.displayName} (black)`);
+        const opening = openingForSlot(parseOpenings(current.tournament.openings), next.gameIndex);
+        setCurrentGame(
+          `${white.displayName} (white) v ${black.displayName} (black)`
+          + (opening ? ` — ${opening.name}` : ""),
+        );
         setPly(0);
         setStatus("Loading packages…");
         const [whiteModel, blackModel] = [
@@ -223,6 +228,8 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
           {
             moveTimeLimitMs: current.tournament.moveTimeLimitMs,
             seed: seedFor(next),
+            openingMoves: opening?.moves ?? [],
+            openingName: opening?.name,
             now: () => performance.now(),
             onMove: (move) => {
               setPly(move.ply);
