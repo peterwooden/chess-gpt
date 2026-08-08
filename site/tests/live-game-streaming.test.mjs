@@ -117,3 +117,19 @@ test("tournament games broadcast automatically without affecting permanent scori
   assert.match(results, /getTournamentLiveGame/);
   assert.match(results, /scheduledCount/);
 });
+
+test("the tournament broadcast puts ranked progress beside active game tiles", async () => {
+  const broadcast = await readFile(
+    new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url),
+    "utf8",
+  );
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(broadcast, /className="tournament-broadcast-dashboard"/);
+  assert.match(broadcast, /className="tournament-broadcast-rail"/);
+  assert.match(broadcast, /className="tournament-game-grid"/);
+  assert.match(broadcast, /className="tournament-live-card"/);
+  assert.match(broadcast, /role="grid" aria-label="Current tournament position"/);
+  assert.match(styles, /\.tournament-broadcast-dashboard\s*\{[^}]*grid-template-columns:\s*minmax\(18rem,\s*22rem\) minmax\(0,\s*1fr\)/s);
+  assert.match(styles, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.tournament-broadcast-dashboard\s*\{[^}]*grid-template-columns:\s*1fr/s);
+});

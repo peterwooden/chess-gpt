@@ -1,5 +1,6 @@
 "use client";
 
+import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { LiveGame } from "../../../lib/live-game-types";
@@ -27,6 +28,12 @@ type BroadcastState = {
 
 const POLL_INTERVAL_MS = 2_000;
 const STALE_AFTER_MS = 60_000;
+const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
+const RANKS = [8, 7, 6, 5, 4, 3, 2, 1] as const;
+const PIECES: Record<Color, Record<PieceSymbol, string>> = {
+  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
+  b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
+};
 
 export function TournamentBroadcast({
   tournamentId,
@@ -69,72 +76,144 @@ export function TournamentBroadcast({
   const stale = Boolean(state.liveGame && now - state.liveGame.updatedAt > STALE_AFTER_MS);
 
   return (
-    <section className="tournament-panel" aria-labelledby="standings-title">
-      <div className="tournament-live-heading">
-        <div>
-          <h2 id="standings-title">Tournament broadcast</h2>
-          <p className="tournament-note" aria-live="polite">
-            {delayed
-              ? "Results are reconnecting…"
-              : state.liveGame
-                ? stale
-                  ? "The current game appears paused."
-                  : `${state.liveGame.whiteName} v ${state.liveGame.blackName} · ply ${state.liveGame.moves.length}`
-                : state.status === "running"
-                  ? "Waiting for the runner to begin the next game…"
-                  : state.status === "completed" ? "All scheduled games are complete." : "Waiting for play to begin."}
-          </p>
+    <section className="tournament-broadcast-dashboard" aria-labelledby="standings-title">
+      <aside className="tournament-broadcast-rail">
+        <header>
+          <span>Live tournament</span>
+          <h2 id="standings-title">Standings</h2>
+          <p aria-live="polite">{broadcastStatus(state, delayed, stale)}</p>
+        </header>
+
+        <div className="tournament-progress-block">
+          <div className="tournament-progress-copy">
+            <span>Progress</span>
+            <strong>{state.playedCount} / {state.scheduledCount}</strong>
+          </div>
+          <div
+            className="tournament-progress"
+            role="progressbar"
+            aria-valuenow={percent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${state.playedCount} of ${state.scheduledCount} games complete`}
+          >
+            <div style={{ width: `${percent}%` }} />
+          </div>
+          <small>{percent}% complete</small>
         </div>
-        {state.liveGame ? (
-          <Link className="tournament-watch-link" href={`/watch/${state.liveGame.id}`}>
-            Watch current game →
-          </Link>
+
+        {state.status === "completed" && state.shared ? (
+          <p className="tournament-shared-title">The leaders share the title.</p>
         ) : null}
+
+        <ol className="tournament-ranking-list" aria-label="Ranked tournament standings">
+          {state.table.map((row) => (
+            <li key={row.entryId}>
+              <span className="tournament-rank">{row.rank}</span>
+              <div className="tournament-ranked-model">
+                <strong>{row.displayName}</strong>
+                <small>{row.games} games · {row.games > 0 ? `${Math.round((row.points / row.games) * 100)}%` : "—"}</small>
+              </div>
+              <strong className="tournament-points">{formatScore(row.points)}</strong>
+              <div className="tournament-ranked-wdl" aria-label={`${row.wins} wins, ${row.draws} draws, ${row.losses} losses`}>
+                <span><b>{row.wins}</b> W</span>
+                <span><b>{row.draws}</b> D</span>
+                <span><b>{row.losses}</b> L</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </aside>
+
+      <div className="tournament-games-stage">
+        <header>
+          <div>
+            <span>On the board</span>
+            <h2>Current game</h2>
+          </div>
+          <small>Games run sequentially on the pinned tournament machine.</small>
+        </header>
+        <div className="tournament-game-grid">
+          {state.liveGame ? (
+            <TournamentLiveCard game={state.liveGame} stale={stale} />
+          ) : (
+            <div className="tournament-live-empty">
+              <span aria-hidden="true">01</span>
+              <div>
+                <strong>{state.status === "completed" ? "Tournament complete" : "Waiting for the next pairing"}</strong>
+                <p>{state.status === "completed" ? "Every scheduled game has finished." : "The runner will place the next live board here."}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-
-      <div
-        className="tournament-progress"
-        role="progressbar"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`${state.playedCount} of ${state.scheduledCount} games complete`}
-      >
-        <div style={{ width: `${percent}%` }} />
-      </div>
-      <p className="tournament-progress-copy">
-        <strong>{state.playedCount}</strong> of {state.scheduledCount} games · {percent}% complete
-      </p>
-
-      {state.status === "completed" && state.shared ? (
-        <p className="tournament-note">
-          The leaders are level on points and share the title. No further games are played to separate them.
-        </p>
-      ) : null}
-
-      {state.table.length > 0 ? (
-        <table className="tournament-table">
-          <thead>
-            <tr>
-              <th scope="col">#</th><th scope="col">Model</th><th scope="col">Points</th>
-              <th scope="col">W</th><th scope="col">D</th><th scope="col">L</th>
-              <th scope="col">Games</th><th scope="col">Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.table.map((row) => (
-              <tr key={row.entryId}>
-                <td>{row.rank}</td>
-                <td>{row.displayName}</td>
-                <td><strong>{formatScore(row.points)}</strong></td>
-                <td>{row.wins}</td><td>{row.draws}</td><td>{row.losses}</td><td>{row.games}</td>
-                <td>{row.games > 0 ? `${Math.round((row.points / row.games) * 100)}%` : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
     </section>
   );
 }
 
+function TournamentLiveCard({ game, stale }: { game: LiveGame; stale: boolean }) {
+  const position = gameFromMoves(game.moves);
+  const lastMove = position.history({ verbose: true }).at(-1);
+  const recentMoves = position.history().slice(-8);
+  return (
+    <article className="tournament-live-card">
+      <header>
+        <div>
+          <span>{stale ? "Paused" : "Live now"}</span>
+          <strong>{game.whiteName} <i>v</i> {game.blackName}</strong>
+        </div>
+        <b>{game.moves.length} plies</b>
+      </header>
+      <div className="tournament-live-card-body">
+        <div className="chessboard tournament-live-board" role="grid" aria-label="Current tournament position">
+          {RANKS.flatMap((rank) => FILES.map((file) => {
+            const square = `${file}${rank}` as Square;
+            const piece = position.get(square);
+            const light = (FILES.indexOf(file) + rank) % 2 === 0;
+            const last = square === lastMove?.from || square === lastMove?.to;
+            return (
+              <div
+                className={`board-square ${light ? "light" : "dark"}${last ? " last" : ""}`}
+                role="gridcell"
+                aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} piece` : " empty"}`}
+                key={square}
+              >
+                {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
+              </div>
+            );
+          }))}
+        </div>
+        <div className="tournament-live-card-details">
+          <div className="tournament-live-players">
+            <span><i className="white" />{game.whiteName}</span>
+            <span><i className="black" />{game.blackName}</span>
+          </div>
+          <dl>
+            <div><dt>Status</dt><dd>{stale ? "Runner paused" : game.status}</dd></div>
+            <div><dt>Opening</dt><dd>{game.openingName ?? "Standard position"}</dd></div>
+            <div><dt>Last move</dt><dd>{lastMove?.san ?? "Waiting…"}</dd></div>
+            <div><dt>Move time</dt><dd>{game.lastMoveMs === null ? "—" : `${Math.round(game.lastMoveMs)} ms`}</dd></div>
+          </dl>
+          <p className="tournament-recent-moves">{recentMoves.length > 0 ? recentMoves.join("  ") : "Waiting for the first move…"}</p>
+          <Link className="tournament-watch-link" href={`/watch/${game.id}`}>
+            Open live player + thinking →
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function gameFromMoves(moves: readonly string[]): Chess {
+  const game = new Chess();
+  for (const san of moves) game.move(san);
+  return game;
+}
+
+function broadcastStatus(state: BroadcastState, delayed: boolean, stale: boolean): string {
+  if (delayed) return "Results are reconnecting…";
+  if (state.liveGame) return stale ? "The current game appears paused." : `${state.liveGame.whiteName} v ${state.liveGame.blackName}`;
+  if (state.status === "running") return "Waiting for the runner to begin the next game…";
+  if (state.status === "completed") return "All scheduled games are complete.";
+  return "Waiting for play to begin.";
+}
