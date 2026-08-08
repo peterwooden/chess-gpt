@@ -58,8 +58,9 @@ TIE_ROLES = {
 SHARD_SETS = {
     "elo1600": [f"shards/elo1600-{c}.parquet" for c in "abcd"],
     "elite2600": [f"shards/elite2600-{c}.parquet" for c in "ab"],
-    "fullbudget-nobullet": [
-        f"shards/fullbudget-nobullet-{month}.parquet" for month in ("jan", "feb", "mar")
+    # compact game-record parquets, replayed to identical rows by lab/decode_games.py
+    "fullbudget-games": [
+        f"games:shards/games-2026-{month}.parquet" for month in ("01", "02", "03")
     ],
     **{
         f"slice67-{name}": [f"shards/slice67-{name}.parquet"]
@@ -704,6 +705,42 @@ def load_shard(path, offset):
     return {k: np.concatenate([c[k] for c in chunks]) for k in chunks[0]}, len(seen)
 
 
+GAMES_PREFIX = "games:"
+
+
+def _games_decoder():
+    """Import lab/decode_games.py; on a bare cloud job (single-file uv script),
+    fetch it from the public repo the way slice67_pair_job.py does."""
+    try:
+        import decode_games
+    except ImportError:
+        import subprocess
+        import sys
+        subprocess.run(
+            ["git", "clone", "--depth", "1",
+             "https://github.com/peterwooden/chess-gpt", "/tmp/chess-gpt-src"],
+            check=True,
+        )
+        sys.path.insert(0, "/tmp/chess-gpt-src/lab")
+        import decode_games
+    return decode_games
+
+
+def load_any_shard(shard, local_dir, offset):
+    """Route a shard spec to the right loader: a plain path is a materialized
+    parquet for load_shard; a 'games:' prefix marks a compact game-record parquet
+    that decode_games replays into the identical rows."""
+    name = shard.removeprefix(GAMES_PREFIX)
+    path = (
+        os.path.join(local_dir, os.path.basename(name))
+        if local_dir
+        else hf_hub_download(DATASET, name, repo_type="dataset")
+    )
+    if shard.startswith(GAMES_PREFIX):
+        return _games_decoder().load_games_shard(path, offset)
+    return load_shard(path, offset)
+
+
 def upload_with_retry(api, path_or_fileobj, path_in_repo, attempts=3):
     """Upload to the dataset repo, retrying with backoff; on final failure print a loud
     json line and return False (training must survive a flaky upload, never except:pass).
@@ -752,8 +789,7 @@ def main():
     offset, parts = 0, []
     local_dir = os.environ.get("LOCAL_SHARDS", "")
     for shard in shard_list:
-        path = os.path.join(local_dir, os.path.basename(shard)) if local_dir else hf_hub_download(DATASET, shard, repo_type="dataset")
-        merged, games = load_shard(path, offset)
+        merged, games = load_any_shard(shard, local_dir, offset)
         offset += games
         parts.append(merged)
     data = {k: np.concatenate([p[k] for p in parts]) for k in parts[0]}
@@ -778,12 +814,7 @@ def main():
     keys = [k for k in data if k != "game_ordinal"]
     train_np = {k: data[k][train_mask].copy() for k in keys}
     if r["val_shard"]:
-        vpath = (
-            os.path.join(local_dir, os.path.basename(r["val_shard"]))
-            if local_dir
-            else hf_hub_download(DATASET, r["val_shard"], repo_type="dataset")
-        )
-        vdata, _ = load_shard(vpath, 0)
+        vdata, _ = load_any_shard(r["val_shard"], local_dir, 0)
         vnxt = np.full(len(vdata["target"]), -100, dtype=np.int16)
         vsame = vdata["game_ordinal"][1:] == vdata["game_ordinal"][:-1]
         vnxt[:-1][vsame] = vdata["target"][1:][vsame]
