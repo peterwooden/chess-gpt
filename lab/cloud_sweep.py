@@ -915,6 +915,7 @@ def main():
     calibrated = not r["time_budget_s"]
     mark_time = None
     train_started = time.perf_counter()
+    hb_last, hb_last_step, hb_loss_sum, hb_loss_n = train_started, start_step, 0.0, 0
     stop = False
     step = 0
     autocast = torch.autocast(device.type, dtype=torch.bfloat16) if device.type != "cpu" else torch.autocast("cpu", enabled=False)
@@ -1027,6 +1028,20 @@ def main():
             if not skip_step:
                 for opt in optimizers:
                     opt.step()
+            hb_loss_sum += float(loss.detach())
+            hb_loss_n += 1
+            hb_now = time.perf_counter()
+            if hb_now - hb_last >= 60.0:
+                hb_rate = (step - hb_last_step) / max(1e-6, hb_now - hb_last)
+                print(json.dumps({
+                    "heartbeat": step, "total_steps": total_steps,
+                    "pct": round(100 * step / max(1, total_steps), 2),
+                    "train_loss": round(hb_loss_sum / max(1, hb_loss_n), 4),
+                    "lr_scale": round(scale, 4), "steps_s": round(hb_rate, 2),
+                    "positions_seen": base_positions + (step - start_step) * r["batch"],
+                    "eta_min": round((total_steps - step) / max(1e-6, hb_rate) / 60, 1),
+                }), flush=True)
+                hb_last, hb_last_step, hb_loss_sum, hb_loss_n = hb_now, step, 0.0, 0
             if ema_state is not None:
                 with torch.no_grad():
                     for k, v in model.state_dict().items():
@@ -1063,6 +1078,29 @@ def main():
                 # per-mark file so nothing is ever overwritten, plus a rolling latest for resume
                 upload_with_retry(api, "/tmp/resume.pt", f"results3/{r['id']}.partial{mark}.pt")
                 upload_with_retry(api, "/tmp/resume.pt", f"results3/{r['id']}.resume.pt")
+                # subsampled val probe: the run's live saturation curve, ~1s per mark
+                model.eval()
+                with torch.no_grad():
+                    sub_n = min(131072, len(val["target"]))
+                    p_loss = p_correct = v_correct = 0.0
+                    for s0 in range(0, sub_n, 8192):
+                        b = slice(s0, min(s0 + 8192, sub_n))
+                        vout = model(val["squares"][b].long(), val["state"][b].long(),
+                                     val["history_from"][b].long(), val["history_to"][b].long())
+                        p_loss += torch.nn.functional.cross_entropy(
+                            vout["policy"], val["target"][b].long(), reduction="sum").item()
+                        p_correct += (vout["policy"].argmax(1) == val["target"][b].long()).sum().item()
+                        if r["value_mode"] in ("ce", "smooth"):
+                            v_correct += (vout["value"].argmax(1) == val["result"][b].long()).sum().item()
+                    probe = {
+                        "mark_pct": mark, "step": step,
+                        "val_loss_sub": round(p_loss / sub_n, 4),
+                        "val_top1_sub": round(p_correct / sub_n, 4),
+                    }
+                    if r["value_mode"] in ("ce", "smooth"):
+                        probe["value_top1_sub"] = round(v_correct / sub_n, 4)
+                    print(json.dumps(probe), flush=True)
+                model.train()
             if not calibrated:
                 if step == CALIB_FROM:
                     if device.type == "cuda":
