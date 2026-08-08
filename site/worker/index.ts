@@ -1,7 +1,6 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { CROSS_ORIGIN_ISOLATION_HEADERS } from "../build/cross-origin-isolation.mjs";
 
 interface Env {
   ASSETS: Fetcher;
@@ -42,34 +41,8 @@ const worker = {
       }, allowedWidths);
     }
 
-    if (request.method === "GET" || request.method === "HEAD") {
-      const asset = await env.ASSETS.fetch(request);
-      if (asset.status !== 404) {
-        return isIsolatedRuntimeAsset(url.pathname)
-          ? withCrossOriginIsolation(asset)
-          : asset;
-      }
-    }
-
     return handler.fetch(request, env, ctx);
   },
 };
 
 export default worker;
-
-function isIsolatedRuntimeAsset(pathname: string): boolean {
-  return pathname.startsWith("/assets/model-worker-")
-    || pathname.startsWith("/assets/ort-wasm-");
-}
-
-function withCrossOriginIsolation(response: Response): Response {
-  const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(CROSS_ORIGIN_ISOLATION_HEADERS)) {
-    headers.set(name, value);
-  }
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}

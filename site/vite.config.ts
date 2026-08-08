@@ -15,13 +15,6 @@ const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 const localBindingConfig = {
   main: "./worker/index.ts",
   compatibility_flags: ["nodejs_compat"],
-  assets: {
-    binding: "ASSETS",
-    // Sites does not currently preserve Cloudflare's path-rule form when it
-    // publishes the archive. Route every request through the Worker, then let
-    // worker/index.ts return static files directly from this binding.
-    run_worker_first: true,
-  },
   d1_databases: d1
     ? [
         {

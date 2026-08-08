@@ -1,50 +1,18 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(path = "/") {
-  return fetchWorker(path, async () => new Response("Not found", { status: 404 }));
-}
-
-async function fetchWorker(path, fetchAsset) {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
     new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: fetchAsset } },
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
-
-test("model worker and ONNX runtime assets retain cross-origin isolation", async () => {
-  for (const path of [
-    "/assets/model-worker-example.js",
-    "/assets/ort-wasm-simd-threaded.asyncify-example.wasm",
-  ]) {
-    const response = await fetchWorker(
-      path,
-      async () => new Response("runtime", {
-        headers: { "content-type": "application/octet-stream" },
-      }),
-    );
-
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
-    assert.equal(response.headers.get("cross-origin-embedder-policy"), "require-corp");
-    assert.equal(await response.text(), "runtime");
-  }
-});
-
-test("deployment routes isolated runtime assets through the application worker", async () => {
-  const config = JSON.parse(
-    await readFile(new URL("../dist/server/wrangler.json", import.meta.url), "utf8"),
-  );
-
-  assert.equal(config.assets.binding, "ASSETS");
-  assert.equal(config.assets.run_worker_first, true);
-});
 
 test("server-renders the roadmap and placement diagnostic", async () => {
   const response = await render();
@@ -292,7 +260,8 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelLoader, /sha256/i);
   assert.match(packageManifest, /100_000_000/);
   assert.match(modelLoader, /legalMoves/);
-  assert.match(modelLoader, /new Worker/);
+  assert.match(modelLoader, /model-worker\.ts\?worker&inline/);
+  assert.match(modelLoader, /new ModelPackageWorker/);
   assert.match(modelLoader, /es-module-lexer/);
   assert.match(modelWorker, /loadPackage/);
   assert.match(modelWorker, /newGame/);
@@ -301,6 +270,13 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.doesNotMatch(`${modelLoader}\n${modelWorker}`, /\beval\s*\(|new Function\s*\(/);
   assert.doesNotMatch(modelLoader, /chess-gpt-browser-v1|model\.json\.gz/);
   assert.match(modelWorker, /globalThis\.fetch = \(\) => Promise\.reject/);
+});
+
+test("production bundles the model worker inline instead of as a static worker script", async () => {
+  const assets = await readdir(new URL("../dist/client/assets/", import.meta.url));
+
+  assert.equal(assets.some((name) => name.startsWith("model-worker-")), false);
+  assert.equal(assets.some((name) => name.startsWith("ort-wasm-") && name.endsWith(".wasm")), true);
 });
 
 test("the SAN n-gram adapter implements package v1 without arena-specific imports", async () => {

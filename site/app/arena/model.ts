@@ -1,4 +1,7 @@
+/// <reference types="vite/client" />
+
 import { init, parse, type ImportSpecifier } from "es-module-lexer";
+import ModelPackageWorker from "./model-worker.ts?worker&inline";
 import { createImmutableDownloadCache } from "./immutable-download-cache.mjs";
 import { resolveHuggingFaceReference } from "./hugging-face-reference.mjs";
 import {
@@ -126,7 +129,11 @@ export async function loadBrowserModel(
     artifacts.push({ name, bytes });
   }
 
-  const worker = new Worker(new URL("./model-worker.ts", import.meta.url), { type: "module" });
+  // An inline worker inherits the page's cross-origin-isolated policy. Sites
+  // serves static assets ahead of the application Worker and does not retain
+  // COEP on a standalone worker script, which makes Chrome reject it before
+  // any package code can run.
+  const worker = new ModelPackageWorker({ name: "chess-gpt-package" });
   const client = createWorkerClient(worker);
   try {
     const artifactPayload = artifacts.map(({ name, bytes }) => ({ name, bytes: bytes.buffer }));
