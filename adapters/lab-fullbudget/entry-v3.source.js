@@ -14,7 +14,7 @@ import { Chess } from "chess.js";
 // Argmax-visits move choice, no Dirichlet noise, no randomness. The tree is
 // reused within a game (root advances along the opponent's replies); each
 // newGame starts a fresh tree. The whole clock is spent: soft deadline at
-// 0.88 * moveTimeLimitMs, checked before every evaluation, so overshoot is
+// 0.94 * moveTimeLimitMs, checked before every evaluation, so overshoot is
 // bounded by roughly one ~35ms eval.
 
 const FILES = "abcdefgh";
@@ -22,7 +22,7 @@ const HISTORY = 8;
 const CPUCT = 1.5;
 const CONTEMPT = 0.15;
 const DRAW_VALUE = 0.5 - CONTEMPT / 2; // 0.425 to the root player, always
-const SOFT_FRACTION = 0.88;
+const SOFT_FRACTION = 0.94; // per-eval deadline checks bound overshoot to ~one eval
 const DEFAULT_LIMIT_MS = 3000;
 const POLICY_OPENING_PLIES = 6; // no book: trust the policy head early
 const SATURATION_SIMS = 3000; // stop when terminals dominate and evals stall
@@ -324,7 +324,7 @@ export async function loadPackage({ artifacts, ort }) {
             return bestSan;
           }
 
-          // PUCT: spend the whole budget. The soft deadline (0.88 * limit) is
+          // PUCT: spend the whole budget. The soft deadline (0.94 * limit) is
           // checked before every evaluation -- each simulation performs at
           // most one, so overshoot is bounded by roughly one eval. The first
           // simulation always runs so the root has visited children. The
