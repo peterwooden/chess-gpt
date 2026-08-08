@@ -237,7 +237,7 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .play-actions .arena-primary { color: var(--white); background: var(--green); }
 .arena-workbench { display: grid; gap: 1rem; align-items: start; }
 .arena-error { margin-top: 0.5rem; }
-.chessboard { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr)); overflow: hidden; width: 100%; max-width: 44rem; aspect-ratio: 1; border: 0.45rem solid var(--green); box-shadow: 0.45rem 0.45rem 0 rgb(20 63 49 / 0.14); }
+.chessboard { display: grid; container-type: inline-size; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr)); overflow: hidden; width: 100%; max-width: 44rem; aspect-ratio: 1; border: 0.45rem solid var(--green); box-shadow: 0.45rem 0.45rem 0 rgb(20 63 49 / 0.14); }
 .board-square { position: relative; display: grid; min-width: 0; min-height: 0; padding: 0; border: 0; place-items: center; cursor: pointer; }
 .board-square.light { color: var(--green); background: var(--board-light); }
 .board-square.dark { color: var(--paper-light); background: var(--board-dark); }
@@ -245,7 +245,7 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .board-square.selected { z-index: 1; outline: 0.22rem solid var(--amber); outline-offset: -0.22rem; }
 .board-square.target::after { position: absolute; z-index: 2; width: 24%; aspect-ratio: 1; border-radius: 50%; background: rgb(184 91 41 / 0.72); content: ""; }
 .board-square.target:has(.piece)::after { width: 72%; border: 0.18rem solid rgb(184 91 41 / 0.88); background: transparent; }
-.piece { position: relative; z-index: 1; font-family: "Chess Merida"; font-size: clamp(1.8rem, 10.5vw, 4.55rem); font-style: normal; font-weight: 400; line-height: 1; user-select: none; }
+.piece { position: relative; z-index: 1; font-family: "Chess Merida"; font-size: 8.5cqi; font-style: normal; font-weight: 400; line-height: 1; user-select: none; }
 .piece.w { color: #fffdf7; text-shadow: 0 1px 0 #18241d, 1px 0 0 #18241d, 0 -1px 0 #18241d, -1px 0 0 #18241d, 0 0 0.16rem rgb(0 0 0 / 0.55); }
 .piece.b { color: #18241d; text-shadow: 0 1px 0 rgb(255 253 247 / 0.4); }
 .file-label, .rank-label { position: absolute; z-index: 3; font-family: ui-monospace, monospace; font-size: clamp(0.43rem, 1.7vw, 0.65rem); font-weight: 900; line-height: 1; }
@@ -534,7 +534,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .arena-workbench { grid-template-columns: minmax(0, 1.4fr) minmax(20rem, 0.7fr); min-height: 0; height: 100%; align-items: stretch; }
   .board-stage { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
   .chessboard { align-self: start; justify-self: center; width: auto; max-width: 100%; height: 100%; max-height: 100%; }
-  .piece { font-size: clamp(1.5rem, 6vh, 3.6rem); }
   .move-console { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; min-height: 0; max-height: none; height: 100%; }
   .move-console > header { min-height: 3rem; padding: 0.4rem 0.65rem; }
   .empty-record { min-height: 0; padding: 1rem; }
@@ -600,7 +599,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   border-width: 0.4rem;
   box-shadow: none;
 }
-.arena-page-v2 .piece { font-size: clamp(1.6rem, min(8vw, 6vh), 4rem); }
 .board-frame { display: grid; min-width: 0; align-content: start; }
 .board-frame.with-players { grid-template-rows: auto auto auto; }
 .player-strip {
@@ -1223,7 +1221,6 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .tournament-live-board { width: 100%; max-width: none; height: auto; border: 0; box-shadow: none; }
 .tournament-live-board-wrap { --thinking-board-inset: 0; --thinking-board-border-total: 0; aspect-ratio: 1; }
 .tournament-live-board .board-square { cursor: default; }
-.tournament-live-board .piece { font-size: clamp(1.55rem, 5vw, 4.2rem); }
 .tournament-live-card-details { display: grid; grid-template-rows: auto auto minmax(3rem, 1fr) auto; align-content: start; min-width: 0; padding: 0.9rem; border-left: 1px solid var(--green); }
 .tournament-live-players { display: grid; gap: 0.45rem; margin-bottom: 0.9rem; }
 .tournament-live-players span { display: flex; gap: 0.45rem; align-items: center; overflow: hidden; font-size: 0.72rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }

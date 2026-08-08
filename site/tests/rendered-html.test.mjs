@@ -316,6 +316,16 @@ test("arena constrains the board to eight equal columns and rows", async () => {
   assert.match(boardRule, /grid-template-rows:\s*repeat\(8,\s*minmax\(0,\s*1fr\)\)/);
 });
 
+test("pieces scale from their board instead of the viewport", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const boardRule = styles.match(/\.chessboard\s*\{[^}]+\}/)?.[0] ?? "";
+
+  assert.match(boardRule, /container-type:\s*inline-size/);
+  assert.match(styles, /\.piece\s*\{[^}]*font-size:\s*8\.5cqi/s);
+  assert.doesNotMatch(styles, /\.piece\s*\{[^}]*font-size:[^;}]*(?:vw|vh)/s);
+  assert.doesNotMatch(styles, /\.(?:arena-page-v2|tournament-live-board)[^{]*\.piece\s*\{[^}]*font-size:/s);
+});
+
 test("arena uses standard chess square colours", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
 
