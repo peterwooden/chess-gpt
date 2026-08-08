@@ -17,10 +17,10 @@ const localBindingConfig = {
   compatibility_flags: ["nodejs_compat"],
   assets: {
     binding: "ASSETS",
-    run_worker_first: [
-      "/assets/model-worker-*",
-      "/assets/ort-wasm-*",
-    ],
+    // Sites does not currently preserve Cloudflare's path-rule form when it
+    // publishes the archive. Route every request through the Worker, then let
+    // worker/index.ts return static files directly from this binding.
+    run_worker_first: true,
   },
   d1_databases: d1
     ? [

@@ -31,10 +31,6 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    if (isIsolatedRuntimeAsset(url.pathname)) {
-      return withCrossOriginIsolation(await env.ASSETS.fetch(request));
-    }
-
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
@@ -44,6 +40,15 @@ const worker = {
           return result.response();
         },
       }, allowedWidths);
+    }
+
+    if (request.method === "GET" || request.method === "HEAD") {
+      const asset = await env.ASSETS.fetch(request);
+      if (asset.status !== 404) {
+        return isIsolatedRuntimeAsset(url.pathname)
+          ? withCrossOriginIsolation(asset)
+          : asset;
+      }
     }
 
     return handler.fetch(request, env, ctx);

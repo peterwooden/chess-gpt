@@ -43,10 +43,7 @@ test("deployment routes isolated runtime assets through the application worker",
   );
 
   assert.equal(config.assets.binding, "ASSETS");
-  assert.deepEqual(config.assets.run_worker_first, [
-    "/assets/model-worker-*",
-    "/assets/ort-wasm-*",
-  ]);
+  assert.equal(config.assets.run_worker_first, true);
 });
 
 test("server-renders the roadmap and placement diagnostic", async () => {
