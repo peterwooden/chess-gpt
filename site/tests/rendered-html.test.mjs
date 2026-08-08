@@ -3,16 +3,51 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(path = "/") {
+  return fetchWorker(path, async () => new Response("Not found", { status: 404 }));
+}
+
+async function fetchWorker(path, fetchAsset) {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
     new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
-    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { ASSETS: { fetch: fetchAsset } },
     { waitUntil() {}, passThroughOnException() {} },
   );
 }
+
+test("model worker and ONNX runtime assets retain cross-origin isolation", async () => {
+  for (const path of [
+    "/assets/model-worker-example.js",
+    "/assets/ort-wasm-simd-threaded.asyncify-example.wasm",
+  ]) {
+    const response = await fetchWorker(
+      path,
+      async () => new Response("runtime", {
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cross-origin-opener-policy"), "same-origin");
+    assert.equal(response.headers.get("cross-origin-embedder-policy"), "require-corp");
+    assert.equal(await response.text(), "runtime");
+  }
+});
+
+test("deployment routes isolated runtime assets through the application worker", async () => {
+  const config = JSON.parse(
+    await readFile(new URL("../dist/server/wrangler.json", import.meta.url), "utf8"),
+  );
+
+  assert.equal(config.assets.binding, "ASSETS");
+  assert.deepEqual(config.assets.run_worker_first, [
+    "/assets/model-worker-*",
+    "/assets/ort-wasm-*",
+  ]);
+});
 
 test("server-renders the roadmap and placement diagnostic", async () => {
   const response = await render();
