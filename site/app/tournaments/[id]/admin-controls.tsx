@@ -53,7 +53,7 @@ export function TournamentAdminControls({
 
   return (
     <section className="tournament-panel">
-      <h2>Administration</h2>
+      <h2>Tournament management</h2>
       <div className="tournament-admin-actions">
         {NEXT_STATUS[status].map((action) => (
           <button

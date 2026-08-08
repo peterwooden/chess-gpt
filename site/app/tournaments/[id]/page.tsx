@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { ensureHumanPlayer } from "../../../lib/history";
-import { getTournament, getTournamentResults, isAdministrator } from "../../../lib/tournaments";
+import { getTournament, getTournamentResults, isAdministrator, isTournamentManager } from "../../../lib/tournaments";
 import { HistoryNav } from "../../history/history-components";
 import { formatDateTime, formatScore } from "../tournament-nav";
 import { TournamentAdminControls } from "./admin-controls";
@@ -33,9 +33,10 @@ export default async function TournamentPage(
   if (!tournament) notFound();
 
   const user = await getChatGPTUser();
-  const [results, administrator] = await Promise.all([
+  const [results, administrator, manager] = await Promise.all([
     getTournamentResults(id),
     isAdministrator(user),
+    isTournamentManager(tournament, user),
   ]);
   const viewer = user ? await ensureHumanPlayer(user) : null;
   const { entries, games, table, shared, distinctGamesByPair, runnerChanges } = results;
@@ -54,7 +55,7 @@ export default async function TournamentPage(
         </p>
       </header>
 
-      {administrator ? (
+      {manager ? (
         <TournamentAdminControls
           tournamentId={tournament.id}
           status={tournament.status}

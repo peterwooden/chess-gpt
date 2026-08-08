@@ -322,7 +322,7 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
               onChange={(event) => setOverride(event.target.checked)}
             />
             <span>
-              Move this tournament to this machine. Requires an administrator, and is
+              Move this tournament to this machine. Requires the tournament creator or an administrator, and is
               recorded permanently beside the standings.
             </span>
           </label>

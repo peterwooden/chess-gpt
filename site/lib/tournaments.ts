@@ -105,10 +105,22 @@ function requireSignedInUser(user: ChatGPTUser | null): ChatGPTUser {
   return user;
 }
 
-async function requireAdministrator(user: ChatGPTUser | null): Promise<ChatGPTUser> {
+export async function isTournamentManager(
+  tournament: Tournament,
+  user: ChatGPTUser | null,
+): Promise<boolean> {
+  if (!user) return false;
+  if (await isAdministrator(user)) return true;
+  return (await ensureHumanPlayer(user)).id === tournament.createdByPlayerId;
+}
+
+async function requireTournamentManager(
+  tournament: Tournament,
+  user: ChatGPTUser | null,
+): Promise<ChatGPTUser> {
   const signedInUser = requireSignedInUser(user);
-  if (!await isAdministrator(user)) {
-    throw new HistoryError(403, "Only a tournament administrator can do that.");
+  if (!await isTournamentManager(tournament, signedInUser)) {
+    throw new HistoryError(403, "Only this tournament's creator or an administrator can do that.");
   }
   return signedInUser;
 }
@@ -164,8 +176,8 @@ export async function setTournamentStatus(
   status: TournamentStatus,
   user: ChatGPTUser | null,
 ): Promise<Tournament> {
-  await requireAdministrator(user);
   const tournament = await requireTournament(id);
+  await requireTournamentManager(tournament, user);
 
   const allowed: Record<TournamentStatus, TournamentStatus[]> = {
     registration: ["running"],
@@ -318,14 +330,14 @@ export async function withdrawEntry(
     throw new HistoryError(409, "Entries are frozen once a tournament leaves registration.");
   }
   const owner = await ensureHumanPlayer(user);
-  const administrator = await isAdministrator(user);
+  const manager = await isTournamentManager(tournament, user);
   const entry = await (await getD1())
     .prepare("SELECT owner_player_id AS ownerPlayerId FROM tournament_entries WHERE id = ? AND tournament_id = ?")
     .bind(entryId, tournamentId)
     .first<{ ownerPlayerId: string }>();
   if (!entry) throw new HistoryError(404, "That entry does not exist.");
-  if (entry.ownerPlayerId !== owner.id && !administrator) {
-    throw new HistoryError(403, "You can only withdraw your own entry.");
+  if (entry.ownerPlayerId !== owner.id && !manager) {
+    throw new HistoryError(403, "Only the entry owner or tournament manager can withdraw this entry.");
   }
   await (await getD1())
     .prepare("DELETE FROM tournament_entries WHERE id = ? AND tournament_id = ?")
@@ -337,7 +349,7 @@ export type ClaimRunnerInput = {
   runnerId: string;
   runnerLabel: string;
   runnerMetadata: Record<string, unknown>;
-  /** Set by an administrator to move a pinned tournament to a different machine. */
+  /** Set by the tournament manager to move a pinned tournament to a different machine. */
   override?: boolean;
 };
 
@@ -345,7 +357,7 @@ export type ClaimRunnerInput = {
  * Take or renew the runner lease.
  *
  * A tournament split across machines is not a clean result under a wall-clock
- * limit, so a different machine is refused unless an administrator overrides,
+ * limit, so a different machine is refused unless the tournament manager overrides,
  * and every override is recorded permanently and shown beside the standings.
  */
 export async function claimRunner(
@@ -377,10 +389,10 @@ export async function claimRunner(
     if (!input.override) {
       throw new HistoryError(
         409,
-        `This tournament is pinned to “${tournament.runnerLabel ?? "another machine"}”. An administrator must authorise a different machine, and the change is recorded against the results.`,
+        `This tournament is pinned to “${tournament.runnerLabel ?? "another machine"}”. Its creator or an administrator must authorise a different machine, and the change is recorded against the results.`,
       );
     }
-    await requireAdministrator(user);
+    const manager = await requireTournamentManager(tournament, user);
     const changes = parseRunnerChanges(tournament.runnerChanges);
     changes.push({
       at: now,
@@ -388,7 +400,7 @@ export async function claimRunner(
       fromLabel: tournament.runnerLabel,
       toRunnerId: input.runnerId,
       toLabel: label,
-      authorisedBy: user.email,
+      authorisedBy: manager.email,
     });
     await (await getD1()).prepare("UPDATE tournaments SET runner_changes = ? WHERE id = ?")
       .bind(JSON.stringify(changes), tournamentId).run();

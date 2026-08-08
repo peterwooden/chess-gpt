@@ -325,6 +325,17 @@ test("signed-in users can create tournaments while anonymous users cannot", asyn
   assert.match(page, /Sign in to create one\./);
 });
 
+test("tournament creators can manage their own tournaments", async () => {
+  const tournaments = await readFile(new URL("../lib/tournaments.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/tournaments/[id]/page.tsx", import.meta.url), "utf8");
+
+  assert.match(tournaments, /export async function isTournamentManager\(/);
+  assert.match(tournaments, /createdByPlayerId/);
+  assert.match(tournaments, /await requireTournamentManager\(tournament, user\);/);
+  assert.match(page, /isTournamentManager\(tournament, user\)/);
+  assert.match(page, /\{manager \? \(/);
+});
+
 test("arena has a single-viewport laptop workspace", async () => {
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const laptopStyles = styles.split("/* Arena v2: board with a contextual setup / move pane */")[1] ?? "";
