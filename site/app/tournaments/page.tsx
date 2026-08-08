@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getChatGPTUser } from "../chatgpt-auth";
-import { isAdministrator, listTournaments } from "../../lib/tournaments";
+import { listTournaments } from "../../lib/tournaments";
 import { CreateTournamentForm } from "./create-tournament-form";
 import { HistoryNav } from "../history/history-components";
 import { formatDateTime } from "./tournament-nav";
@@ -20,10 +20,9 @@ const STATUS_LABEL = {
 } as const;
 
 export default async function TournamentsPage() {
-  const user = await getChatGPTUser();
-  const [tournaments, administrator] = await Promise.all([
+  const [tournaments, user] = await Promise.all([
     listTournaments(),
-    isAdministrator(user),
+    getChatGPTUser(),
   ]);
 
   return (
@@ -39,7 +38,7 @@ export default async function TournamentsPage() {
         </p>
       </header>
 
-      {administrator ? <CreateTournamentForm /> : null}
+      {user ? <CreateTournamentForm /> : null}
 
       <section className="history-directory" aria-labelledby="tournament-list-title">
         <h2 className="sr-only" id="tournament-list-title">All tournaments</h2>
@@ -47,7 +46,7 @@ export default async function TournamentsPage() {
           {tournaments.length === 0 ? (
             <p className="history-empty">
               No tournaments yet.
-              {administrator ? " Create one above." : " An administrator can create one."}
+              {user ? " Create one above." : " Sign in to create one."}
             </p>
           ) : tournaments.map((tournament) => (
             <Link

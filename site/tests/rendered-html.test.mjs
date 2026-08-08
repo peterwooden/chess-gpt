@@ -315,6 +315,16 @@ test("arena uses standard chess square colours", async () => {
   assert.match(arena, /const light = \(FILES\.indexOf\(file\) \+ rank\) % 2 === 0;/);
 });
 
+test("signed-in users can create tournaments while anonymous users cannot", async () => {
+  const tournaments = await readFile(new URL("../lib/tournaments.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/tournaments/page.tsx", import.meta.url), "utf8");
+
+  assert.match(tournaments, /const creator = requireSignedInUser\(user\);/);
+  assert.match(tournaments, /const owner = await ensureHumanPlayer\(creator\);/);
+  assert.match(page, /\{user \? <CreateTournamentForm\s*\/\> : null\}/);
+  assert.match(page, /Sign in to create one\./);
+});
+
 test("arena has a single-viewport laptop workspace", async () => {
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const laptopStyles = styles.split("/* Arena v2: board with a contextual setup / move pane */")[1] ?? "";

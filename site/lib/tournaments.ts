@@ -100,12 +100,17 @@ export async function isAdministrator(user: ChatGPTUser | null): Promise<boolean
   return allowed.includes(user.email.trim().toLocaleLowerCase());
 }
 
-async function requireAdministrator(user: ChatGPTUser | null): Promise<ChatGPTUser> {
+function requireSignedInUser(user: ChatGPTUser | null): ChatGPTUser {
   if (!user) throw new HistoryError(401, "Sign in to manage tournaments.");
+  return user;
+}
+
+async function requireAdministrator(user: ChatGPTUser | null): Promise<ChatGPTUser> {
+  const signedInUser = requireSignedInUser(user);
   if (!await isAdministrator(user)) {
     throw new HistoryError(403, "Only a tournament administrator can do that.");
   }
-  return user;
+  return signedInUser;
 }
 
 export async function listTournaments(): Promise<Tournament[]> {
@@ -127,9 +132,9 @@ export async function createTournament(
   config: TournamentConfig,
   user: ChatGPTUser | null,
 ): Promise<Tournament> {
-  const administrator = await requireAdministrator(user);
+  const creator = requireSignedInUser(user);
   const validated = validateConfig(config);
-  const owner = await ensureHumanPlayer(administrator);
+  const owner = await ensureHumanPlayer(creator);
   const id = crypto.randomUUID();
   const now = Date.now();
 

@@ -4,7 +4,7 @@ import * as schema from "./schema";
 export type ChessGptRuntimeEnv = {
   DB?: D1Database;
   PLAYER_ID_HMAC_SECRET?: string;
-  /** Comma-separated emails allowed to create tournaments and change their phase. */
+  /** Comma-separated emails allowed to administer tournament phases and runners. */
   TOURNAMENT_ADMIN_EMAILS?: string;
 };
 
