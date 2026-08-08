@@ -34,23 +34,46 @@ concrete act rather than a piece of metadata. Two tournaments are expected on th
 championship over the three nominated models, then an open tournament over everything
 registered. Only tournament configuration distinguishes them.
 
-### No opening book
+### Sampled openings
 
-Every game starts from the standard position. Openings are part of chess, and the tournament
-should measure them.
+Proposed 2026-08-08 as a per-tournament option beside the standard-start protocol of
+2026-07-31: each tournament chooses at creation whether to use the opening book, and the
+choice is displayed with its configuration. The standard-start protocol
+accepted a known cost: both published candidates select moves deterministically (`argmax`,
+never calling the supplied `random()`), so a pairing produced exactly two distinct games —
+one per color — and every further game was a replay. Sample size within a pairing depended
+entirely on a competitor choosing to make their submission stochastic, and none did.
 
-The cost is understood and accepted. Under this protocol a pairing of two deterministic
-packages produces exactly two distinct games, one per color, and every further game is a
-replay. Sample size within a pairing therefore depends entirely on whether a competitor
-chose to make their submission stochastic. The harness applies no special treatment for
-this: duplicate games are played, recorded, and scored like any others.
+Opening sampling restores sample size without touching the package interface. When an
+opening-book tournament leaves registration, `sampleOpenings` draws `gamesPerPair / 2` openings from the
+fixed book in `site/lib/opening-book.mjs` — established theory lines truncated at varying
+even ply depths — and the draw is stored as JSON on the tournament row. Storing it, rather
+than re-deriving it, keeps the runner plan a pure function of the tournament row and means a
+later edit to the book cannot silently change a tournament already underway.
 
-This also invalidated the previous tiebreak rule, which resolved ties by playing more
-opening pairs. Against deterministic packages that rule cannot terminate. Ties now share
-the title.
+Book lines do not need to be objectively equal, only famous: because both models play each
+side of every sampled opening, an uneven line is symmetric, and deliberately sharp or
+dubious gambits (Englund, Halloween, Latvian, Grob) are kept in as a test in themselves —
+a stronger model should hold the worse side of an uneven position where a weaker model
+cannot, and the color-reversed pair converts exactly that difference into points.
 
-Note for future work: `adapters/board-policy/entry.source.js` selects by `argmax` and never
-calls the supplied `random()`, so both currently published candidates are deterministic.
+The draw happens at the registration→running transition, not at creation, so entries are
+frozen before anyone can see which openings will be played. Colors already alternate on the
+game index, so opening `⌊gameIndex / 2⌋` gives each opening one game per color with no
+schedule change; games per pair must be even for this to come out balanced (enforced only
+when the book is on).
+
+The runner plays the book moves itself before either package moves. They are recorded with
+actor `book` and zero elapsed time, appear in the PGN with an `Opening` header, and reach
+packages as ordinary `history`, so packages published before this change remain valid. An
+illegal book move throws — it is a harness bug, never a competitor's forfeit.
+
+Tournaments with the book off — and all tournaments created before the column existed —
+have `openings = NULL` and play from the standard start.
+
+The old tiebreak rule (more opening pairs on a tie) stays retired: ties still share the
+title. The `distinctGamesByPair` metric now mostly reflects opening variety rather than
+package stochasticity, since different openings trivially produce different games.
 
 ### Per-move time limit
 

@@ -1,0 +1,1 @@
+ALTER TABLE `tournaments` ADD `opening_book` integer DEFAULT false NOT NULL;

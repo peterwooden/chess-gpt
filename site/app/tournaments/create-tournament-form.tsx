@@ -14,6 +14,7 @@ const DEFAULTS = {
   moveTimeLimitMs: 300,
   residentBudgetMb: 1_500,
   maxAttemptsPerGame: 3,
+  openingBook: true,
 };
 
 export function CreateTournamentForm() {
@@ -30,6 +31,10 @@ export function CreateTournamentForm() {
     }));
   }
 
+  function toggleOpeningBook(checked: boolean) {
+    setValues((current) => ({ ...current, openingBook: checked }));
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -44,6 +49,7 @@ export function CreateTournamentForm() {
           moveTimeLimitMs: values.moveTimeLimitMs,
           residentBudgetBytes: Math.round(values.residentBudgetMb * 1_000_000),
           maxAttemptsPerGame: values.maxAttemptsPerGame,
+          openingBook: values.openingBook,
         }),
       });
       const payload = await response.json() as { tournament?: { id: string }; error?: string };
@@ -84,11 +90,31 @@ export function CreateTournamentForm() {
         <label>
           <span>Games per pair</span>
           <input
-            type="number" min={1} max={5000} required
+            type="number"
+            min={values.openingBook ? 2 : 1}
+            max={5000}
+            step={values.openingBook ? 2 : 1}
+            required
             value={values.gamesPerPair}
             onChange={(event) => update("gamesPerPair", event.target.value)}
           />
-          <small>How confidently the result is known.</small>
+          <small>
+            {values.openingBook
+              ? "How confidently the result is known. Even, because half as many openings are sampled when the tournament starts and each is played once per color."
+              : "How confidently the result is known."}
+          </small>
+        </label>
+        <label className="tournament-override">
+          <input
+            type="checkbox"
+            checked={values.openingBook}
+            onChange={(event) => toggleOpeningBook(event.target.checked)}
+          />
+          <span>
+            Sample openings from the arena book. Unticked, every game starts from the
+            standard position — deterministic packages then repeat the same two games
+            per pairing.
+          </span>
         </label>
         <label>
           <span>Move time limit (ms)</span>

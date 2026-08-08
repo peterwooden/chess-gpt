@@ -50,6 +50,7 @@ export default async function TournamentPage(
         <h1>{tournament.name}</h1>
         <p>
           {tournament.gamesPerPair} games per pair · {tournament.moveTimeLimitMs} ms per move ·{" "}
+          {tournament.openingBook ? "sampled openings" : "standard start"} ·{" "}
           {entries.length} entries · {games.length} of{" "}
           {scheduled} games played
         </p>

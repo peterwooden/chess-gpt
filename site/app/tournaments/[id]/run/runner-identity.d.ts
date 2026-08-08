@@ -29,6 +29,8 @@ export type RunnerPlan = {
     maxAttemptsPerGame: number;
     runnerId: string | null;
     runnerLabel: string | null;
+    /** JSON array of sampled openings; null on pre-sampling tournaments. */
+    openings: string | null;
   };
   entries: PlanEntry[];
   scheduledCount: number;

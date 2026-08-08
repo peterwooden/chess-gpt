@@ -29,6 +29,14 @@ export type PlayGameOptions = {
   now?: () => number;
   onMove?: (move: PlayedMove, game: Chess) => void;
   signal?: AbortSignal;
+  /**
+   * Book moves the runner plays before either package moves. They cost no
+   * thinking time, are recorded with actor "book", and reach the packages as
+   * ordinary history. An illegal book move throws rather than forfeiting.
+   */
+  openingMoves?: readonly string[];
+  /** Recorded as the PGN Opening header when present. */
+  openingName?: string;
 };
 
 export type GameOutcome = {

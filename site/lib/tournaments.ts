@@ -5,6 +5,7 @@ import type { ChatGPTUser } from "../app/chatgpt-auth";
 import { resolveHuggingFaceReference } from "../app/arena/hugging-face-reference.mjs";
 import { ensureHumanPlayer, ensureModelPlayer, HistoryError } from "./history";
 import { buildSchedule, remainingGames, standings } from "./tournament-schedule.mjs";
+import { sampleOpenings } from "./opening-book.mjs";
 
 export type TournamentStatus = "registration" | "running" | "completed";
 
@@ -14,6 +15,11 @@ export type TournamentConfig = {
   moveTimeLimitMs: number;
   residentBudgetBytes: number;
   maxAttemptsPerGame: number;
+  /**
+   * Sample openings from the arena book. Off means every game starts from the
+   * standard chess position.
+   */
+  openingBook: boolean;
 };
 
 export type RunnerChange = {
@@ -42,6 +48,14 @@ export type Tournament = {
   runnerMetadata: string | null;
   runnerHeartbeatAt: number | null;
   runnerChanges: string;
+  /** 0 or 1 from D1. When off, every game starts from the standard position. */
+  openingBook: number;
+  /**
+   * JSON array of sampled openings, set when an opening-book tournament leaves
+   * registration so entries are frozen before the draw is known. NULL when the
+   * book is off or the tournament predates opening sampling.
+   */
+  openings: string | null;
 };
 
 export type TournamentEntry = {
@@ -149,8 +163,8 @@ export async function createTournament(
 
   await (await getD1()).prepare(`INSERT INTO tournaments (
       id, name, status, games_per_pair, move_time_limit_ms,
-      resident_budget_bytes, max_attempts_per_game, created_by_player_id,
-      created_at, runner_changes
+      resident_budget_bytes, max_attempts_per_game, opening_book,
+      created_by_player_id, created_at, runner_changes
     ) VALUES (?, ?, 'registration', ?, ?, ?, ?, ?, ?, ?, '[]')`).bind(
     id,
     validated.name,
@@ -158,6 +172,7 @@ export async function createTournament(
     validated.moveTimeLimitMs,
     validated.residentBudgetBytes,
     validated.maxAttemptsPerGame,
+    validated.openingBook ? 1 : 0,
     owner.id,
     now,
   ).run();
@@ -195,6 +210,17 @@ export async function setTournamentStatus(
         400,
         `${unverified.length} entr${unverified.length === 1 ? "y has" : "ies have"} not passed the registration smoke test.`,
       );
+    }
+    // Sample openings only now, when entries are frozen, so nobody can pick a
+    // nominated version against a known draw. A tournament sent back to
+    // registration and restarted keeps its draw: the recorded games already
+    // used it.
+    if (tournament.openingBook && tournament.openings === null) {
+      const sampled = sampleOpenings(Math.ceil(tournament.gamesPerPair / 2), Math.random);
+      await (await getD1())
+        .prepare("UPDATE tournaments SET openings = ? WHERE id = ? AND openings IS NULL")
+        .bind(JSON.stringify(sampled), id)
+        .run();
     }
   }
 
@@ -545,7 +571,9 @@ const TOURNAMENT_SELECT = `SELECT
       t.runner_id AS runnerId, t.runner_label AS runnerLabel,
       t.runner_metadata AS runnerMetadata,
       t.runner_heartbeat_at AS runnerHeartbeatAt,
-      t.runner_changes AS runnerChanges
+      t.runner_changes AS runnerChanges,
+      t.opening_book AS openingBook,
+      t.openings AS openings
     FROM tournaments t`;
 
 async function requireTournament(id: string): Promise<Tournament> {
@@ -563,9 +591,18 @@ function validateConfig(config: TournamentConfig): TournamentConfig {
     }
     return value as number;
   };
+  const openingBook = Boolean(config.openingBook);
+  const gamesPerPair = positive(config.gamesPerPair, "Games per pair", MAX_GAMES_PER_PAIR);
+  if (openingBook && gamesPerPair % 2 !== 0) {
+    throw new HistoryError(
+      400,
+      "Games per pair must be even with the opening book: each sampled opening is played once with each color.",
+    );
+  }
   return {
     name,
-    gamesPerPair: positive(config.gamesPerPair, "Games per pair", MAX_GAMES_PER_PAIR),
+    openingBook,
+    gamesPerPair,
     moveTimeLimitMs: positive(config.moveTimeLimitMs, "The move time limit", 600_000),
     residentBudgetBytes: positive(config.residentBudgetBytes, "The resident budget", 8_000_000_000),
     maxAttemptsPerGame: positive(config.maxAttemptsPerGame, "Attempts per game", 20),
