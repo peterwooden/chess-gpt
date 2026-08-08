@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Chess } from "chess.js";
-
-import { MAX_PLIES_TERMINATION, playGame } from "../app/arena/play-game.mjs";
+import { playGame } from "../app/arena/play-game.mjs";
 
 /** A player that replays a fixed script of SAN moves. */
 function scripted(name, sanMoves) {
@@ -27,7 +25,7 @@ function firstLegal(name) {
   };
 }
 
-const OPTIONS = { moveTimeLimitMs: 1_000, maxPlies: 200 };
+const OPTIONS = { moveTimeLimitMs: 1_000 };
 
 test("a checkmate is recorded as a win for the mating side", async () => {
   const white = scripted("white", ["f3", "g4"]);
@@ -41,34 +39,6 @@ test("a checkmate is recorded as a win for the mating side", async () => {
   assert.equal(outcome.moves.length, 4);
   assert.match(outcome.pgn, /\[Result "0-1"\]/);
   assert.match(outcome.pgn, /\[Termination "checkmate"\]/);
-});
-
-test("a game reaching the ply cap is a draw the history layer will accept", async () => {
-  const outcome = await playGame(firstLegal("a"), firstLegal("b"), {
-    ...OPTIONS,
-    maxPlies: 6,
-  });
-
-  assert.equal(outcome.result, "1/2-1/2");
-  assert.equal(outcome.termination, MAX_PLIES_TERMINATION);
-  assert.equal(outcome.moves.length, 6);
-  assert.match(outcome.pgn, /\[Termination "max_plies"\]/);
-
-  // The recorded position is deliberately not terminal, which is exactly the
-  // case lib/history.ts had to grow an escape hatch for.
-  const replay = new Chess();
-  replay.loadPgn(outcome.pgn);
-  assert.equal(replay.isGameOver(), false);
-});
-
-test("the ply cap does not pre-empt a checkmate delivered on the final ply", async () => {
-  const white = scripted("white", ["f3", "g4"]);
-  const black = scripted("black", ["e5", "Qh4#"]);
-
-  const outcome = await playGame(white, black, { ...OPTIONS, maxPlies: 4 });
-
-  assert.equal(outcome.termination, "checkmate");
-  assert.equal(outcome.result, "0-1");
 });
 
 test("a package that throws forfeits the game to its opponent", async () => {
@@ -127,10 +97,13 @@ test("each side receives a distinct seed", async () => {
   const player = (name) => ({
     name,
     async newGame(seed) { seeds.push(seed); },
-    async predict(_history, legalMoves) { return { san: legalMoves[0] }; },
+    async predict(history, legalMoves) {
+      if (history.length >= 2) throw new Error("test complete");
+      return { san: legalMoves[0] };
+    },
   });
 
-  await playGame(player("white"), player("black"), { ...OPTIONS, maxPlies: 2, seed: 7 });
+  await playGame(player("white"), player("black"), { ...OPTIONS, seed: 7 });
 
   assert.equal(seeds.length, 2);
   assert.notEqual(seeds[0], seeds[1]);
@@ -140,7 +113,8 @@ test("the move time limit is passed through to the package", async () => {
   const seen = [];
   const player = (name) => ({
     name,
-    async predict(_history, legalMoves, moveTimeLimitMs) {
+    async predict(history, legalMoves, moveTimeLimitMs) {
+      if (history.length >= 4) throw new Error("test complete");
       seen.push(moveTimeLimitMs);
       return { san: legalMoves[0] };
     },
@@ -148,7 +122,6 @@ test("the move time limit is passed through to the package", async () => {
 
   await playGame(player("white"), player("black"), {
     moveTimeLimitMs: 250,
-    maxPlies: 4,
   });
 
   assert.deepEqual(seen, [250, 250, 250, 250]);
@@ -158,7 +131,8 @@ test("per-move elapsed time is measured from the injected clock", async () => {
   let clock = 0;
   const player = (name) => ({
     name,
-    async predict(_history, legalMoves) {
+    async predict(history, legalMoves) {
+      if (history.length >= 2) throw new Error("test complete");
       clock += 40;
       return { san: legalMoves[0] };
     },
@@ -166,7 +140,6 @@ test("per-move elapsed time is measured from the injected clock", async () => {
 
   const outcome = await playGame(player("white"), player("black"), {
     ...OPTIONS,
-    maxPlies: 2,
     now: () => clock,
   });
 
@@ -205,13 +178,9 @@ test("an aborted game rejects rather than recording a result", async () => {
   );
 });
 
-test("playGame rejects a missing or nonsensical budget", async () => {
+test("playGame rejects a nonsensical move budget", async () => {
   await assert.rejects(
-    playGame(firstLegal("a"), firstLegal("b"), { moveTimeLimitMs: 0, maxPlies: 10 }),
+    playGame(firstLegal("a"), firstLegal("b"), { moveTimeLimitMs: 0 }),
     /positive moveTimeLimitMs/,
-  );
-  await assert.rejects(
-    playGame(firstLegal("a"), firstLegal("b"), { moveTimeLimitMs: 100, maxPlies: 0 }),
-    /positive integer maxPlies/,
   );
 });

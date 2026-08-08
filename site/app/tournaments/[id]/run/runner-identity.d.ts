@@ -26,7 +26,6 @@ export type RunnerPlan = {
     status: "registration" | "running" | "completed";
     gamesPerPair: number;
     moveTimeLimitMs: number;
-    maxPlies: number;
     maxAttemptsPerGame: number;
     runnerId: string | null;
     runnerLabel: string | null;

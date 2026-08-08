@@ -222,7 +222,6 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
           adapt(black.displayName, blackModel),
           {
             moveTimeLimitMs: current.tournament.moveTimeLimitMs,
-            maxPlies: current.tournament.maxPlies,
             seed: seedFor(next),
             now: () => performance.now(),
             onMove: (move) => {

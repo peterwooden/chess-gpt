@@ -42,7 +42,6 @@ export const tournaments = sqliteTable("tournaments", {
   status: text("status", { enum: ["registration", "running", "completed"] }).notNull(),
   gamesPerPair: integer("games_per_pair").notNull(),
   moveTimeLimitMs: integer("move_time_limit_ms").notNull(),
-  maxPlies: integer("max_plies").notNull(),
   residentBudgetBytes: integer("resident_budget_bytes").notNull(),
   maxAttemptsPerGame: integer("max_attempts_per_game").notNull(),
   createdByPlayerId: text("created_by_player_id").notNull().references(() => players.id),

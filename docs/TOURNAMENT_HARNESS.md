@@ -72,10 +72,8 @@ and the runner machine must stay idle for the duration.
 
 ### Game termination
 
-A tournament configures `max_plies`; reaching it is a draw with termination `max_plies`.
-This matches `src/chess_gpt/snapshot_match.py` exactly, so tournament results stay directly
-comparable with the paired-match results already published in this repository. The default is
-200 plies, or 100 moves each.
+Games end only under the ordinary rules of chess, including the fifty-move rule. There is no
+ply cap, so tournament results are not artificially drawn from non-terminal positions.
 
 Adjudication by material or by Stockfish was rejected: material adjudication rewards
 grabbing material and shuffling, engine adjudication imports an outside judge into the match
@@ -151,7 +149,7 @@ clock. Existing behaviour is unchanged: opening a finished game analyses it on d
 The game loop is extracted from `site/app/arena/arena-client.tsx` into a React-free function:
 
 ```ts
-playGame(white, black, { moveTimeLimitMs, maxPlies, seed }) => GameResult
+playGame(white, black, { moveTimeLimitMs, seed }) => GameResult
 ```
 
 It drives `chess.js`, calls `model.predict()`, enforces the per-move timeout, and returns the
@@ -166,7 +164,7 @@ rather than playing games that are not being recorded.
 ## Data model
 
 `tournaments` carries status (`registration` → `running` → `completed`), the configuration
-(`games_per_pair`, `move_time_limit_ms`, `max_plies`, memory budget), runner identity,
+(`games_per_pair`, `move_time_limit_ms`, memory budget), runner identity,
 metadata, heartbeat, and recorded runner changes.
 
 `tournament_entries` links a tournament to a registered model version and its owning human

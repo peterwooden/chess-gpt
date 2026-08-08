@@ -1,7 +1,5 @@
 import type { Chess, Color, PieceSymbol, Square } from "chess.js";
 
-export const MAX_PLIES_TERMINATION: "max_plies";
-
 export type GameResult = "1-0" | "0-1" | "1/2-1/2";
 
 export type GamePlayer = {
@@ -27,7 +25,6 @@ export type PlayedMove = {
 
 export type PlayGameOptions = {
   moveTimeLimitMs: number;
-  maxPlies: number;
   seed?: number;
   now?: () => number;
   onMove?: (move: PlayedMove, game: Chess) => void;

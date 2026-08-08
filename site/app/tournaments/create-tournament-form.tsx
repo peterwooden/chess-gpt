@@ -12,7 +12,6 @@ const DEFAULTS = {
   name: "",
   gamesPerPair: 100,
   moveTimeLimitMs: 300,
-  maxPlies: 200,
   residentBudgetMb: 1_500,
   maxAttemptsPerGame: 3,
 };
@@ -23,8 +22,6 @@ export function CreateTournamentForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-
-  const estimateMs = values.gamesPerPair * values.maxPlies * values.moveTimeLimitMs;
 
   function update<K extends keyof typeof DEFAULTS>(key: K, raw: string) {
     setValues((current) => ({
@@ -45,7 +42,6 @@ export function CreateTournamentForm() {
           name: values.name,
           gamesPerPair: values.gamesPerPair,
           moveTimeLimitMs: values.moveTimeLimitMs,
-          maxPlies: values.maxPlies,
           residentBudgetBytes: Math.round(values.residentBudgetMb * 1_000_000),
           maxAttemptsPerGame: values.maxAttemptsPerGame,
         }),
@@ -104,15 +100,6 @@ export function CreateTournamentForm() {
           <small>What the contest is. Packages are told this budget.</small>
         </label>
         <label>
-          <span>Ply cap</span>
-          <input
-            type="number" min={1} max={1000} required
-            value={values.maxPlies}
-            onChange={(event) => update("maxPlies", event.target.value)}
-          />
-          <small>≈ {Math.floor(values.maxPlies / 2)} moves each. Reaching it is a draw.</small>
-        </label>
-        <label>
           <span>Resident package budget (MB)</span>
           <input
             type="number" min={1} max={8000} required
@@ -130,11 +117,6 @@ export function CreateTournamentForm() {
           />
           <small>Then the game is abandoned rather than retried forever.</small>
         </label>
-
-        <p className="tournament-estimate">
-          Worst case per pairing: about {Math.round(estimateMs / 3_600_000)} h if every move
-          uses its whole budget. Multiply by the number of pairings.
-        </p>
 
         {error ? <p className="tournament-error">{error}</p> : null}
 

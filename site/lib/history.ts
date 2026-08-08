@@ -11,9 +11,6 @@ const ARENA_VERSION = "history-v1";
 const MAX_PGN_BYTES = 64_000;
 const PAGE_SIZE = 24;
 
-/** Termination recorded when a game reaches its tournament ply cap. */
-export const MAX_PLIES_TERMINATION = "max_plies";
-
 export type ParticipantInput =
   | { kind: "human" }
   | { kind: "model"; reference: string };
@@ -467,10 +464,6 @@ function validateCompletedPgn(pgn: string): {
   else if (game.isDraw()) result = "1/2-1/2";
   else if ((headers.Result === "1-0" || headers.Result === "0-1") && /^forfeit:/i.test(headers.Termination ?? "")) {
     result = headers.Result;
-  } else if (headers.Result === "1/2-1/2" && headers.Termination === MAX_PLIES_TERMINATION) {
-    // A tournament game that reaches its configured ply cap is a draw even though
-    // the position itself is not terminal. See docs/TOURNAMENT_RULES.md.
-    result = "1/2-1/2";
   } else {
     throw new HistoryError(400, "Only completed games can be saved.");
   }
@@ -498,7 +491,6 @@ function canonicalizePgn(
 }
 
 function terminationForGame(game: Chess, reported?: string): string {
-  if (!game.isGameOver() && reported === MAX_PLIES_TERMINATION) return MAX_PLIES_TERMINATION;
   if (!game.isGameOver() && reported && /^forfeit:/i.test(reported)) return sanitizeName(reported) || "forfeit";
   if (game.isCheckmate()) return "checkmate";
   if (game.isStalemate()) return "stalemate";

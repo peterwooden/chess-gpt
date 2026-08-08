@@ -58,8 +58,7 @@ export default async function TournamentsPage() {
                 <strong>{tournament.name}</strong>
                 <code>
                   {tournament.gamesPerPair} games per pair ·{" "}
-                  {tournament.moveTimeLimitMs} ms per move ·{" "}
-                  {tournament.maxPlies} ply cap
+                  {tournament.moveTimeLimitMs} ms per move
                 </code>
               </div>
               <span className={`tournament-status is-${tournament.status}`}>

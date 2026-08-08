@@ -50,7 +50,7 @@ export default async function TournamentPage(
         <h1>{tournament.name}</h1>
         <p>
           {tournament.gamesPerPair} games per pair · {tournament.moveTimeLimitMs} ms per move ·{" "}
-          {tournament.maxPlies} ply cap · {entries.length} entries · {games.length} of{" "}
+          {entries.length} entries · {games.length} of{" "}
           {scheduled} games played
         </p>
       </header>

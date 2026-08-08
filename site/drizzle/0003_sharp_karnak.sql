@@ -1,0 +1,1 @@
+ALTER TABLE `tournaments` DROP COLUMN `max_plies`;

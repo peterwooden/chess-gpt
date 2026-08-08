@@ -12,7 +12,6 @@ export type TournamentConfig = {
   name: string;
   gamesPerPair: number;
   moveTimeLimitMs: number;
-  maxPlies: number;
   residentBudgetBytes: number;
   maxAttemptsPerGame: number;
 };
@@ -32,7 +31,6 @@ export type Tournament = {
   status: TournamentStatus;
   gamesPerPair: number;
   moveTimeLimitMs: number;
-  maxPlies: number;
   residentBudgetBytes: number;
   maxAttemptsPerGame: number;
   createdByPlayerId: string;
@@ -86,7 +84,6 @@ export type RecordedTournamentGame = {
 export const RUNNER_LEASE_MS = 60_000;
 
 const MAX_GAMES_PER_PAIR = 5_000;
-const MAX_PLIES_CEILING = 1_000;
 
 export async function isAdministrator(user: ChatGPTUser | null): Promise<boolean> {
   if (!user) return false;
@@ -151,7 +148,7 @@ export async function createTournament(
   const now = Date.now();
 
   await (await getD1()).prepare(`INSERT INTO tournaments (
-      id, name, status, games_per_pair, move_time_limit_ms, max_plies,
+      id, name, status, games_per_pair, move_time_limit_ms,
       resident_budget_bytes, max_attempts_per_game, created_by_player_id,
       created_at, runner_changes
     ) VALUES (?, ?, 'registration', ?, ?, ?, ?, ?, ?, ?, '[]')`).bind(
@@ -159,7 +156,6 @@ export async function createTournament(
     validated.name,
     validated.gamesPerPair,
     validated.moveTimeLimitMs,
-    validated.maxPlies,
     validated.residentBudgetBytes,
     validated.maxAttemptsPerGame,
     owner.id,
@@ -541,7 +537,7 @@ export async function getTournamentResults(tournamentId: string) {
 
 const TOURNAMENT_SELECT = `SELECT
       t.id, t.name, t.status, t.games_per_pair AS gamesPerPair,
-      t.move_time_limit_ms AS moveTimeLimitMs, t.max_plies AS maxPlies,
+      t.move_time_limit_ms AS moveTimeLimitMs,
       t.resident_budget_bytes AS residentBudgetBytes,
       t.max_attempts_per_game AS maxAttemptsPerGame,
       t.created_by_player_id AS createdByPlayerId, t.created_at AS createdAt,
@@ -571,7 +567,6 @@ function validateConfig(config: TournamentConfig): TournamentConfig {
     name,
     gamesPerPair: positive(config.gamesPerPair, "Games per pair", MAX_GAMES_PER_PAIR),
     moveTimeLimitMs: positive(config.moveTimeLimitMs, "The move time limit", 600_000),
-    maxPlies: positive(config.maxPlies, "The ply cap", MAX_PLIES_CEILING),
     residentBudgetBytes: positive(config.residentBudgetBytes, "The resident budget", 8_000_000_000),
     maxAttemptsPerGame: positive(config.maxAttemptsPerGame, "Attempts per game", 20),
   };

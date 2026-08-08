@@ -1,8 +1,5 @@
 import { Chess } from "chess.js";
 
-/** Termination recorded when a game reaches its configured ply cap. */
-export const MAX_PLIES_TERMINATION = "max_plies";
-
 /** Offset applied to the black player's seed so both sides differ. */
 const BLACK_SEED_OFFSET = 0x9e3779b9;
 
@@ -10,7 +7,7 @@ const BLACK_SEED_OFFSET = 0x9e3779b9;
  * Play one complete game between two packages.
  *
  * This is the whole of the match protocol in one place: it owns the per-move
- * time budget, the ply cap, forfeit attribution, and the PGN that gets recorded.
+ * time budget, forfeit attribution, and the PGN that gets recorded.
  * It deliberately knows nothing about React or the DOM so that the component
  * deciding tournament outcomes can be tested directly.
  *
@@ -22,7 +19,6 @@ const BLACK_SEED_OFFSET = 0x9e3779b9;
 export async function playGame(white, black, options) {
   const {
     moveTimeLimitMs,
-    maxPlies,
     seed = 0,
     now = () => Date.now(),
     onMove,
@@ -32,10 +28,6 @@ export async function playGame(white, black, options) {
   if (!Number.isFinite(moveTimeLimitMs) || moveTimeLimitMs <= 0) {
     throw new Error("playGame requires a positive moveTimeLimitMs.");
   }
-  if (!Number.isInteger(maxPlies) || maxPlies <= 0) {
-    throw new Error("playGame requires a positive integer maxPlies.");
-  }
-
   const game = new Chess();
   /** @type {import("./play-game.js").PlayedMove[]} */
   const moves = [];
@@ -53,15 +45,6 @@ export async function playGame(white, black, options) {
 
   while (true) {
     if (game.isGameOver()) break;
-    if (moves.length >= maxPlies) {
-      return {
-        result: "1/2-1/2",
-        termination: MAX_PLIES_TERMINATION,
-        moves,
-        pgn: buildPgn(game, "1/2-1/2", MAX_PLIES_TERMINATION),
-        failure: null,
-      };
-    }
     if (signal?.aborted) throw new DOMException("The game was aborted.", "AbortError");
 
     const color = game.turn();

@@ -16,8 +16,9 @@ export type EntrySummary = {
   packageBytes: number;
 };
 
-/** Plies played against the package's own moves to prove it actually runs. */
-const SMOKE_PLIES = 20;
+/** Moves played against the package's own moves to prove it actually runs. */
+const SMOKE_MOVES = 20;
+const SMOKE_COMPLETE = "smoke test complete";
 const SMOKE_MOVE_TIME_LIMIT_MS = 30_000;
 
 type Phase = "idle" | "loading" | "smoke" | "saving";
@@ -70,18 +71,20 @@ export function RegisterEntryPanel({
       const self = {
         name: model.info.name,
         newGame: (seed: number) => model!.newGame(seed),
-        predict: (history: string[], legalMoves: string[], limit: number) =>
-          model!.predict(history, legalMoves, limit),
+        predict: (history: string[], legalMoves: string[], limit: number) => {
+          if (history.length >= SMOKE_MOVES) throw new Error(SMOKE_COMPLETE);
+          return model!.predict(history, legalMoves, limit);
+        },
       };
       // The package plays both sides: this proves it loads, returns legal SAN
       // and keeps working across moves, which is all registration needs to know.
       const outcome = await playGame(self, self, {
         moveTimeLimitMs: SMOKE_MOVE_TIME_LIMIT_MS,
-        maxPlies: SMOKE_PLIES,
         seed: 1,
       });
-      if (outcome.failure) {
-        throw new Error(`The package failed its smoke test: ${outcome.failure.reason}`);
+      const failureReason = outcome.failure?.reason;
+      if (failureReason && failureReason !== SMOKE_COMPLETE) {
+        throw new Error(`The package failed its smoke test: ${failureReason}`);
       }
       if (outcome.moves.length === 0) {
         throw new Error("The package did not produce any moves.");
