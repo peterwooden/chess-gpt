@@ -1,20 +1,5 @@
-# Cloudflare serves static assets before the Worker runs, so `headers()` in
-# next.config.ts never sees them. The arena's model worker and the ONNX Runtime
-# WASM ship as content-hashed /assets/* files, and a dedicated worker spawned
-# from a cross-origin-isolated document must carry COEP on its own script
-# response — so the isolation headers have to be declared here as well.
-#
-# Every matching rule is merged, so the isolation headers belong under /* only.
-# Repeating them under /assets/* emits each header twice, which parses as
-# "same-origin, same-origin" — not a valid token — and the browser falls back
-# to unsafe-none, silently losing isolation.
-#
 # vinext generates this file only when it is absent, so the immutable-cache
 # rule it would otherwise write is reproduced below.
-
-/*
-  Cross-Origin-Opener-Policy: same-origin
-  Cross-Origin-Embedder-Policy: require-corp
 
 # Cache content-hashed assets immutably (mirrors vinext's generated default)
 /assets/*

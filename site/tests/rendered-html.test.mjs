@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(path = "/") {
@@ -260,10 +260,7 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelLoader, /sha256/i);
   assert.match(packageManifest, /100_000_000/);
   assert.match(modelLoader, /legalMoves/);
-  assert.match(modelLoader, /model-worker\.ts\?worker&url/);
-  assert.match(modelLoader, /workerScriptResponse\.arrayBuffer/);
-  assert.match(modelLoader, /new Blob/);
-  assert.match(modelLoader, /new Worker\(workerBlobUrl/);
+  assert.match(modelLoader, /new Worker\(new URL\("\.\/model-worker\.ts"/);
   assert.match(modelLoader, /es-module-lexer/);
   assert.match(modelWorker, /loadPackage/);
   assert.match(modelWorker, /newGame/);
@@ -274,11 +271,12 @@ test("arena enforces a narrow, revision-aware model contract", async () => {
   assert.match(modelWorker, /globalThis\.fetch = \(\) => Promise\.reject/);
 });
 
-test("production keeps the model worker out of the size-limited server bundle", async () => {
-  const assets = await readdir(new URL("../dist/client/assets/", import.meta.url));
+test("Sites leaves the arena non-isolated so its static model worker can start", async () => {
+  const nextConfig = await readFile(new URL("../next.config.ts", import.meta.url), "utf8");
+  const viteConfig = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
+  const staticHeaders = await readFile(new URL("../public/_headers", import.meta.url), "utf8");
 
-  assert.equal(assets.some((name) => name.startsWith("model-worker-") && name.endsWith(".js")), true);
-  assert.equal(assets.some((name) => name.startsWith("ort-wasm-") && name.endsWith(".wasm")), true);
+  assert.doesNotMatch(`${nextConfig}\n${viteConfig}\n${staticHeaders}`, /Cross-Origin-Embedder-Policy|crossOriginIsolation/);
 });
 
 test("the SAN n-gram adapter implements package v1 without arena-specific imports", async () => {
