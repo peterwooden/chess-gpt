@@ -89,6 +89,18 @@ test("regular arena games make streaming opt-in and unlisted", async () => {
   assert.match(viewer, /if \(!livePhase \|\| livePhase === "finished"\) return/);
 });
 
+test("spectators poll ordered batches because Sites does not flush SSE responses", async () => {
+  const viewer = await readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(viewer, /new EventSource/);
+  assert.doesNotMatch(viewer, /pollFallback/);
+  assert.match(viewer, /POLL_INTERVAL_MS = 500/);
+  assert.match(viewer, /Live updates · 500 ms polling/);
+  assert.match(viewer, /if \(refreshing \|\| stopped\) return/);
+  assert.match(viewer, /for \(const batch of next\.batches\) consumeBatch\(batch\)/);
+  assert.match(viewer, /window\.setInterval\(\(\) => void refresh\(\), POLL_INTERVAL_MS\)/);
+});
+
 test("tournament games broadcast automatically without affecting permanent scoring", async () => {
   const runner = await readFile(
     new URL("../app/tournaments/[id]/run/tournament-runner.tsx", import.meta.url),

@@ -20,7 +20,6 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
   const [response, setResponse] = useState(initial);
   const [now, setNow] = useState(() => Date.now());
   const [connectionError, setConnectionError] = useState(false);
-  const [pollFallback, setPollFallback] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
   const cursor = useRef(initial.live?.eventSeq ?? 0);
   const replay = useRef(Promise.resolve());
@@ -93,34 +92,11 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
 
   useEffect(() => {
     if (!livePhase || livePhase === "finished") return;
-    if (pollFallback) return;
-    if (typeof EventSource === "undefined") {
-      const timer = window.setTimeout(() => setPollFallback(true), 0);
-      return () => window.clearTimeout(timer);
-    }
-    const source = new EventSource(
-      `/api/live-games/${encodeURIComponent(gameId)}/events?after=${cursor.current}`,
-    );
-    source.addEventListener("live-game-batch", (event) => {
-      try {
-        consumeBatch(JSON.parse((event as MessageEvent<string>).data) as LiveGameEventBatch);
-        setConnectionError(false);
-      } catch {
-        setConnectionError(true);
-      }
-    });
-    source.onerror = () => {
-      source.close();
-      setConnectionError(true);
-      setPollFallback(true);
-    };
-    return () => source.close();
-  }, [consumeBatch, gameId, livePhase, pollFallback]);
-
-  useEffect(() => {
-    if (!pollFallback || !livePhase || livePhase === "finished") return;
     let stopped = false;
+    let refreshing = false;
     const refresh = async () => {
+      if (refreshing || stopped) return;
+      refreshing = true;
       try {
         const fetched = await fetch(
           `/api/live-games/${encodeURIComponent(gameId)}?after=${cursor.current}`,
@@ -143,6 +119,8 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
         setConnectionError(false);
       } catch {
         if (!stopped) setConnectionError(true);
+      } finally {
+        refreshing = false;
       }
     };
     void refresh();
@@ -151,7 +129,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [clearThinking, consumeBatch, gameId, livePhase, pollFallback]);
+  }, [clearThinking, consumeBatch, gameId, livePhase]);
 
   const presentation = useMemo(() => present(response), [response]);
   const stale = Boolean(
@@ -230,7 +208,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
             ) : response.live?.tournamentId ? (
               <Link href={`/tournaments/${encodeURIComponent(response.live.tournamentId)}`}>Back to tournament standings →</Link>
             ) : (
-              <span>{pollFallback ? "Live stream · reconnecting by polling" : "Live event stream"}</span>
+              <span>Live updates · 500 ms polling</span>
             )}
           </footer>
         </aside>
