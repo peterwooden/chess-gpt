@@ -153,11 +153,11 @@ export default async function TournamentPage(
                   <strong>{game.whiteName} v {game.blackName}</strong>
                   <code>{game.termination} · {game.moveCount} moves</code>
                 </div>
-                <span>{game.result}</span>
+                <span className="tournament-game-result">{game.result}</span>
                 <time dateTime={new Date(game.recordedAt).toISOString()}>
                   {formatDateTime(game.recordedAt)}
                 </time>
-                <span aria-hidden="true">→</span>
+                <span className="row-arrow" aria-hidden="true">→</span>
               </Link>
             ))}
           </div>

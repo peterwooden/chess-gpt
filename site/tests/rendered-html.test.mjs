@@ -348,6 +348,22 @@ test("tournament directory keeps names and metadata readable on narrow screens",
   );
 });
 
+test("tournament game directory keeps game details readable on narrow screens", async () => {
+  const page = await readFile(new URL("../app/tournaments/[id]/page.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(page, /className="tournament-game-result"/);
+  assert.match(page, /className="row-arrow" aria-hidden="true"/);
+  assert.match(
+    styles,
+    /@media \(max-width: 700px\) \{[\s\S]*?\.history-directory-row\.tournament-game-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/s,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 700px\) \{[\s\S]*?\.tournament-game-row \.tournament-game-result\s*\{[^}]*grid-column:\s*1/s,
+  );
+});
+
 test("tournament creators can manage their own tournaments", async () => {
   const tournaments = await readFile(new URL("../lib/tournaments.ts", import.meta.url), "utf8");
   const page = await readFile(new URL("../app/tournaments/[id]/page.tsx", import.meta.url), "utf8");
