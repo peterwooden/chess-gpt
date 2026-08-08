@@ -19,6 +19,8 @@
   --amber: #b85b29;
   --red: #93473b;
   --white: #fffdf7;
+  --board-light: #eadfca;
+  --board-dark: #386451;
 }
 
 * { box-sizing: border-box; }
@@ -154,8 +156,6 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 
 /* Browser arena */
 .arena-page {
-  --board-light: #eadfca;
-  --board-dark: #386451;
   --board-mark: #d68a48;
   min-height: 100svh;
   background:

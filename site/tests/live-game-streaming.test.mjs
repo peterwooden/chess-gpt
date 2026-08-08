@@ -134,6 +134,16 @@ test("the tournament broadcast puts ranked progress beside active game tiles", a
   assert.match(styles, /@media \(max-width:\s*900px\)\s*\{[\s\S]*?\.tournament-broadcast-dashboard\s*\{[^}]*grid-template-columns:\s*1fr/s);
 });
 
+test("tournament boards inherit the chess-square palette outside the arena page", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const root = styles.match(/:root\s*\{([^}]*)\}/s)?.[1] ?? "";
+
+  assert.match(root, /--board-light:\s*#eadfca/);
+  assert.match(root, /--board-dark:\s*#386451/);
+  assert.match(styles, /\.board-square\.light\s*\{[^}]*background:\s*var\(--board-light\)/s);
+  assert.match(styles, /\.board-square\.dark\s*\{[^}]*background:\s*var\(--board-dark\)/s);
+});
+
 test("the tournament page only renders controls for its current phase", async () => {
   const [page, watcher] = await Promise.all([
     readFile(new URL("../app/tournaments/[id]/page.tsx", import.meta.url), "utf8"),
