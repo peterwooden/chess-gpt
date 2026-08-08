@@ -12,7 +12,8 @@ export function normalizeThinkingCommand(value) {
   if (value.type === "drawArrow") {
     if (!isSquare(value.from) || !isSquare(value.to) || value.from === value.to) return null;
     const drawing = normalizeDrawing(value);
-    return drawing && { type: value.type, from: value.from, to: value.to, ...drawing };
+    const side = value.side === undefined ? {} : normalizeArrowSide(value.side);
+    return drawing && side && { type: value.type, from: value.from, to: value.to, ...drawing, ...side };
   }
   if (value.type === "clearSquare") {
     return isSquare(value.square) ? { type: value.type, square: value.square } : null;
@@ -48,6 +49,10 @@ function normalizeDrawing(value) {
   if (!Number.isFinite(intensity) || intensity < 0 || intensity > 1) return null;
   if (!Number.isFinite(fadeMs) || fadeMs < 0) return null;
   return { intensity, fadeMs };
+}
+
+function normalizeArrowSide(value) {
+  return value === "own" || value === "opponent" ? { side: value } : null;
 }
 
 function isSquare(value) {

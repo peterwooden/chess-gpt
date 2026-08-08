@@ -18,6 +18,7 @@ test("thinking drawing commands receive the agreed defaults", () => {
       to: "f3",
       intensity: 0.4,
       fadeMs: 1200,
+      side: "opponent",
     }),
     {
       type: "drawArrow",
@@ -25,6 +26,7 @@ test("thinking drawing commands receive the agreed defaults", () => {
       to: "f3",
       intensity: 0.4,
       fadeMs: 1200,
+      side: "opponent",
     },
   );
 });
@@ -32,6 +34,7 @@ test("thinking drawing commands receive the agreed defaults", () => {
 test("thinking commands reject invalid cosmetic data without throwing", () => {
   assert.equal(normalizeThinkingCommand({ type: "highlightSquare", square: "e9" }), null);
   assert.equal(normalizeThinkingCommand({ type: "drawArrow", from: "e2", to: "e2" }), null);
+  assert.equal(normalizeThinkingCommand({ type: "drawArrow", from: "e2", to: "e4", side: "white" }), null);
   assert.equal(normalizeThinkingCommand({ type: "highlightSquare", square: "e4", intensity: 1.1 }), null);
   assert.equal(normalizeThinkingCommand({ type: "highlightSquare", square: "e4", fadeMs: -1 }), null);
   assert.equal(normalizeThinkingCommand({ type: "clearArrow", from: "a1", to: "a9" }), null);

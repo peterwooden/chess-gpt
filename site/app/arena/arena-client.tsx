@@ -174,6 +174,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const {
     squares: thinkingSquares,
     arrows: thinkingArrows,
+    sequence: thinkingSequence,
     apply: applyThinking,
     clear: clearThinking,
   } = useThinkingDisplay();
@@ -620,7 +621,12 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
           moveTimeLimitMs,
           (sample) => {
             if (gameEpoch.current !== epoch) return;
-            applyThinking(sample.command);
+            applyThinking(sample.command, {
+              thinkingColor: activeGame.turn(),
+              sourceColor: sample.command.type === "drawArrow"
+                ? activeGame.get(sample.command.from)?.color ?? null
+                : null,
+            });
             if (publisher && turnId) publisher.thinking(turnId, sample);
           },
         );
@@ -972,6 +978,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
               <ThinkingOverlay
                 enabled={showThinking && isLiveView}
                 orientation={orientation}
+                sequence={thinkingSequence}
                 squares={thinkingSquares}
                 arrows={thinkingArrows}
               />

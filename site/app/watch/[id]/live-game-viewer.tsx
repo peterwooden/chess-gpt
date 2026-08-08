@@ -24,9 +24,14 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
   const [showThinking, setShowThinking] = useState(false);
   const cursor = useRef(initial.live?.eventSeq ?? 0);
   const replay = useRef(Promise.resolve());
+  const livePosition = useRef(gameFromMoves(initial.live?.moves ?? []));
+  const thinkingColor = useRef<Color | null>(
+    initial.live ? gameFromMoves(initial.live.moves).turn() : null,
+  );
   const {
     squares: thinkingSquares,
     arrows: thinkingArrows,
+    sequence: thinkingSequence,
     apply: applyThinking,
     clear: clearThinking,
   } = useThinkingDisplay();
@@ -34,15 +39,27 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
 
   const applyEvent = useCallback((payload: LiveGameEventPayload) => {
     if (payload.type === "thinking.command") {
-      applyThinking(payload.command);
+      applyThinking(payload.command, {
+        thinkingColor: thinkingColor.current,
+        sourceColor: payload.command.type === "drawArrow"
+          ? livePosition.current.get(payload.command.from)?.color ?? null
+          : null,
+      });
       return;
     }
-    if (payload.type === "turn.started" || payload.type === "move.played") {
+    if (payload.type === "turn.started") {
       clearThinking();
+      thinkingColor.current = payload.color;
+      return;
+    }
+    if (payload.type === "move.played") {
+      clearThinking();
+      thinkingColor.current = null;
       return;
     }
     if (payload.type !== "game.updated") return;
     if (payload.update.phase === "finished") clearThinking();
+    livePosition.current = gameFromMoves(payload.update.moves);
     setResponse((current) => current.live ? {
       ...current,
       live: {
@@ -117,6 +134,10 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
         if (next.live && next.live.eventSeq > cursor.current && next.batches.length === 0) {
           cursor.current = next.live.eventSeq;
           clearThinking();
+          livePosition.current = gameFromMoves(next.live.moves);
+          thinkingColor.current = next.live.phase === "playing"
+            ? livePosition.current.turn()
+            : null;
           setResponse(next);
         }
         setConnectionError(false);
@@ -176,7 +197,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
                 );
               }))}
             </div>
-            <ThinkingOverlay enabled={showThinking} orientation="w" squares={thinkingSquares} arrows={thinkingArrows} />
+            <ThinkingOverlay enabled={showThinking} orientation="w" sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
           </div>
           <PlayerBar color="w" name={presentation.whiteName} />
         </div>
@@ -220,14 +241,19 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
 
 function present(response: LiveGameResponse) {
   if (response.live) {
-    const game = new Chess();
-    for (const san of response.live.moves) game.move(san);
+    const game = gameFromMoves(response.live.moves);
     return { game, moves: response.live.moves, whiteName: response.live.whiteName, blackName: response.live.blackName, openingName: response.live.openingName, status: response.live.status };
   }
   const completed = response.completed!;
   const game = new Chess();
   game.loadPgn(completed.pgn);
   return { game, moves: game.history(), whiteName: completed.whiteName, blackName: completed.blackName, openingName: game.getHeaders().Opening ?? null, status: `${completed.result} · ${completed.termination}` };
+}
+
+function gameFromMoves(moves: readonly string[]): Chess {
+  const game = new Chess();
+  for (const san of moves) game.move(san);
+  return game;
 }
 
 function pairMoves(moves: readonly string[]) {
