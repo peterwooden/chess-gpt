@@ -14,11 +14,15 @@ export type LiveGame = {
   blackName: string;
   whiteModelReference: string | null;
   blackModelReference: string | null;
+  whiteMoveTimeLimitMs: number | null;
+  blackMoveTimeLimitMs: number | null;
   openingName: string | null;
   phase: LiveGamePhase;
   status: string;
   moves: string[];
   lastMoveMs: number | null;
+  activeTurnColor: "w" | "b" | null;
+  activeTurnElapsedMs: number | null;
   result: LiveGameResult | null;
   revision: number;
   eventSeq: number;

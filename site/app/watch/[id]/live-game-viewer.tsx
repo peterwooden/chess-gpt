@@ -4,7 +4,8 @@ import { Chess, type Color, type PieceSymbol } from "chess.js";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveGameEventBatch, LiveGameEventPayload } from "../../../lib/live-game-events.mjs";
-import type { LiveGameResponse } from "../../../lib/live-game-types";
+import type { LiveGame, LiveGameResponse } from "../../../lib/live-game-types";
+import { PlayerStrip, type PlayerClock } from "../../arena/player-strip";
 import { ThinkingOverlay, useThinkingDisplay } from "../../arena/thinking-overlay";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
@@ -21,6 +22,8 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
   const [now, setNow] = useState(() => Date.now());
   const [connectionError, setConnectionError] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
+  const [orientation, setOrientation] = useState<Color>("w");
+  const [clockAnchor, setClockAnchor] = useState(() => activeClockAnchor(initial.live));
   const cursor = useRef(initial.live?.eventSeq ?? 0);
   const replay = useRef(Promise.resolve());
   const livePosition = useRef(gameFromMoves(initial.live?.moves ?? []));
@@ -49,15 +52,18 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
     if (payload.type === "turn.started") {
       clearThinking();
       thinkingColor.current = payload.color;
+      setClockAnchor({ color: payload.color, startedAtMs: Date.now() });
       return;
     }
     if (payload.type === "move.played") {
       clearThinking();
       thinkingColor.current = null;
+      setClockAnchor(null);
       return;
     }
     if (payload.type !== "game.updated") return;
     if (payload.update.phase === "finished") clearThinking();
+    setClockAnchor(activeClockAnchor(payload.update));
     livePosition.current = gameFromMoves(payload.update.moves);
     setResponse((current) => current.live ? {
       ...current,
@@ -115,6 +121,7 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
             ? livePosition.current.turn()
             : null;
           setResponse(next);
+          setClockAnchor(activeClockAnchor(next.live));
         }
         setConnectionError(false);
       } catch {
@@ -140,6 +147,25 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
   const finished = response.live?.phase === "finished" || (!response.live && Boolean(response.completed));
   const lastMove = presentation.game.history({ verbose: true }).at(-1);
   const moveRows = pairMoves(presentation.moves);
+  const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
+  const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
+  const stripMoves = presentation.game.history({ verbose: true });
+  const whiteSummary = {
+    color: "w" as const,
+    name: presentation.whiteName,
+    modelReference: response.live?.whiteModelReference ?? null,
+    moves: stripMoves,
+    clock: playerClock(response.live, clockAnchor, "w"),
+  };
+  const blackSummary = {
+    color: "b" as const,
+    name: presentation.blackName,
+    modelReference: response.live?.blackModelReference ?? null,
+    moves: stripMoves,
+    clock: playerClock(response.live, clockAnchor, "b"),
+  };
+  const topSummary = orientation === "w" ? blackSummary : whiteSummary;
+  const bottomSummary = orientation === "w" ? whiteSummary : blackSummary;
 
   return (
     <main className="arena-page live-watch-page">
@@ -158,10 +184,10 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
 
       <section className="live-watch-layout" aria-label="Live chess game">
         <div className="live-board-stack">
-          <PlayerBar color="b" name={presentation.blackName} />
+          <PlayerStrip {...topSummary} />
           <div className="thinking-board-wrap">
-            <div className="chessboard live-watch-board" role="grid" aria-label="Chess board">
-              {RANKS.flatMap((rank) => FILES.map((file) => {
+            <div className={`chessboard live-watch-board orientation-${orientation}`} role="grid" aria-label="Chess board">
+              {boardRanks.flatMap((rank) => boardFiles.map((file) => {
                 const square = `${file}${rank}` as const;
                 const piece = presentation.game.get(square);
                 const light = (FILES.indexOf(file) + rank) % 2 === 0;
@@ -169,15 +195,15 @@ export function LiveGameViewer({ gameId, initial }: { gameId: string; initial: L
                 return (
                   <div className={`board-square ${light ? "light" : "dark"}${last ? " last" : ""}`} role="gridcell" aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} piece` : " empty"}`} key={square}>
                     {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
-                    {rank === 1 ? <small className="file-label">{file}</small> : null}
-                    {file === "a" ? <small className="rank-label">{rank}</small> : null}
+                    {(orientation === "w" ? rank === 1 : rank === 8) ? <small className="file-label">{file}</small> : null}
+                    {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
                   </div>
                 );
               }))}
             </div>
-            <ThinkingOverlay enabled={showThinking} orientation="w" sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
+            <ThinkingOverlay enabled={showThinking} orientation={orientation} sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
           </div>
-          <PlayerBar color="w" name={presentation.whiteName} />
+          <PlayerStrip {...bottomSummary} onFlip={() => setOrientation((color) => color === "w" ? "b" : "w")} />
         </div>
 
         <aside className="live-scorecard">
@@ -246,8 +272,27 @@ function pairMoves(moves: readonly string[]) {
   return rows;
 }
 
-function PlayerBar({ color, name }: { color: Color; name: string }) {
-  return <section className={`player-strip ${color === "w" ? "white" : "black"}`}><div className="player-identity"><span className="player-color">{color === "w" ? "White" : "Black"}</span><strong>{name}</strong></div></section>;
+function activeClockAnchor(snapshot: {
+  activeTurnColor?: Color | null;
+  activeTurnElapsedMs?: number | null;
+} | null | undefined): { color: Color; startedAtMs: number } | null {
+  if (!snapshot?.activeTurnColor || snapshot.activeTurnElapsedMs === null
+      || snapshot.activeTurnElapsedMs === undefined) return null;
+  return {
+    color: snapshot.activeTurnColor,
+    startedAtMs: Date.now() - snapshot.activeTurnElapsedMs,
+  };
+}
+
+function playerClock(
+  live: LiveGame | null,
+  anchor: { color: Color; startedAtMs: number } | null,
+  color: Color,
+): PlayerClock | null {
+  if (!live || live.phase !== "playing" || anchor?.color !== color) return null;
+  const modelReference = color === "w" ? live.whiteModelReference : live.blackModelReference;
+  const limitMs = color === "w" ? live.whiteMoveTimeLimitMs : live.blackMoveTimeLimitMs;
+  return modelReference && limitMs ? { startedAtMs: anchor.startedAtMs, limitMs } : null;
 }
 
 function wait(ms: number): Promise<void> {

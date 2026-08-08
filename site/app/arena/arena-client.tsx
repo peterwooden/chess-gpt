@@ -29,6 +29,7 @@ import {
   openLiveGamePublisher,
   type LiveGamePublisher,
 } from "./live-game-publisher";
+import { ModelNameWithCopy, PlayerStrip, type PlayerClock } from "./player-strip";
 import { ThinkingOverlay, useThinkingDisplay } from "./thinking-overlay";
 
 const MODEL_URLS_KEY = "chess-gpt:arena-model-urls-v1";
@@ -39,8 +40,6 @@ const PIECES: Record<Color, Record<PieceSymbol, string>> = {
   w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
   b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
 };
-const CAPTURE_VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-const CAPTURE_ORDER: PieceSymbol[] = ["q", "r", "b", "n", "p"];
 const POSITIVE_JUDGEMENTS = ["brilliant", "good"] as const;
 const NEGATIVE_JUDGEMENTS = ["inaccuracy", "mistake", "blunder"] as const;
 const JUDGEMENT_META: Record<ReviewJudgement, { glyph: string; label: string; plural: string }> = {
@@ -79,15 +78,6 @@ type PromotionChoice = {
   from: Square;
   to: Square;
   pieces: PieceSymbol[];
-};
-
-type PlayerStripProps = {
-  color: Color;
-  name: string;
-  profileId?: string | null;
-  modelReference?: string | null;
-  captured: PieceSymbol[];
-  lead: number;
 };
 
 type Players = Record<Color, string>;
@@ -172,6 +162,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   const [liveWatchPath, setLiveWatchPath] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [showThinking, setShowThinking] = useState(false);
+  const [boardFlipped, setBoardFlipped] = useState(false);
+  const [activeTurnClock, setActiveTurnClock] = useState<(PlayerClock & { color: Color }) | null>(null);
   const {
     squares: thinkingSquares,
     arrows: thinkingArrows,
@@ -357,7 +349,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     ? new Set(game.moves({ square: selectedSquare, verbose: true }).map((move) => move.to))
     : new Set<Square>();
   const displayedMove = displayPly > 0 ? moves[displayPly - 1] : undefined;
-  const orientation: Color = gameStarted && mode === "human" ? humanColor : "w";
+  const naturalOrientation: Color = gameStarted && mode === "human" ? humanColor : "w";
+  const orientation: Color = boardFlipped ? oppositeColor(naturalOrientation) : naturalOrientation;
   const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
   const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
   const status = finishedStatus ?? describeGame(game, running, thinking);
@@ -563,6 +556,12 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
           blackModelReference: resolvedPlayer1Color === "b"
             ? modelA.model?.info.reference ?? null
             : modelB.model?.info.reference ?? null,
+          whiteMoveTimeLimitMs: resolvedPlayer1Color === "w"
+            ? modelA.model ? moveTimeLimitMsA : null
+            : modelB.model ? moveTimeLimitMsB : null,
+          blackMoveTimeLimitMs: resolvedPlayer1Color === "b"
+            ? modelA.model ? moveTimeLimitMsA : null
+            : modelB.model ? moveTimeLimitMsB : null,
         });
         livePublisher.current = publisher;
         setLiveWatchPath(publisher.watchPath);
@@ -595,6 +594,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     setSelectedSquare(null);
     setPromotion(null);
     setThinking(null);
+    setActiveTurnClock(null);
+    setBoardFlipped(false);
     clearThinking();
     setGameError(null);
     setFinishedStatus(null);
@@ -615,6 +616,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       clearThinking();
       const publisher = livePublisher.current;
       const turnId = publisher?.startTurn(activeGame.history().length + 1, activeGame.turn()) ?? null;
+      setActiveTurnClock({ color: activeGame.turn(), startedAtMs: Date.now(), limitMs: moveTimeLimitMs });
       setThinking(actor);
       setGameError(null);
       const started = performance.now();
@@ -673,6 +675,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         if (gameEpoch.current === epoch) {
           clearThinking();
           setThinking(null);
+          setActiveTurnClock(null);
         }
       }
     },
@@ -863,6 +866,8 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
     );
     setRunning(false);
     setThinking(null);
+    setActiveTurnClock(null);
+    setBoardFlipped(false);
     clearThinking();
     setMoves([]);
     setViewedPly(null);
@@ -886,27 +891,22 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
   }
 
   const displayedMoves = moves.slice(0, displayPly);
-  const whiteCapturedPieces = capturedPieces(displayedMoves, "w");
-  const blackCapturedPieces = capturedPieces(displayedMoves, "b");
-  const whiteCapturePoints = capturePoints(whiteCapturedPieces);
-  const blackCapturePoints = capturePoints(blackCapturedPieces);
-  const materialLead = whiteCapturePoints - blackCapturePoints;
-  const whitePlayerSummary: PlayerStripProps = {
+  const whitePlayerSummary = {
     color: "w",
     name: players.w,
     profileId: playerProfiles.w,
     modelReference: playerModelReferences.w,
-    captured: whiteCapturedPieces,
-    lead: Math.max(0, materialLead),
-  };
-  const blackPlayerSummary: PlayerStripProps = {
+    moves: displayedMoves,
+    clock: isLiveView && activeTurnClock?.color === "w" ? activeTurnClock : null,
+  } as const;
+  const blackPlayerSummary = {
     color: "b",
     name: players.b,
     profileId: playerProfiles.b,
     modelReference: playerModelReferences.b,
-    captured: blackCapturedPieces,
-    lead: Math.max(0, -materialLead),
-  };
+    moves: displayedMoves,
+    clock: isLiveView && activeTurnClock?.color === "b" ? activeTurnClock : null,
+  } as const;
   const topPlayerSummary = orientation === "w" ? blackPlayerSummary : whitePlayerSummary;
   const bottomPlayerSummary = orientation === "w" ? whitePlayerSummary : blackPlayerSummary;
 
@@ -987,7 +987,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
                 arrows={thinkingArrows}
               />
             </div>
-            {gameStarted ? <PlayerStrip {...bottomPlayerSummary} /> : null}
+            {gameStarted ? <PlayerStrip {...bottomPlayerSummary} onFlip={() => setBoardFlipped((value) => !value)} /> : null}
           </div>
           {promotion ? (
             <div className="promotion-picker" role="dialog" aria-label="Choose promotion piece">
@@ -1412,54 +1412,6 @@ function judgementName(judgement: ReviewJudgement): string {
   return JUDGEMENT_META[judgement].label;
 }
 
-function ModelNameWithCopy({ name, reference }: { name: string; reference: string }) {
-  const [copied, setCopied] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-
-  const copyReference = async () => {
-    try {
-      await navigator.clipboard.writeText(reference);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  return (
-    <span className={`model-name-with-copy${copied ? " copied" : ""}${revealed ? " revealed" : ""}`}>
-      <Link
-        href={modelPageHref(reference)}
-        title={name}
-        onClick={(event) => {
-          if (!revealed && window.matchMedia("(hover: none)").matches) {
-            event.preventDefault();
-            setRevealed(true);
-          }
-        }}
-      >
-        {name}
-      </Link>
-      <button
-        className="model-name-copy"
-        type="button"
-        aria-label={`Copy full reference for ${name}`}
-        title={copied ? "Reference copied" : "Copy full reference"}
-        onClick={() => void copyReference()}
-      >
-        {copied ? (
-          <span aria-hidden="true">✓</span>
-        ) : (
-          <svg aria-hidden="true" viewBox="0 0 16 16">
-            <rect x="5" y="5" width="8" height="8" rx="1" />
-            <path d="M3 11H2.5A1.5 1.5 0 0 1 1 9.5v-7A1.5 1.5 0 0 1 2.5 1h7A1.5 1.5 0 0 1 11 2.5V3" />
-          </svg>
-        )}
-      </button>
-    </span>
-  );
-}
-
 function PgnExport({ pgn }: { pgn: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -1492,34 +1444,6 @@ function PgnExport({ pgn }: { pgn: string }) {
         <button type="button" onClick={() => void copyPgn()}>{copied ? "Copied ✓" : "Copy PGN"}</button>
       </header>
       <pre>{pgn}</pre>
-    </section>
-  );
-}
-
-function PlayerStrip({ color, name, profileId, modelReference, captured, lead }: PlayerStripProps) {
-  const colorName = color === "w" ? "White" : "Black";
-  const capturedColor = oppositeColor(color);
-
-  return (
-    <section className={`player-strip ${color === "w" ? "white" : "black"}`} aria-label={`${colorName} player`}>
-      <div className="player-identity">
-        <span className="player-color">{colorName}</span>
-        {modelReference
-          ? <ModelNameWithCopy name={name} reference={modelReference} />
-          : profileId ? <Link href={`/players/${profileId}`}>{name}</Link> : <strong>{name}</strong>}
-      </div>
-      <div className="captured-pieces" aria-label={`${colorName} captured pieces`}>
-        {captured.length > 0 ? captured.map((piece, index) => (
-          <span
-            className={`captured-piece ${capturedColor === "w" ? "white" : "black"}`}
-            aria-label={`Captured ${capturedColor === "w" ? "white" : "black"} ${pieceName(piece)}`}
-            key={`${piece}-${index}`}
-          >
-            {PIECES[capturedColor][piece]}
-          </span>
-        )) : <span className="no-captures" aria-hidden="true">—</span>}
-        {lead > 0 ? <strong className="material-lead">+{lead}</strong> : null}
-      </div>
     </section>
   );
 }
@@ -1727,16 +1651,6 @@ function oppositeColor(color: Color): Color {
 
 function randomColor(): Color {
   return crypto.getRandomValues(new Uint8Array(1))[0] % 2 === 0 ? "w" : "b";
-}
-
-function capturedPieces(moves: MoveRecord[], color: Color): PieceSymbol[] {
-  return moves
-    .flatMap((move) => move.color === color && move.captured ? [move.captured] : [])
-    .sort((left, right) => CAPTURE_ORDER.indexOf(left) - CAPTURE_ORDER.indexOf(right));
-}
-
-function capturePoints(pieces: PieceSymbol[]): number {
-  return pieces.reduce((total, piece) => total + CAPTURE_VALUES[piece], 0);
 }
 
 function pieceName(piece: PieceSymbol): string {

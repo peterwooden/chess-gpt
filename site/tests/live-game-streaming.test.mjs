@@ -75,6 +75,27 @@ test("live event batches are ordered per game and expire after one hour", async 
   assert.equal(db.prepare("SELECT COUNT(*) AS count FROM live_game_event_batches").get().count, 0);
 });
 
+test("live snapshots preserve per-side move clocks for remote spectators", async () => {
+  const initial = await readFile(
+    new URL("../drizzle/0006_futuristic_wonder_man.sql", import.meta.url),
+    "utf8",
+  );
+  const clocks = await readFile(
+    new URL("../drizzle/0008_past_cerebro.sql", import.meta.url),
+    "utf8",
+  );
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE tournaments (id TEXT PRIMARY KEY)");
+  db.exec(initial);
+  db.exec(clocks);
+
+  const columns = db.prepare("PRAGMA table_info(live_games)").all().map((row) => row.name);
+  assert.ok(columns.includes("white_move_time_limit_ms"));
+  assert.ok(columns.includes("black_move_time_limit_ms"));
+  assert.ok(columns.includes("active_turn_color"));
+  assert.ok(columns.includes("active_turn_elapsed_ms"));
+});
+
 test("regular arena games make streaming opt-in and unlisted", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
   const publisher = await readFile(new URL("../app/arena/live-game-publisher.ts", import.meta.url), "utf8");
@@ -202,4 +223,36 @@ test("tournament spectator reads are public across computers", async () => {
   assert.match(liveRoute, /export async function GET/);
   assert.match(liveRoute, /getLiveGameResponse\(id, after\)/);
   assert.doesNotMatch(liveRoute, /getChatGPTUser|Authorization/);
+});
+
+test("arena and spectator boards share player material, flip, and move-clock chrome", async () => {
+  const [arena, viewer, broadcast, playerStrip, publisher, liveGames, runner, styles] = await Promise.all([
+    readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/watch/[id]/live-game-viewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/tournaments/[id]/tournament-broadcast.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/player-strip.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/arena/live-game-publisher.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/live-games.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/tournaments/[id]/run/tournament-runner.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  for (const surface of [arena, viewer, broadcast]) {
+    assert.match(surface, /<PlayerStrip/);
+    assert.match(surface, /onFlip=/);
+  }
+  assert.match(arena, /boardFlipped/);
+  assert.match(viewer, /setOrientation/);
+  assert.match(broadcast, /setOrientation/);
+  assert.match(playerStrip, /className="captured-pieces"/);
+  assert.match(playerStrip, /className="material-lead"/);
+  assert.match(playerStrip, /role="timer"/);
+  assert.match(playerStrip, /aria-label="Flip board"/);
+  assert.match(styles, /\.move-clock\s*\{[^}]*conic-gradient/s);
+  assert.match(styles, /\.board-flip-button\s*\{/);
+  assert.match(publisher, /activeTurnElapsedMs/);
+  assert.match(liveGames, /whiteMoveTimeLimitMs/);
+  assert.match(runner, /whiteMoveTimeLimitMs:\s*current\.tournament\.moveTimeLimitMs/);
+  assert.match(viewer, /orientation === "w" \? blackSummary : whiteSummary/);
+  assert.match(broadcast, /orientation === "w" \? blackSummary : whiteSummary/);
 });

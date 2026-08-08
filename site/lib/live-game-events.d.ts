@@ -7,6 +7,8 @@ export type LiveGameStreamUpdate = {
   status: string;
   moves: readonly string[];
   lastMoveMs?: number | null;
+  activeTurnColor?: Color | null;
+  activeTurnElapsedMs?: number | null;
   result?: LiveGameResult | null;
 };
 

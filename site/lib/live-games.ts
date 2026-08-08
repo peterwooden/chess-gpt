@@ -35,6 +35,8 @@ export type OpenLiveGameInput = {
   blackName: string;
   whiteModelReference?: string | null;
   blackModelReference?: string | null;
+  whiteMoveTimeLimitMs?: number | null;
+  blackMoveTimeLimitMs?: number | null;
   openingName?: string | null;
 };
 
@@ -45,6 +47,8 @@ export type PublishLiveGameInput = {
   status: string;
   moves: string[];
   lastMoveMs?: number | null;
+  activeTurnColor?: "w" | "b" | null;
+  activeTurnElapsedMs?: number | null;
   result?: LiveGameResult | null;
   eventBatch?: unknown;
 };
@@ -67,6 +71,14 @@ export async function openLiveGame(input: OpenLiveGameInput): Promise<LiveGame> 
   } else if (tournamentId || pairKey || gameIndex !== null) {
     throw new HistoryError(400, "A regular arena broadcast cannot claim a tournament slot.");
   }
+  const whiteModelReference = cleanOptional(input.whiteModelReference, 300);
+  const blackModelReference = cleanOptional(input.blackModelReference, 300);
+  const whiteMoveTimeLimitMs = whiteModelReference
+    ? cleanMoveTimeLimit(input.whiteMoveTimeLimitMs, "White move time limit")
+    : null;
+  const blackMoveTimeLimitMs = blackModelReference
+    ? cleanMoveTimeLimit(input.blackMoveTimeLimitMs, "Black move time limit")
+    : null;
 
   const now = Date.now();
   const tokenHash = await sha256(input.publisherToken);
@@ -87,10 +99,12 @@ export async function openLiveGame(input: OpenLiveGameInput): Promise<LiveGame> 
     db.prepare(`INSERT INTO live_games (
         id, publisher_token_hash, source, tournament_id, tournament_pair_key,
         tournament_game_index, white_name, black_name, white_model_reference,
-        black_model_reference, opening_name, phase, status, moves, last_move_ms,
-        result, revision, event_seq, started_at, updated_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'starting', 'Preparing game…', '[]',
-        NULL, NULL, 0, 0, ?, ?, ?)
+        black_model_reference, white_move_time_limit_ms, black_move_time_limit_ms,
+        opening_name, phase, status, moves, last_move_ms, active_turn_color,
+        active_turn_elapsed_ms, result, revision, event_seq, started_at, updated_at,
+        expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'starting', 'Preparing game…', '[]',
+        NULL, NULL, NULL, NULL, 0, 0, ?, ?, ?)
       ON CONFLICT(id) DO NOTHING`).bind(
       input.id,
       tokenHash,
@@ -100,8 +114,10 @@ export async function openLiveGame(input: OpenLiveGameInput): Promise<LiveGame> 
       gameIndex,
       cleanRequired(input.whiteName, "White player", 120),
       cleanRequired(input.blackName, "Black player", 120),
-      cleanOptional(input.whiteModelReference, 300),
-      cleanOptional(input.blackModelReference, 300),
+      whiteModelReference,
+      blackModelReference,
+      whiteMoveTimeLimitMs,
+      blackMoveTimeLimitMs,
       cleanOptional(input.openingName, 160),
       now,
       now,
@@ -136,6 +152,21 @@ export async function publishLiveGame(
   if (lastMoveMs !== null && (!Number.isFinite(lastMoveMs) || lastMoveMs < 0)) {
     throw new HistoryError(400, "Last-move time must be non-negative.");
   }
+  let activeTurnColor = input.activeTurnColor ?? null;
+  let activeTurnElapsedMs = input.activeTurnElapsedMs ?? null;
+  if (activeTurnColor !== null && activeTurnColor !== "w" && activeTurnColor !== "b") {
+    throw new HistoryError(400, "The active turn has an invalid colour.");
+  }
+  if (activeTurnElapsedMs !== null && (!Number.isFinite(activeTurnElapsedMs) || activeTurnElapsedMs < 0)) {
+    throw new HistoryError(400, "The active-turn time must be non-negative.");
+  }
+  if ((activeTurnColor === null) !== (activeTurnElapsedMs === null)) {
+    throw new HistoryError(400, "The active turn requires both a colour and elapsed time.");
+  }
+  if (phase === "finished") {
+    activeTurnColor = null;
+    activeTurnElapsedMs = null;
+  }
 
   const tokenHash = await sha256(input.publisherToken);
   const stored = await getStoredLiveGame(id);
@@ -160,6 +191,8 @@ export async function publishLiveGame(
     status,
     moves,
     lastMoveMs: lastMoveMs === null ? null : Math.round(lastMoveMs),
+    activeTurnColor,
+    activeTurnElapsedMs: activeTurnElapsedMs === null ? null : Math.round(activeTurnElapsedMs),
     result,
   };
   if (eventBatch) {
@@ -187,14 +220,17 @@ export async function publishLiveGame(
     ));
   }
   statements.push(db.prepare(`UPDATE live_games SET
-      phase = ?, status = ?, moves = ?, last_move_ms = ?, result = ?, revision = ?,
-      event_seq = ?, updated_at = ?, expires_at = ?
+      phase = ?, status = ?, moves = ?, last_move_ms = ?, active_turn_color = ?,
+      active_turn_elapsed_ms = ?, result = ?, revision = ?, event_seq = ?,
+      updated_at = ?, expires_at = ?
     WHERE id = ? AND publisher_token_hash = ? AND revision < ? AND event_seq = ?`)
     .bind(
       phase,
       status,
       JSON.stringify(moves),
       normalizedUpdate.lastMoveMs,
+      normalizedUpdate.activeTurnColor,
+      normalizedUpdate.activeTurnElapsedMs,
       result,
       input.revision,
       nextEventSeq,
@@ -282,8 +318,12 @@ const LIVE_GAME_SELECT = `SELECT
     white_name AS whiteName, black_name AS blackName,
     white_model_reference AS whiteModelReference,
     black_model_reference AS blackModelReference,
+    white_move_time_limit_ms AS whiteMoveTimeLimitMs,
+    black_move_time_limit_ms AS blackMoveTimeLimitMs,
     opening_name AS openingName, phase, status, moves,
-    last_move_ms AS lastMoveMs, result, revision, event_seq AS eventSeq,
+    last_move_ms AS lastMoveMs, active_turn_color AS activeTurnColor,
+    active_turn_elapsed_ms AS activeTurnElapsedMs, result, revision,
+    event_seq AS eventSeq,
     started_at AS startedAt, updated_at AS updatedAt, expires_at AS expiresAt
   FROM live_games`;
 
@@ -312,11 +352,15 @@ function toPublicLiveGame(stored: StoredLiveGame): LiveGame {
     blackName: stored.blackName,
     whiteModelReference: stored.whiteModelReference,
     blackModelReference: stored.blackModelReference,
+    whiteMoveTimeLimitMs: stored.whiteMoveTimeLimitMs,
+    blackMoveTimeLimitMs: stored.blackMoveTimeLimitMs,
     openingName: stored.openingName,
     phase: stored.phase,
     status: stored.status,
     moves,
     lastMoveMs: stored.lastMoveMs,
+    activeTurnColor: stored.activeTurnColor,
+    activeTurnElapsedMs: stored.activeTurnElapsedMs,
     result: stored.result,
     revision: stored.revision,
     eventSeq: stored.eventSeq,
@@ -388,6 +432,14 @@ function cleanRequired(value: unknown, label: string, max: number): string {
 function cleanOptional(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   return value.trim().slice(0, max) || null;
+}
+
+function cleanMoveTimeLimit(value: unknown, label: string): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0 || value > 600_000) {
+    throw new HistoryError(400, `${label} must be a positive integer no greater than 600000 ms.`);
+  }
+  return value;
 }
 
 async function sha256(value: string): Promise<string> {

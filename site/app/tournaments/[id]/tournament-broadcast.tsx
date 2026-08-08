@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LiveGameEventBatch, LiveGameEventPayload } from "../../../lib/live-game-events.mjs";
 import type { LiveGame } from "../../../lib/live-game-types";
+import { PlayerStrip, type PlayerClock } from "../../arena/player-strip";
 import { ThinkingOverlay, useThinkingDisplay } from "../../arena/thinking-overlay";
 import { formatScore } from "../tournament-nav";
 
@@ -184,6 +185,8 @@ function TournamentLiveCard({
 }) {
   const [live, setLive] = useState(game);
   const [connectionError, setConnectionError] = useState(false);
+  const [orientation, setOrientation] = useState<Color>("w");
+  const [clockAnchor, setClockAnchor] = useState(() => activeClockAnchor(game));
   const cursor = useRef(game.eventSeq);
   const replay = useRef(Promise.resolve());
   const livePosition = useRef(gameFromMoves(game.moves));
@@ -211,15 +214,18 @@ function TournamentLiveCard({
     if (payload.type === "turn.started") {
       clearThinking();
       thinkingColor.current = payload.color;
+      setClockAnchor({ color: payload.color, startedAtMs: Date.now() });
       return;
     }
     if (payload.type === "move.played") {
       clearThinking();
       thinkingColor.current = null;
+      setClockAnchor(null);
       return;
     }
     if (payload.type !== "game.updated") return;
     if (payload.update.phase === "finished") clearThinking();
+    setClockAnchor(activeClockAnchor(payload.update));
     livePosition.current = gameFromMoves(payload.update.moves);
     setLive((current) => ({
       ...current,
@@ -267,6 +273,7 @@ function TournamentLiveCard({
             ? livePosition.current.turn()
             : null;
           setLive(next.live);
+          setClockAnchor(activeClockAnchor(next.live));
         }
         setConnectionError(false);
       } catch {
@@ -286,6 +293,25 @@ function TournamentLiveCard({
   const position = gameFromMoves(live.moves);
   const lastMove = position.history({ verbose: true }).at(-1);
   const recentMoves = position.history().slice(-8);
+  const boardRanks = orientation === "w" ? RANKS : [...RANKS].reverse();
+  const boardFiles = orientation === "w" ? FILES : [...FILES].reverse();
+  const stripMoves = position.history({ verbose: true });
+  const whiteSummary = {
+    color: "w" as const,
+    name: live.whiteName,
+    modelReference: live.whiteModelReference,
+    moves: stripMoves,
+    clock: playerClock(live, clockAnchor, "w"),
+  };
+  const blackSummary = {
+    color: "b" as const,
+    name: live.blackName,
+    modelReference: live.blackModelReference,
+    moves: stripMoves,
+    clock: playerClock(live, clockAnchor, "b"),
+  };
+  const topSummary = orientation === "w" ? blackSummary : whiteSummary;
+  const bottomSummary = orientation === "w" ? whiteSummary : blackSummary;
   return (
     <article className="tournament-live-card">
       <header>
@@ -296,32 +322,34 @@ function TournamentLiveCard({
         <b>{live.moves.length} plies</b>
       </header>
       <div className="tournament-live-card-body">
-        <div className="thinking-board-wrap tournament-live-board-wrap">
-          <div className="chessboard tournament-live-board" role="grid" aria-label="Current tournament position">
-            {RANKS.flatMap((rank) => FILES.map((file) => {
-              const square = `${file}${rank}` as Square;
-              const piece = position.get(square);
-              const light = (FILES.indexOf(file) + rank) % 2 === 0;
-              const last = square === lastMove?.from || square === lastMove?.to;
-              return (
-                <div
-                  className={`board-square ${light ? "light" : "dark"}${last ? " last" : ""}`}
-                  role="gridcell"
-                  aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} piece` : " empty"}`}
-                  key={square}
-                >
-                  {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
-                </div>
-              );
-            }))}
+        <div className="tournament-board-stack">
+          <PlayerStrip {...topSummary} />
+          <div className="thinking-board-wrap tournament-live-board-wrap">
+            <div className={`chessboard tournament-live-board orientation-${orientation}`} role="grid" aria-label="Current tournament position">
+              {boardRanks.flatMap((rank) => boardFiles.map((file) => {
+                const square = `${file}${rank}` as Square;
+                const piece = position.get(square);
+                const light = (FILES.indexOf(file) + rank) % 2 === 0;
+                const last = square === lastMove?.from || square === lastMove?.to;
+                return (
+                  <div
+                    className={`board-square ${light ? "light" : "dark"}${last ? " last" : ""}`}
+                    role="gridcell"
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} piece` : " empty"}`}
+                    key={square}
+                  >
+                    {piece ? <span className={`piece ${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
+                    {(orientation === "w" ? rank === 1 : rank === 8) ? <small className="file-label">{file}</small> : null}
+                    {(orientation === "w" ? file === "a" : file === "h") ? <small className="rank-label">{rank}</small> : null}
+                  </div>
+                );
+              }))}
+            </div>
+            <ThinkingOverlay enabled={showThinking} orientation={orientation} sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
           </div>
-          <ThinkingOverlay enabled={showThinking} orientation="w" sequence={thinkingSequence} squares={thinkingSquares} arrows={thinkingArrows} />
+          <PlayerStrip {...bottomSummary} onFlip={() => setOrientation((color) => color === "w" ? "b" : "w")} />
         </div>
         <div className="tournament-live-card-details">
-          <div className="tournament-live-players">
-            <span><i className="white" />{live.whiteName}</span>
-            <span><i className="black" />{live.blackName}</span>
-          </div>
           <label className="thinking-display-option tournament-thinking-option">
             <input
               type="checkbox"
@@ -359,6 +387,29 @@ function broadcastStatus(state: BroadcastState, delayed: boolean, stale: boolean
   if (state.liveGame) return stale ? "The current game appears paused." : `${state.liveGame.whiteName} v ${state.liveGame.blackName}`;
   if (state.status === "running") return "Waiting for the runner to begin the next game…";
   return "Waiting for play to begin.";
+}
+
+function activeClockAnchor(snapshot: {
+  activeTurnColor?: Color | null;
+  activeTurnElapsedMs?: number | null;
+} | null | undefined): { color: Color; startedAtMs: number } | null {
+  if (!snapshot?.activeTurnColor || snapshot.activeTurnElapsedMs === null
+      || snapshot.activeTurnElapsedMs === undefined) return null;
+  return {
+    color: snapshot.activeTurnColor,
+    startedAtMs: Date.now() - snapshot.activeTurnElapsedMs,
+  };
+}
+
+function playerClock(
+  live: LiveGame,
+  anchor: { color: Color; startedAtMs: number } | null,
+  color: Color,
+): PlayerClock | null {
+  if (live.phase !== "playing" || anchor?.color !== color) return null;
+  const modelReference = color === "w" ? live.whiteModelReference : live.blackModelReference;
+  const limitMs = color === "w" ? live.whiteMoveTimeLimitMs : live.blackMoveTimeLimitMs;
+  return modelReference && limitMs ? { startedAtMs: anchor.startedAtMs, limitMs } : null;
 }
 
 function wait(ms: number): Promise<void> {

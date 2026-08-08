@@ -21,6 +21,8 @@ type LiveGameDescriptor = {
   blackName: string;
   whiteModelReference?: string | null;
   blackModelReference?: string | null;
+  whiteMoveTimeLimitMs?: number | null;
+  blackMoveTimeLimitMs?: number | null;
   openingName?: string | null;
 };
 
@@ -29,6 +31,8 @@ export type LiveGameUpdate = {
   status: string;
   moves: readonly string[];
   lastMoveMs?: number | null;
+  activeTurnColor?: Color | null;
+  activeTurnElapsedMs?: number | null;
   result?: LiveGameResult | null;
 };
 
@@ -70,7 +74,7 @@ export async function openLiveGamePublisher(
     status: "Preparing game…",
     moves: [],
   };
-  let activeTurn: { id: string; offsetMs: number } | null = null;
+  let activeTurn: { id: string; offsetMs: number; color: Color } | null = null;
   const backlog: Array<{ revision: number; update: LiveGameUpdate; eventBatch: unknown }> = [];
   let queue = Promise.resolve();
   let timer = window.setInterval(() => void flush().catch(() => {}), BATCH_WINDOW_MS);
@@ -80,7 +84,7 @@ export async function openLiveGamePublisher(
     watchPath: `/watch/${encodeURIComponent(descriptor.id)}`,
     startTurn(ply, color, turnId) {
       const id = turnId ?? `${ply}-${crypto.randomUUID()}`;
-      activeTurn = { id, offsetMs: sequencer.currentOffsetMs() };
+      activeTurn = { id, offsetMs: sequencer.currentOffsetMs(), color };
       sequencer.record({ type: "turn.started", turnId: id, ply, color });
       return id;
     },
@@ -99,6 +103,7 @@ export async function openLiveGamePublisher(
       latestUpdate = copyUpdate(update);
       sequencer.record({ type: "game.updated", update: latestUpdate });
       if (update.phase === "finished") {
+        activeTurn = null;
         window.clearInterval(timer);
         timer = 0;
       }
@@ -111,10 +116,19 @@ export async function openLiveGamePublisher(
   };
 
   function flush(): Promise<void> {
+    const timedUpdate: LiveGameUpdate = activeTurn ? {
+      ...latestUpdate,
+      activeTurnColor: activeTurn.color,
+      activeTurnElapsedMs: Math.max(0, sequencer.currentOffsetMs() - activeTurn.offsetMs),
+    } : {
+      ...latestUpdate,
+      activeTurnColor: null,
+      activeTurnElapsedMs: null,
+    };
     const eventBatch = sequencer.flush();
     if (eventBatch) {
       revision += 1;
-      backlog.push({ revision, update: copyUpdate(latestUpdate), eventBatch });
+      backlog.push({ revision, update: copyUpdate(timedUpdate), eventBatch });
     }
     if (backlog.length === 0) return queue;
     const operation = queue.then(drain);

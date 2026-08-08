@@ -238,6 +238,8 @@ export function TournamentRunner({ tournamentId }: { tournamentId: string }) {
             blackName: black.displayName,
             whiteModelReference: white.reference,
             blackModelReference: black.reference,
+            whiteMoveTimeLimitMs: current.tournament.moveTimeLimitMs,
+            blackMoveTimeLimitMs: current.tournament.moveTimeLimitMs,
             openingName: opening?.name ?? null,
           });
           setBroadcastError(null);

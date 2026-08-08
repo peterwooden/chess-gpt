@@ -618,11 +618,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .thinking-overlay { position: absolute; z-index: 4; inset: var(--thinking-board-inset); overflow: hidden; width: calc(100% - var(--thinking-board-border-total)); height: calc(100% - var(--thinking-board-border-total)); pointer-events: none; }
 .thinking-square { fill: #278fc4; }
 .thinking-arrow { fill: none; stroke-width: 2.4; stroke-linecap: butt; stroke-linejoin: round; }
+.player-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.45rem; align-items: center; min-width: 0; }
 .player-identity { display: flex; gap: 0.55rem; align-items: baseline; min-width: 0; }
 .player-identity > .player-color { flex: none; color: var(--muted); font-size: 0.52rem; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
 .player-strip.black .player-identity > .player-color { color: #b8d5c7; }
 .player-identity > strong, .player-identity > a, .player-identity .model-name-with-copy > a { overflow: hidden; font-size: 0.72rem; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
 .player-identity > a, .player-identity .model-name-with-copy > a { text-underline-offset: 0.18rem; }
+.player-material-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.35rem; align-items: center; min-width: 0; }
 .captured-pieces { display: flex; overflow: hidden; gap: 0.08rem; align-items: center; min-height: 1.15rem; }
 .captured-piece { font-family: "Chess Merida"; font-size: 1.15rem; font-style: normal; font-weight: 400; line-height: 1; }
 .captured-piece.black { color: #18241d; }
@@ -631,6 +633,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .player-strip.black .no-captures { color: #6e887b; }
 .material-lead { margin-left: 0.3rem; color: var(--amber); font-family: ui-monospace, monospace; font-size: 0.72rem; }
 .player-strip.black .material-lead { color: #efb17d; }
+.move-clock { --clock-progress: 1; display: grid; flex: none; width: 2rem; aspect-ratio: 1; padding: 0.2rem; border-radius: 50%; place-items: center; background: conic-gradient(var(--amber) calc(var(--clock-progress) * 1turn), rgb(20 63 49 / 0.16) 0); }
+.move-clock > span { display: grid; width: 100%; height: 100%; border-radius: 50%; place-items: center; color: var(--ink); background: var(--white); font-family: ui-monospace, monospace; font-size: 0.48rem; font-weight: 900; line-height: 1; }
+.player-strip.black .move-clock { background: conic-gradient(#efb17d calc(var(--clock-progress) * 1turn), rgb(255 255 255 / 0.18) 0); }
+.player-strip.black .move-clock > span { color: var(--white); background: #1b3027; }
+.board-flip-button { display: grid; width: 1.45rem; min-height: 1.45rem; padding: 0; border: 0; place-items: center; color: #e8e7e2; background: #3a3a38; font-size: 1rem; font-weight: 900; line-height: 1; }
+.board-flip-button:hover { color: var(--white); background: var(--ink); }
+.board-flip-button:focus-visible { outline-width: 2px; outline-offset: 2px; }
 .arena-page-v2 .promotion-picker {
   position: absolute;
   z-index: 6;
@@ -1218,15 +1227,13 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
 .tournament-live-card > header strong i { color: rgb(255 253 247 / 0.55); font-weight: 400; }
 .tournament-live-card > header > b { flex: 0 0 auto; font-family: ui-monospace, monospace; font-size: 0.62rem; }
 .tournament-live-card-body { display: grid; grid-template-columns: minmax(16rem, 34rem) minmax(12rem, 1fr); }
+.tournament-board-stack { display: grid; min-width: 0; align-content: start; }
+.tournament-board-stack .player-strip { border-right: 0; border-left: 0; }
+.tournament-board-stack .thinking-board-wrap + .player-strip { border-top: 0; border-bottom: 0; }
 .tournament-live-board { width: 100%; max-width: none; height: auto; border: 0; box-shadow: none; }
 .tournament-live-board-wrap { --thinking-board-inset: 0; --thinking-board-border-total: 0; aspect-ratio: 1; }
 .tournament-live-board .board-square { cursor: default; }
 .tournament-live-card-details { display: grid; grid-template-rows: auto auto minmax(3rem, 1fr) auto; align-content: start; min-width: 0; padding: 0.9rem; border-left: 1px solid var(--green); }
-.tournament-live-players { display: grid; gap: 0.45rem; margin-bottom: 0.9rem; }
-.tournament-live-players span { display: flex; gap: 0.45rem; align-items: center; overflow: hidden; font-size: 0.72rem; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-.tournament-live-players i { width: 0.8rem; height: 0.8rem; border: 1px solid var(--ink); border-radius: 50%; }
-.tournament-live-players i.white { background: var(--white); }
-.tournament-live-players i.black { background: var(--ink); }
 .tournament-thinking-option { margin: 0 -0.9rem 0.45rem; border-top: 1px solid var(--line); }
 .tournament-live-card-details dl { display: grid; gap: 0; margin: 0; }
 .tournament-live-card-details dl div { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0.5rem; padding: 0.45rem 0; border-top: 1px solid var(--line); }
