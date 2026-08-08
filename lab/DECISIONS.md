@@ -346,3 +346,17 @@ Checkpoint: results3/fullbudget-68.pt (+ 49 partial marks). Next: continuity-rul
 ## Run 68 epilogue — eval, package, publish (2026-08-08)
 
 Continuity ruler (slice67-val-april, 1.79M positions): **1.4060 / 54.37% / value 59.12%** vs screen control 1.4829 / 52.10 / 58.47 — best model on the frozen ruler by clear margins. Flag: the nobullet→all-TC distribution penalty is +0.089 loss at this scale vs +0.012 at slice67 scale — specialization deepens with compute. ONNX parity: argmax 100% policy and value, residual at GEMM-accumulation scale (3.8e-4 max logit), K=V export verified; same under ort-web 1.27 single-thread. Arena is single-threaded again (Sites cannot serve COEP on worker assets — see TOURNAMENT_RULES 2026-08-08 note); adapter retuned for ~31.5 ms/eval: root 4 / beam 3 / depth 4 / quiescence 2, budget fraction 0.85 — 198–254 evals, 6.3–8.2 s/move at a 10s clock. Package 39,059,685 bytes, validator + all 6 probes green. **Published: `peterwooden/chess-gpt-fullbudget-68` @ `0e3f0b824ef8b4cb8c6ef39591d86b833a7ea6eb`** with profiler runrecord (9.70072e17, lineage 0). Next: informal parallel arena comparisons vs each competitor's latest 1–2 entries, 4 games each at 10s/move.
+
+## Run 68 arena debut — informal comparison round (2026-08-08)
+
+Ten casual games on the arena site (parallel browser tabs, 10s/move, standard start, colors alternating; informal — not tournament-recorded), fullbudget-68 vs each competitor's latest two entries plus capstone-59:
+
+| opponent | result | notes |
+|---|---|---|
+| shazmate/t2-chess-1-searchless | **2–0** | both mates; 87%/91% accuracy games |
+| shazmate/t2-chess-1-8 (b4) | **1–1** | our mate at 89%; their 96%-accuracy mate over us — the only other clock-searching shazmate entry |
+| burrowdweller/minichess-searchless-v1 | **2–0** | incl. 94%-accuracy 79-move conversion |
+| burrowdweller/minichess-gpt-v1-final | **0.5–1.5** | 137-move draw with 11 brilliancies as White; clean 93% loss as Black. The flagship (115-1-5 coming in) keeps its crown |
+| capstone-59 (own lineage, 20% budget) | **2–0** | direct budget-scaling comparison: 5x compute, decisive |
+
+**Total 7.5/10 (7W 2L 1D), zero forfeits, zero illegal moves, time management 6–8s/move throughout.** Both losses came as Black against the only two opponents that also search under the clock. Reading: the model dominates policy-only opposition and its own ancestor, and is competitive-but-second against the strongest searcher on the site — the depth-vs-judge bet held up against everything except the one opponent with both a good judge AND deep search. The single-threaded arena (post-COOP/COEP rollback) is the shared handicap; the inference layer (MCTS prototype, deeper search) is the designated next lever, per the settled record.
