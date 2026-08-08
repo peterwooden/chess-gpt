@@ -997,6 +997,10 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline
   .model-directory-row .version-count { grid-column: 1; }
   .history-directory-row time { grid-column: 1; }
   .history-directory-row .row-arrow { grid-column: 2; grid-row: 1; }
+  .history-directory-row.tournament-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .tournament-row .tournament-status { grid-column: 1; grid-row: 2; }
+  .history-directory-row.tournament-row time { grid-column: 1; grid-row: 3; }
+  .history-directory-row.tournament-row .row-arrow { grid-column: 2; grid-row: 1 / span 3; }
   .profile-title { display: grid; }
   .profile-record { padding: 0; }
   .profile-record b { font-size: 1.55rem; }

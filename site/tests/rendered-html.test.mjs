@@ -333,6 +333,21 @@ test("signed-in users can create tournaments while anonymous users cannot", asyn
   assert.match(page, /Sign in to create one\./);
 });
 
+test("tournament directory keeps names and metadata readable on narrow screens", async () => {
+  const page = await readFile(new URL("../app/tournaments/page.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(page, /className="row-arrow"/);
+  assert.match(
+    styles,
+    /@media \(max-width: 700px\) \{[\s\S]*?\.history-directory-row\.tournament-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) auto/s,
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 700px\) \{[\s\S]*?\.tournament-row \.tournament-status\s*\{[^}]*grid-column:\s*1/s,
+  );
+});
+
 test("tournament creators can manage their own tournaments", async () => {
   const tournaments = await readFile(new URL("../lib/tournaments.ts", import.meta.url), "utf8");
   const page = await readFile(new URL("../app/tournaments/[id]/page.tsx", import.meta.url), "utf8");

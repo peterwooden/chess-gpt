@@ -67,7 +67,7 @@ export default async function TournamentsPage() {
               <time dateTime={new Date(tournament.createdAt).toISOString()}>
                 {formatDateTime(tournament.createdAt)}
               </time>
-              <span aria-hidden="true">→</span>
+              <span className="row-arrow" aria-hidden="true">→</span>
             </Link>
           ))}
         </div>
