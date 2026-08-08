@@ -1,4 +1,4 @@
-const MAX_NEWER_ANNOTATIONS = 20;
+export const MAX_NEWER_ANNOTATIONS = 64;
 const MAX_OPACITY = 0.8;
 
 export function annotationOpacity(intensity, newerAnnotations) {
@@ -25,10 +25,34 @@ export function thinkingArrowPoints(fromSquare, toSquare, orientation) {
   return [from, bend, to];
 }
 
+export function thinkingArrowShape(fromSquare, toSquare, orientation) {
+  const points = thinkingArrowPoints(fromSquare, toSquare, orientation);
+  const tip = points.at(-1);
+  const previous = points.at(-2);
+  const dx = tip.x - previous.x;
+  const dy = tip.y - previous.y;
+  const length = Math.hypot(dx, dy);
+  const unit = { x: dx / length, y: dy / length };
+  const base = roundPoint({ x: tip.x - unit.x * 4, y: tip.y - unit.y * 4 });
+  const normal = { x: -unit.y * 3.2, y: unit.x * 3.2 };
+  return {
+    shaft: [...points.slice(0, -1), base],
+    head: [
+      tip,
+      roundPoint({ x: base.x + normal.x, y: base.y + normal.y }),
+      roundPoint({ x: base.x - normal.x, y: base.y - normal.y }),
+    ],
+  };
+}
+
 export function squareCenter(square, orientation) {
   const file = square.charCodeAt(0) - 97;
   const rank = Number(square[1]) - 1;
   return orientation === "w"
     ? { x: (file + 0.5) * 12.5, y: (7.5 - rank) * 12.5 }
     : { x: (7.5 - file) * 12.5, y: (rank + 0.5) * 12.5 };
+}
+
+function roundPoint(point) {
+  return { x: Number(point.x.toFixed(6)), y: Number(point.y.toFixed(6)) };
 }

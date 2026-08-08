@@ -392,6 +392,14 @@ test("arena has a single-viewport laptop workspace", async () => {
   assert.match(boardRule, /height:\s*auto/);
 });
 
+test("thinking annotations align to the chessboard content inside its border", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.thinking-board-wrap\s*\{[^}]*--thinking-board-inset:\s*0\.45rem/s);
+  assert.match(styles, /\.arena-page-v2 \.thinking-board-wrap\s*\{[^}]*--thinking-board-inset:\s*0\.4rem/s);
+  assert.match(styles, /\.thinking-overlay\s*\{[^}]*inset:\s*var\(--thinking-board-inset\)[^}]*width:\s*calc\(100% - var\(--thinking-board-border-total\)\)/s);
+});
+
 test("mobile setup uses the page-sized workspace as its scroll container", async () => {
   const arena = await readFile(new URL("../app/arena/arena-client.tsx", import.meta.url), "utf8");
   const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");

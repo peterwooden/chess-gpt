@@ -68,14 +68,17 @@ test("one game stream preserves thinking and move order with capture offsets", (
   assert.equal(stream.flush(), null);
 });
 
-test("published batches accept at most 64 thinking commands", () => {
+test("published batches accept at most 128 thinking commands plus ordered game events", () => {
   const stream = createLiveGameEventSequencer(() => 0);
-  for (let index = 0; index < 65; index += 1) {
+  stream.record({ type: "turn.started", turnId: "turn-1", ply: 1, color: "w" });
+  for (let index = 0; index < 129; index += 1) {
     stream.record({ type: "thinking.command", turnId: "turn-1", command: { type: "clearAll" } });
   }
-  assert.equal(stream.flush().events.length, 64, "the publisher drops overflow before upload");
+  const published = stream.flush();
+  assert.equal(published.events.length, 129, "the publisher keeps one game event and 128 commands");
+  assert.ok(normalizeLiveGameEventBatch(published), "the full ordered batch remains valid");
 
-  const events = Array.from({ length: 65 }, (_, index) => ({
+  const events = Array.from({ length: 129 }, (_, index) => ({
     seq: index + 1,
     offsetMs: index,
     payload: {
@@ -87,13 +90,13 @@ test("published batches accept at most 64 thinking commands", () => {
   assert.equal(normalizeLiveGameEventBatch({
     batchIndex: 1,
     firstSeq: 1,
-    lastSeq: 65,
+    lastSeq: 129,
     events,
   }), null);
   assert.ok(normalizeLiveGameEventBatch({
     batchIndex: 1,
     firstSeq: 1,
-    lastSeq: 64,
-    events: events.slice(0, 64),
+    lastSeq: 128,
+    events: events.slice(0, 128),
   }));
 });

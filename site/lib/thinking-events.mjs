@@ -1,5 +1,5 @@
 const SQUARE_PATTERN = /^[a-h][1-8]$/;
-const COMMANDS_PER_WINDOW = 64;
+const COMMANDS_PER_WINDOW = 128;
 const WINDOW_MS = 500;
 
 export function normalizeThinkingCommand(value) {

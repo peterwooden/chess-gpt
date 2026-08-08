@@ -7,7 +7,7 @@ import type {
 } from "../../lib/live-game-types";
 import type { ThinkingSample } from "../../lib/thinking-events.mjs";
 
-const PUBLISH_TIMEOUT_MS = 1_500;
+const PUBLISH_TIMEOUT_MS = 10_000;
 const BATCH_WINDOW_MS = 500;
 
 type LiveGameDescriptor = {

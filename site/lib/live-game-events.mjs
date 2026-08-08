@@ -1,7 +1,7 @@
 import { normalizeThinkingCommand } from "./thinking-events.mjs";
 
-const MAX_EVENTS_PER_BATCH = 128;
-const MAX_THINKING_COMMANDS_PER_BATCH = 64;
+const MAX_EVENTS_PER_BATCH = 256;
+const MAX_THINKING_COMMANDS_PER_BATCH = 128;
 
 export function createLiveGameEventSequencer(now) {
   const startedAt = now();

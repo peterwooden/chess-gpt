@@ -3,6 +3,7 @@
 import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { livePublisherErrorMessage } from "../../lib/live-publisher-error.mjs";
 import {
   DEFAULT_MOVE_TIME_LIMIT_MS,
   loadBrowserModel,
@@ -335,7 +336,7 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
       moves: moves.map((move) => move.san),
       lastMoveMs: moves.at(-1)?.elapsedMs ?? null,
     }).then(() => setStreamError(null)).catch((error) => {
-      setStreamError(error instanceof Error ? error.message : "The live link stopped updating.");
+      setStreamError(livePublisherErrorMessage(error, "The live link stopped updating."));
     });
   }, [finishedStatus, gameStarted, liveWatchPath, moves, running, thinking]);
 
@@ -566,7 +567,10 @@ export default function ArenaClient({ viewer }: { viewer: { signedIn: boolean; n
         livePublisher.current = publisher;
         setLiveWatchPath(publisher.watchPath);
       } catch (error) {
-        setStreamError(error instanceof Error ? error.message : "The live link could not be created.");
+        setStreamError(livePublisherErrorMessage(
+          error,
+          "The live link could not be created. Please try again.",
+        ));
       }
     }
     setMode(nextMode);

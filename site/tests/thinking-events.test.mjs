@@ -41,10 +41,10 @@ test("thinking commands reject invalid cosmetic data without throwing", () => {
   assert.deepEqual(normalizeThinkingCommand({ type: "clearAll" }), { type: "clearAll" });
 });
 
-test("the package worker accepts at most 64 commands in each 500 ms window", () => {
+test("the package worker accepts at most 128 commands in each 500 ms window", () => {
   let now = 1000;
   const limiter = createThinkingCommandLimiter(() => now);
-  for (let index = 0; index < 64; index += 1) {
+  for (let index = 0; index < 128; index += 1) {
     assert.equal(limiter.accept(), true);
   }
   assert.equal(limiter.accept(), false);
