@@ -321,7 +321,7 @@ test("pieces scale from their board instead of the viewport", async () => {
   const boardRule = styles.match(/\.chessboard\s*\{[^}]+\}/)?.[0] ?? "";
 
   assert.match(boardRule, /container-type:\s*inline-size/);
-  assert.match(styles, /\.piece\s*\{[^}]*font-size:\s*8\.5cqi/s);
+  assert.match(styles, /\.piece\s*\{[^}]*font-size:\s*10cqi/s);
   assert.doesNotMatch(styles, /\.piece\s*\{[^}]*font-size:[^;}]*(?:vw|vh)/s);
   assert.doesNotMatch(styles, /\.(?:arena-page-v2|tournament-live-board)[^{]*\.piece\s*\{[^}]*font-size:/s);
 });

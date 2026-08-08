@@ -245,7 +245,7 @@ h2 { max-width: 15ch; font-size: clamp(2.35rem, 8vw, 4.75rem); line-height: 0.96
 .board-square.selected { z-index: 1; outline: 0.22rem solid var(--amber); outline-offset: -0.22rem; }
 .board-square.target::after { position: absolute; z-index: 2; width: 24%; aspect-ratio: 1; border-radius: 50%; background: rgb(184 91 41 / 0.72); content: ""; }
 .board-square.target:has(.piece)::after { width: 72%; border: 0.18rem solid rgb(184 91 41 / 0.88); background: transparent; }
-.piece { position: relative; z-index: 1; font-family: "Chess Merida"; font-size: 8.5cqi; font-style: normal; font-weight: 400; line-height: 1; user-select: none; }
+.piece { position: relative; z-index: 1; font-family: "Chess Merida"; font-size: 10cqi; font-style: normal; font-weight: 400; line-height: 1; user-select: none; }
 .piece.w { color: #fffdf7; text-shadow: 0 1px 0 #18241d, 1px 0 0 #18241d, 0 -1px 0 #18241d, -1px 0 0 #18241d, 0 0 0.16rem rgb(0 0 0 / 0.55); }
 .piece.b { color: #18241d; text-shadow: 0 1px 0 rgb(255 253 247 / 0.4); }
 .file-label, .rank-label { position: absolute; z-index: 3; font-family: ui-monospace, monospace; font-size: clamp(0.43rem, 1.7vw, 0.65rem); font-weight: 900; line-height: 1; }
